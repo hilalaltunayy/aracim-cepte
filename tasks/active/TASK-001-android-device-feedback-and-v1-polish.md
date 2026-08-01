@@ -225,7 +225,7 @@ değişmez. Storage/server enforcement değişmez. PII içeren görseller kalıc
 3. **Completed:** Typography, form labels, body condition ve safe-area düzeni uygulandı.
 4. **Completed:** Attachment mesajları ve developer row’u uygulandı.
 5. **Completed:** Odaklı testler → tam unit suite → typecheck/lint/legal freshness → diff/security review.
-6. **In progress:** Kanıt raporu, commit ve `origin/main` push.
+6. **Completed:** Kanıt raporu, commit ve `origin/main` push tamamlandı.
 
 ### Validation commands
 
