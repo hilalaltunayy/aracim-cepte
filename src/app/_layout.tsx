@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import { shouldRedirectExpiredSession } from '@/features/auth/sessionRouting';
 import { getReminderNotificationDestination } from '@/features/reminders/notificationRouting';
+import { AppErrorBoundary } from '@/shared/components/AppErrorBoundary';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -54,7 +55,9 @@ function BackButton({ fallback = '/(tabs)' }: { fallback?: '/(tabs)' | '/auth/lo
 export default function RootLayout() {
   return (
     <AppThemeProvider>
-      <RootNavigator />
+      <AppErrorBoundary>
+        <RootNavigator />
+      </AppErrorBoundary>
     </AppThemeProvider>
   );
 }
@@ -189,6 +192,13 @@ function RootNavigator() {
           options={{
             ...detailOptions('Yeni şifre'),
             headerLeft: () => <BackButton fallback="/auth/login" />,
+          }}
+        />
+        <Stack.Screen
+          name="legal/index"
+          options={{
+            ...detailOptions('Yasal ve gizlilik'),
+            headerLeft: () => <BackButton fallback="/(tabs)" />,
           }}
         />
         <Stack.Screen

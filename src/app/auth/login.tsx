@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   AppButton,
@@ -29,7 +29,12 @@ export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const [email, setEmail] = useState(() => getLoginPrefillEmail(params.email));
   const [password, setPassword] = useState('');
-  const { signIn, busy, error, sessionNotice } = useAuthStore();
+  const { signIn, busy, error, sessionNotice, hasSignedInBefore, clearError } = useAuthStore();
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+    }, [clearError]),
+  );
   const submit = async () => {
     if (!isValidEmail(email) || password.length < 6) return;
     if (await signIn(email, password)) router.replace('/');
@@ -40,9 +45,11 @@ export default function LoginScreen() {
         <Ionicons name="car-sport-outline" size={34} color={colors.onPrimary} />
       </View>
       <View style={styles.heading}>
-        <Text style={styles.title}>Tekrar hoş geldiniz</Text>
+        <Text style={styles.title}>{hasSignedInBefore ? 'Tekrar hoş geldiniz' : 'Hoş geldiniz'}</Text>
         <Text style={styles.subtitle}>
-          Aracınızla ilgili her şey kaldığınız yerden devam ediyor.
+          {hasSignedInBefore
+            ? 'Aracınızla ilgili her şey kaldığınız yerden devam ediyor.'
+            : 'Araç kayıtlarınızı güvenli ve düzenli biçimde yönetmeye başlayın.'}
         </Text>
       </View>
       {!isSupabaseConfigured ? (
@@ -84,7 +91,12 @@ export default function LoginScreen() {
       </FormSection>
       <View style={styles.register}>
         <Text style={styles.muted}>Henüz hesabınız yok mu?</Text>
-        <Pressable onPress={() => router.push('/auth/register')}>
+        <Pressable
+          onPress={() => {
+            clearError();
+            router.push('/auth/register');
+          }}
+        >
           <Text style={styles.link}>Hesap oluştur</Text>
         </Pressable>
       </View>

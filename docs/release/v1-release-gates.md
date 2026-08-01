@@ -3,9 +3,18 @@
 **Snapshot date:** 2026-08-01  
 **Release target:** İlk Google Play production Android yayını
 
-## Preview APK build kapısı — TASK-009
+## Preview APK build kapısı — TASK-010 güncellemesi
 
-**Karar:** READY FOR PREVIEW APK BUILD
+**Karar:** READY FOR CRASH-REGRESSION PREVIEW APK BUILD — ANDROID KABULÜ BEKLENİYOR
+
+1–2 Ağustos 2026 gerçek Android kabulü, TASK-009 kararından sonra hızlı kayıt, ekspertiz dosyası açma
+ve toplu silme sonrası ekran durumlarında production-blocking kusurlar göstermiştir. TASK-009'un
+`READY FOR PREVIEW APK BUILD` kararı tarihsel kanıttır. TASK-010 kaynak düzeltmeleri; hedefli ve tam
+test, TypeScript, lint, Expo Doctor, diff ve güvenlik taraması kapılarından geçmiştir. Bu güncel karar
+yalnız ayrı aşamada yeni crash-regression preview APK'sı alınmasına izin verir; o APK gerçek cihazda
+kabul edilmeden Android blocker'ları `Passed` değildir ve production Play Store yayını hazır değildir.
+
+### Tarihsel TASK-009 kararı
 
 2026-08-01 tarihli TASK-009 read-only denetiminde `main` ile `origin/main` aynı TASK-008 commit'inde,
 10 migration local/remote eşleşmiş ve gerekli üç Edge Function `ACTIVE` bulunmuştur. TypeScript, lint,
@@ -58,11 +67,11 @@ değerlendirir.
 | No public bucket                              | Passed                       | TASK-004 sonrası linked SQL bucket `public = false` gösterdi; remote probe unsigned private object ve public bucket URL erişimini reddetti. Kanıt: TASK-004, 2026-08-01, `eiqxvvnqkbzbhzpthcwo`.                                                |
 | No service-role key in client                 | Passed                       | `docs/release-readiness.md` client'ta secret/service-role olmadığını kaydediyor; her release'te source, env exposure ve bundle secret scan yeniden yapılmalı.                                                                                   |
 | No sensitive data in logs                     | In progress                  | Release-readiness auth/recovery tokenlarının loglanmadığını kaydediyor; filename/path/signed URL/PII dahil release cihazı ve provider log örneklemi eksik.                                                                                      |
-| Real Android device critical flow test passed | Manual verification required | [Manuel kabul testi](../manual-acceptance-test.md) gerçek release ortamında tamamlanıp cihaz/OS/build kimliğiyle imzalanmalı.                                                                                                                   |
-| APK acceptance test passed                    | Manual verification required | [TASK-001](../../tasks/active/TASK-001-android-device-feedback-and-v1-polish.md) geri bildirimi uygulandı; yeni preview APK üzerinde Android kabul sonucu bekleniyor.                                                                            |
+| Real Android device critical flow test passed | Failed                       | 1–2 Ağustos 2026 kabulünde hızlı kayıt/ekspertiz crash'i ve toplu silme sonrası beyaz ekran bulundu. TASK-010 kaynak düzeltmesi sonrası yeni artifact üzerinde ayrıntılı crash-regression kabulü zorunlu.                                  |
+| APK acceptance test passed                    | Failed                       | Mevcut APK production-blocking cihaz kusurları göstermiştir. TASK-010 otomatik kapıları ve yeni Android kabulü tamamlanmadan Passed yapılamaz.                                                                                              |
 | Production AAB succeeds                       | Not started                  | Güncel production AAB artifact, signing/build logu ve smoke testi kanıtı yok. AAB build bu dokümantasyon görevinde çalıştırılmadı.                                                                                                              |
 | Store screenshots completed                   | Not started                  | Onaylı telefon ekran görüntüleri, privacy redaction, locale/cihaz ölçüleri ve listing seti yok.                                                                                                                                                 |
-| No known blocker or critical bug              | Failed                       | TASK-008 definer RPC'leri authenticated-only, explicit owner/auth kontrolü, boş search_path ve minimum grant ile bilinçli kullanılıyor; advisor bunları manuel inceleme uyarısı olarak listeliyor. Leaked-password protection, hukuk/KVKK, provider-log ve Android/release artifact gate'leri açık. |
+| No known blocker or critical bug              | Failed                       | TASK-010'a kaynak olan Android crash/beyaz ekranlar mevcut APK'da doğrulandı; yeni artifact kabulü bekleniyor. Leaked-password protection, hukuk/KVKK, provider-log ve production artifact gate'leri de açık.                                      |
 
 ## Release kararı kuralı
 

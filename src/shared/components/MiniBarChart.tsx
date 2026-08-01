@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { MonthlyTotal } from '@/shared/utils/analytics';
+import { getMonthlyTrendTotal, MonthlyTotal } from '@/shared/utils/analytics';
 import {
   fontFamilies,
   radii,
@@ -31,15 +31,15 @@ function Bar({ item, max }: { item: MonthlyTotal; max: number }) {
 export function MiniBarChart({ data }: { data: MonthlyTotal[] }) {
   const styles = useThemedStyles(createStyles);
   const max = Math.max(...data.map((item) => item.total), 0);
-  const current = data.at(-1)?.total ?? 0;
+  const trendTotal = getMonthlyTrendTotal(data);
   return (
     <View style={styles.container}>
       <View style={styles.chartHeader}>
         <View>
           <Text style={styles.kicker}>SON 6 AY</Text>
-          <Text style={styles.value}>{formatCurrency(current)}</Text>
+          <Text style={styles.value}>{formatCurrency(trendTotal)}</Text>
         </View>
-        <Text style={styles.caption}>Aylık toplam gider</Text>
+        <Text style={styles.caption}>Altı aylık toplam gider</Text>
       </View>
       <View style={styles.chart}>
         {data.map((item) => (

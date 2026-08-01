@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   AppButton,
   AppInput,
@@ -8,6 +8,7 @@ import {
   ErrorBanner,
   FormSection,
   LoadingScreen,
+  NoVehicleState,
   Screen,
   SelectField,
   confirmAction,
@@ -30,9 +31,12 @@ import {
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
+import { safeEntityId, safeRecordType } from '@/shared/utils/routeParams';
 
 export default function RecordEditScreen() {
-  const params = useLocalSearchParams<{ id?: string; type?: RecordType }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>();
+  const routeId = safeEntityId(params.id);
+  const routeType = safeRecordType(params.type);
   const {
     records,
     vehicles,
@@ -44,10 +48,10 @@ export default function RecordEditScreen() {
     bootstrapped,
   } = useDataStore();
   const existing = useMemo(
-    () => records.find((record) => record.id === params.id),
-    [records, params.id],
+    () => records.find((record) => record.id === routeId),
+    [records, routeId],
   );
-  const [type, setType] = useState<RecordType>(existing?.recordType ?? params.type ?? 'fuel');
+  const [type, setType] = useState<RecordType>(existing?.recordType ?? routeType);
   const categories =
     type === 'maintenance'
       ? [...maintenanceCategories]
@@ -64,7 +68,7 @@ export default function RecordEditScreen() {
   const mutationRequestId = useRef(createRequestId());
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const initialValues = {
-    type: existing?.recordType ?? params.type ?? 'fuel',
+    type: existing?.recordType ?? routeType,
     category: existing?.category ?? categories[0],
     amount: existing?.amount.toString() ?? '',
     liters: existing?.liters?.toString() ?? '',
@@ -82,7 +86,7 @@ export default function RecordEditScreen() {
     description,
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
-  const routeState = resolveEntityRoute(params.id, records, bootstrapped);
+  const routeState = resolveEntityRoute(routeId, records, bootstrapped);
   const parsedAmount = parseDecimal(amount);
   const parsedLiters = parseDecimal(liters);
   const parsedKm = km ? parseDecimal(km) : null;
@@ -93,7 +97,7 @@ export default function RecordEditScreen() {
     parsedAmount !== null &&
     parsedAmount > 0 &&
     Boolean(date) &&
-    (type !== 'fuel' || (parsedLiters !== null && parsedLiters > 0)) &&
+    (type !== 'fuel' || parsedLiters === null || parsedLiters > 0) &&
     (parsedKm === null || parsedKm >= 0) &&
     mileageAllowed;
   const submit = async () => {
@@ -125,6 +129,13 @@ export default function RecordEditScreen() {
       if (await deleteRecord(existing.id)) leaveWithoutPrompt(() => goBackOr());
     });
   if (routeState === 'loading') return <LoadingScreen />;
+  if (!vehicle) {
+    return (
+      <Screen style={styles.form}>
+        <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   if (routeState === 'missing') {
     return (
       <Screen style={styles.form}>
@@ -183,7 +194,7 @@ export default function RecordEditScreen() {
             keyboardType="decimal-pad"
             placeholder="0,00"
             error={
-              submitted && (!parsedLiters || parsedLiters <= 0)
+              submitted && parsedLiters !== null && parsedLiters <= 0
                 ? 'Litre sıfırdan büyük olmalı.'
                 : null
             }

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { AttachmentField } from '@/shared/components/AttachmentField';
 import {
   AppButton,
@@ -9,6 +9,7 @@ import {
   ErrorBanner,
   FormSection,
   LoadingScreen,
+  NoVehicleState,
   Screen,
   confirmAction,
 } from '@/shared/components/ui';
@@ -27,9 +28,11 @@ import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
+import { safeEntityId } from '@/shared/utils/routeParams';
 
 export default function ExpertiseEditScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = safeEntityId(params.id);
   const {
     expertiseReports,
     activeVehicleId,
@@ -127,6 +130,13 @@ export default function ExpertiseEditScreen() {
       if (await deleteExpertise(existing.id)) leaveWithoutPrompt(() => goBackOr('/expertise'));
     });
   if (routeState === 'loading') return <LoadingScreen />;
+  if (routeState === 'create' && !activeVehicleId) {
+    return (
+      <Screen style={styles.form}>
+        <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   if (routeState === 'missing') {
     return (
       <Screen style={styles.form}>

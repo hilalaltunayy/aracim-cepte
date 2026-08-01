@@ -2,7 +2,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Reminder, VehicleDocument, VehicleRecord } from '@/domain/entities';
 import {
-  recordTypeLabels,
   reminderTypeLabels,
   documentTypeLabels,
 } from '@/shared/constants/labels';
@@ -18,24 +17,20 @@ import {
 import { formatCurrency, formatDate, formatNumber } from '@/shared/utils/format';
 import {
   getDocumentExpiryStatus,
+  getReminderDisplay,
   getReminderKilometerProgress,
-  getReminderStatus,
 } from '@/shared/utils/analytics';
 import { Card, StatusBadge } from './ui';
-
-const recordIcons = {
-  fuel: 'water-outline',
-  maintenance: 'construct-outline',
-  expense: 'receipt-outline',
-} as const;
+import { getRecordPresentation } from '@/features/records/recordPresentation';
 
 export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress?: () => void }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
+  const presentation = getRecordPresentation(record);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={onPress ? `${record.category} kaydını aç` : undefined}
+      accessibilityLabel={onPress ? `${presentation.title} kaydını aç` : undefined}
       style={({ pressed }) => pressed && onPress && styles.cardPressed}
       onPress={onPress}
       disabled={!onPress}
@@ -43,7 +38,7 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
       <Card style={styles.rowCard}>
         <View style={styles.icon}>
           <Ionicons
-            name={recordIcons[record.recordType]}
+            name={presentation.icon}
             size={22}
             color={colors.primary}
             accessible={false}
@@ -51,11 +46,11 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
         </View>
         <View style={styles.content}>
           <View style={styles.between}>
-            <Text style={styles.rowTitle}>{record.category}</Text>
+            <Text style={styles.rowTitle}>{presentation.title}</Text>
             <Text style={styles.amount}>{formatCurrency(record.amount)}</Text>
           </View>
           <Text style={styles.meta}>
-            {recordTypeLabels[record.recordType]} · {formatDate(record.recordDate)}
+            {presentation.typeLabel} · {formatDate(record.recordDate)}
           </Text>
           {record.kilometer !== null ? (
             <Text style={styles.meta}>{formatNumber(record.kilometer)} km</Text>
@@ -73,9 +68,12 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
 
 const reminderLabels = {
   completed: ['Tamamlandı', 'success'],
-  overdue: ['Süresi Geçti', 'danger'],
-  due: ['Zamanı Geldi', 'warning'],
-  upcoming: ['Yaklaşıyor', 'warning'],
+  both_overdue: ['Tarih ve kilometre aşıldı', 'danger'],
+  date_overdue: ['Süresi geçti', 'danger'],
+  mileage_overdue: ['Kilometre aşıldı', 'danger'],
+  mileage_due: ['Kilometre zamanı', 'warning'],
+  today: ['Bugün', 'warning'],
+  approaching: ['Yaklaşıyor', 'warning'],
   planned: ['Planlandı', 'info'],
 } as const;
 
@@ -92,8 +90,8 @@ export function ReminderCard({
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const status = getReminderStatus(reminder, currentKm);
-  const [label, tone] = reminderLabels[status];
+  const display = getReminderDisplay(reminder, currentKm);
+  const [label, tone] = reminderLabels[display.status];
   const kilometerProgress =
     reminder.dueKilometer === null
       ? null
@@ -137,12 +135,19 @@ export function ReminderCard({
               .join(' · ')}
           </Text>
           {kilometerProgress ? (
-            <Text style={styles.meta}>
-              {kilometerProgress.overdueBy > 0
-                ? `${formatNumber(kilometerProgress.overdueBy)} km geçti`
-                : `${formatNumber(kilometerProgress.remaining)} km kaldı`}
-            </Text>
+            display.reasons.map((reason) => (
+              <Text key={reason} style={styles.meta}>
+                {reason}
+              </Text>
+            ))
           ) : null}
+          {!kilometerProgress
+            ? display.reasons.map((reason) => (
+                <Text key={reason} style={styles.meta}>
+                  {reason}
+                </Text>
+              ))
+            : null}
         </View>
       </Card>
     </Pressable>

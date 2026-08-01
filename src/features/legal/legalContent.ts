@@ -48,3 +48,21 @@ export const legalDocuments = {
     [1, 2, 3, 7, 8, 9],
   ),
 } as const satisfies Record<string, LegalDocument>;
+
+const internalReviewMarker = 'HUKUK İNCELEMESİ BEKLİYOR';
+
+export function getUserFacingLegalDocument(document: LegalDocument): LegalDocument {
+  return {
+    ...document,
+    status: '',
+    sections: document.sections
+      .filter((section) => section.title !== 'Belge durumu')
+      .map((section) => ({
+        ...section,
+        paragraphs: section.paragraphs.filter(
+          (paragraph) => !paragraph.includes(internalReviewMarker),
+        ),
+      }))
+      .filter((section) => section.paragraphs.length > 0),
+  };
+}

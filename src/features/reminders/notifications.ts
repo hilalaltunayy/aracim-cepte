@@ -6,6 +6,8 @@ import {
   ReminderNotificationSyncResult,
   synchronizeReminderNotification,
 } from './notificationRecovery';
+import { getNotificationLeadDays } from './notificationPreferences';
+import { getReminderNotificationBody } from './notificationSchedule';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -40,7 +42,7 @@ const notificationGateway: ReminderNotificationGateway = {
           : null,
     }));
   },
-  async schedule(reminder, date) {
+  async schedule(reminder, date, leadDays) {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('reminders', {
         name: 'Araç hatırlatıcıları',
@@ -48,10 +50,10 @@ const notificationGateway: ReminderNotificationGateway = {
       });
     }
     return Notifications.scheduleNotificationAsync({
-      identifier: `reminder-${reminder.id}`,
+      identifier: `reminder-${reminder.id}-lead-${leadDays}`,
       content: {
         title: 'Aracım Cepte',
-        body: `${reminder.title} için planlanan tarih geldi.`,
+        body: getReminderNotificationBody(reminder.title, leadDays),
         data: { route: '/(tabs)/reminders', reminderId: reminder.id },
       },
       trigger: {
@@ -72,9 +74,16 @@ const notificationGateway: ReminderNotificationGateway = {
 
 export async function reconcileReminderNotification(
   reminder: Reminder,
-  options: { requestPermission: boolean; forceReschedule?: boolean; staleIds?: string[] },
+  options: {
+    requestPermission: boolean;
+    forceReschedule?: boolean;
+    staleIds?: string[];
+    leadDays?: number;
+    now?: Date;
+  },
 ): Promise<ReminderNotificationSyncResult> {
-  return synchronizeReminderNotification(reminder, notificationGateway, options);
+  const leadDays = options.leadDays ?? (await getNotificationLeadDays(reminder.id));
+  return synchronizeReminderNotification(reminder, notificationGateway, { ...options, leadDays });
 }
 
 export async function cancelReminderNotification(id: string | null): Promise<void> {

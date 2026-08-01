@@ -1,17 +1,44 @@
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { AppButton, AppHeader, EmptyState, Screen, SectionHeader } from '@/shared/components/ui';
+import {
+  AppButton,
+  AppHeader,
+  EmptyState,
+  LoadingScreen,
+  NoVehicleState,
+  Screen,
+  SectionHeader,
+} from '@/shared/components/ui';
 import { ReminderCard } from '@/shared/components/entityCards';
 import { getReminderStatus } from '@/shared/utils/analytics';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
+import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 
-const urgency = { overdue: 0, due: 1, upcoming: 2, planned: 3, completed: 4 };
+const urgency = {
+  both_overdue: 0,
+  mileage_overdue: 1,
+  date_overdue: 2,
+  mileage_due: 3,
+  today: 4,
+  approaching: 5,
+  planned: 6,
+  completed: 7,
+};
 
 export default function RemindersScreen() {
-  const { reminders, vehicles, activeVehicleId, toggleReminder } = useDataStore();
+  const { reminders, vehicles, activeVehicleId, toggleReminder, bootstrapped } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
-  if (!vehicle) return null;
+  const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
+  if (vehicleState === 'loading') return <LoadingScreen />;
+  if (!vehicle) {
+    return (
+      <Screen>
+        <AppHeader title="Hatırlatıcılar" subtitle="Tarih ve kilometre planlarınız" />
+        <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   const sorted = [...reminders].sort(
     (a, b) =>
       urgency[getReminderStatus(a, vehicle.currentKm)] -

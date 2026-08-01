@@ -8,6 +8,44 @@ Bu sonuç uygulama, Android veya release artifact kabulü değildir. Vitest yap�
 environment kullanır ve yalnız `src/**/*.test.ts` dosyalarını alır; React Native ekranlarını light ve
 dark provider ile render eden `.test.tsx` altyapısı yoktur.
 
+## TASK-010 Android crash-regression matrisi — 2026-08-02
+
+Bu tablo 1–2 Ağustos 2026 cihaz bulgularına karşı hazırlanmıştır. Kaynak ve saf-logic testleri geçse
+bile aşağıdaki satırlar yeni APK olmadan `Passed` değildir. Ekran görüntüleri repository'ye alınmaz.
+
+| ID | Yeni APK adımları | Beklenen sonuç | Durum |
+| --- | --- | --- | --- |
+| A10-01 | Dashboard → Yakıt'a bir kez ve hızlıca iki kez dokun | Tek güvenli kayıt route'u açılır; geçerli string `type=fuel`; crash/duplicate yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-02 | Dashboard → Bakım'a bir kez ve hızlıca iki kez dokun | Bakım create formu açılır; crash/duplicate yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-03 | Dashboard → Masraf'a bir kez ve hızlıca iki kez dokun | Diğer masraf create formu açılır; crash/duplicate yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-04 | Geçmişte yakıt, bakım ve diğer kartlarına ayrı ayrı dokun | Doğru düzenleme route'u/tür/ikon açılır; “Diğer” bakım diye gösterilmez | MANUAL ANDROID CHECK REQUIRED |
+| A10-05 | Geçerli ekspertiz ekini aç; sonra ağ kapalı/expired/missing ve viewer bulunmayan durumları dene | App kapanmaz; loading biter; güvenli dosya hatası ve tekrar deneme vardır | MANUAL ANDROID CHECK REQUIRED |
+| A10-06 | Tüm araç kayıtlarını sil | Araç korunur; dashboard sıfır/empty; diğer tab'ler çalışır | MANUAL ANDROID CHECK REQUIRED |
+| A10-07 | Tüm hatırlatıcıları sil | Empty state; local schedule'lar iptal; dashboard/araç çalışır | MANUAL ANDROID CHECK REQUIRED |
+| A10-08 | Gövde durumunu sil | Varsayılan gövde durumu; araç ekranı beyaz/crash olmaz | MANUAL ANDROID CHECK REQUIRED |
+| A10-09 | Tüm araç verisini sil ve app'i kapatıp yeniden aç | Stale active ID temiz; araç oluşturma güvenli durumu; back silinmiş entity'ye dönmez | MANUAL ANDROID CHECK REQUIRED |
+| A10-10 | Her toplu silme düğmesine hızlıca iki kez dokun; ayrıca ağ hatası üret | Disabled/loading çift çağrıyı önler; hata local state'i silinmiş göstermez | MANUAL ANDROID CHECK REQUIRED |
+| A10-11 | Warm ve cold start'ı 5'er kez kronometrele | Zorunlu olmayan reconciliation ilk render'ı bloklamaz; gerçek süreler kaydedilir | MANUAL ANDROID CHECK REQUIRED |
+| A10-12 | Bildirim iznini reddet → Settings satırına dokun → sistemden aç → uygulamaya dön | Sistem uygulama ayarı açılır; dönüşte metin güncellenir ve reconcile tekrar denenir | MANUAL ANDROID CHECK REQUIRED |
+| A10-13 | Tarihi uzak/yakın/bugün/dün; km'yi uzak/yakın/eşit/aşılmış oluştur | Badge 30 gün/1.000 km eşiğiyle doğru; negatif “kaldı” yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-14 | Tarih gelecek+km aşılmış, tarih geçmiş+km eksik, ikisi aşılmış kombinasyonlarını aç | En kritik badge ve ayrı neden satırları doğru | MANUAL ANDROID CHECK REQUIRED |
+| A10-15 | 7/3/1/0 gün ve özel lead seç; izin açık/kapalı durumlarında kaydet | Tek seçimin gelecekteki yerel 09:00 schedule'ı oluşur; DB kaydı izin yokken korunur | MANUAL ANDROID CHECK REQUIRED |
+| A10-16 | Reminder'ı düzenle/sil; aynı kaydı tekrar reconcile et | Eski schedule iptal, duplicate yok, silmede tüm ilişkili schedule temiz | MANUAL ANDROID CHECK REQUIRED |
+| A10-17 | Bildirime foreground/background/killed durumunda dokun; sonra reminder'ı silip eski bildirime dokun | İlgili reminder açılır; silinmiş/geçersiz payload Hatırlatıcılar'a düşer; crash yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-18 | 500 TL/litresiz yakıt; 50 L/500 TL; 2.000 TL bakım; 5 TL diğer ekle | Tutar/litre/kategori ayrımı ve aylık/6 aylık toplamlar doğru | MANUAL ANDROID CHECK REQUIRED |
+| A10-19 | Cari/önceki ay iki sıfır ve cari sıfır-önceki pozitif senaryoları | İki sıfırda anlamsız %100 yok; yalnız ikinci senaryoda %100 azalış | MANUAL ANDROID CHECK REQUIRED |
+| A10-20 | En az iki farklı km kaydı olan/olmayan dataset ile dashboard'u aç | Maliyet/km doğru veya açıklama kartın yanında: “en az iki farklı kilometre kaydı gerekir” | MANUAL ANDROID CHECK REQUIRED |
+| A10-21 | İlk kurulum login başlığı; başarılı login; çıkış/restart login başlığı | İlkinde “Hoş geldiniz”, sonrasında “Tekrar hoş geldiniz”; local değer PII içermez | MANUAL ANDROID CHECK REQUIRED |
+| A10-22 | Hatalı login → Hesap oluştur → geri login | Register temiz; genel auth hatası sızmaz; geri login'de stale hata yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-23 | Settings → Yasal ve gizlilik → beş belgeyi aç | Tek sade liste, uygulama içi içerik, kullanıcı UI'ında inceleme marker'ı yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-24 | Dirty formda geri → Vazgeç; sonra geri → Çık; ayrıca save sonrası geri | Vazgeç form değerini korur; Çık kaydetmez; save sonrası yanlış uyarı yok | MANUAL ANDROID CHECK REQUIRED |
+| A10-25 | Yapay route/render hatasında root fallback'i doğrula | PII/detail/log olmadan “Bir sorun oluştu” ve ana sayfa/tekrar dene aksiyonları | MANUAL ANDROID CHECK REQUIRED |
+
+Otomatik test boşluğu: mevcut Vitest `node` ortamı React Native route/component tree'sini native
+modüllerle render etmez. Bu görev yeni bir renderer/dependency eklemek yerine route-param, araçsız state,
+dosya açma sınırı, reminder, notification ve dashboard mantığını saf testlerle kapsar; gerçek route/render
+ve native module sonucu yukarıdaki APK kapısında kalır.
+
 ## TASK-007 düzeltme kanıtı — 2026-08-01
 
 TASK-007, D-01–D-10 ve D-14 için kaynak düzeltmesini uygulamıştır. Bu durum APK veya Android kabulü

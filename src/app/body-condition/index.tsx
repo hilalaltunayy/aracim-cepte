@@ -5,6 +5,8 @@ import {
   AppInput,
   Card,
   ErrorBanner,
+  LoadingScreen,
+  NoVehicleState,
   Screen,
   SelectField,
   StatusBadge,
@@ -23,13 +25,22 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { router } from 'expo-router';
+import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 
 export default function BodyConditionScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const conditionColors = colors.bodyCondition;
-  const { vehicles, activeVehicleId, bodyConditions, saveBodyCondition, loading, error } =
-    useDataStore();
+  const {
+    vehicles,
+    activeVehicleId,
+    bodyConditions,
+    saveBodyCondition,
+    loading,
+    error,
+    bootstrapped,
+  } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const schema = vehicle ? bodySchemas[vehicle.bodyType] : null;
   const [selectedPartOverride, setSelectedPartOverride] = useState('');
@@ -49,7 +60,15 @@ export default function BodyConditionScreen() {
     condition !== (existing?.condition ?? 'unknown') || note !== (existing?.note ?? '');
   useUnsavedChangesGuard(isDirty);
 
-  if (!vehicle || !schema) return null;
+  const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
+  if (vehicleState === 'loading') return <LoadingScreen />;
+  if (!vehicle || !schema) {
+    return (
+      <Screen>
+        <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   const selectPart = (partKey: string) => {
     setSelectedPartOverride(partKey);
     setConditionOverride(null);

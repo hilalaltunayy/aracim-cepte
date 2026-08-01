@@ -28,6 +28,10 @@ export interface AppRepository {
   saveVehicle(draft: VehicleDraft, id?: string): Promise<Vehicle>;
   deleteVehicle(id: string): Promise<void>;
   loadVehicleData(vehicleId: string): Promise<VehicleDataBundle>;
+  reconcileVehicleData(
+    vehicleId: string,
+    reminders: Reminder[],
+  ): Promise<Pick<VehicleDataBundle, 'reminders' | 'expertiseReports' | 'documents'>>;
   saveRecord(
     vehicleId: string,
     draft: RecordDraft,

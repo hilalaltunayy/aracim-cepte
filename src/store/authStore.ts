@@ -17,6 +17,7 @@ import {
 } from '@/features/auth/confirmationResend';
 import { SESSION_EXPIRED_MESSAGE } from '@/features/auth/sessionRouting';
 import { AppError, getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
+import { markHasSignedInBefore, readHasSignedInBefore } from '@/features/auth/returningUser';
 
 interface AuthState {
   session: Session | null;
@@ -25,6 +26,7 @@ interface AuthState {
   busy: boolean;
   error: string | null;
   sessionNotice: string | null;
+  hasSignedInBefore: boolean;
   initialize: () => Promise<() => void>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signUp: (email: string, password: string, displayName: string) => Promise<boolean>;
@@ -47,6 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   busy: false,
   error: null,
   sessionNotice: null,
+  hasSignedInBefore: false,
 
   initialize: async () => {
     if (!isSupabaseConfigured) {
@@ -54,10 +57,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return () => undefined;
     }
     const client = getSupabaseClient();
-    const { data, error } = await client.auth.getSession();
+    const [{ data, error }, storedReturningUser] = await Promise.all([
+      client.auth.getSession(),
+      readHasSignedInBefore(),
+    ]);
+    const hasSignedInBefore = storedReturningUser || Boolean(data.session);
+    if (data.session && !storedReturningUser) void markHasSignedInBefore();
     set({
       session: data.session,
       ready: true,
+      hasSignedInBefore,
       sessionNotice: error && isSessionExpiredError(error) ? SESSION_EXPIRED_MESSAGE : null,
     });
     const subscription = client.auth.onAuthStateChange((event, session) => {
@@ -90,7 +99,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         password,
       });
       if (error) throw error;
-      set({ busy: false });
+      await markHasSignedInBefore();
+      set({ busy: false, hasSignedInBefore: true });
       return true;
     } catch (error) {
       set({ busy: false, error: getFriendlyError(error) });

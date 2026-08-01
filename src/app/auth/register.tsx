@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router, type Href, useFocusEffect } from 'expo-router';
 import {
   AppButton,
   AppInput,
@@ -36,7 +36,12 @@ export default function RegisterScreen() {
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const { signUp, resendConfirmation, busy, error } = useAuthStore();
+  const { signUp, resendConfirmation, busy, error, clearError } = useAuthStore();
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+    }, [clearError]),
+  );
   const valid = isValidEmail(email) && password.length >= 8 && password === confirmation;
   const submit = async () => {
     if (!valid) return;
@@ -147,7 +152,6 @@ export default function RegisterScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={styles.legalStatus}>HUKUK İNCELEMESİ BEKLİYOR</Text>
         </View>
         <AppButton
           title="Hesap oluştur"
@@ -178,7 +182,6 @@ const createStyles = ({ colors }: AppTheme) =>
     legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
     legalLinks: { gap: spacing.sm },
     legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
-    legalStatus: { color: colors.warning, fontSize: 11, fontWeight: '700' },
     successMessage: { color: colors.muted, ...typography.body },
     resendSuccess: { color: colors.success, ...typography.bodyMedium },
   });

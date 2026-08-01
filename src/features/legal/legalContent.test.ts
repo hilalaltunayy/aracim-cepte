@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legalDocuments } from './legalContent';
+import { getUserFacingLegalDocument, legalDocuments } from './legalContent';
 
 const allContent = JSON.stringify(legalDocuments);
 
@@ -20,6 +20,14 @@ describe('legal content integration', () => {
         'docs/legal/kvkk-basvuru-ve-hesap-silme.md',
       ]),
     );
+  });
+
+  it('keeps canonical review metadata out of the end-user presentation only', () => {
+    const canonical = legalDocuments.privacyPolicy;
+    const visible = getUserFacingLegalDocument(canonical);
+    expect(canonical.status).toBe('HUKUK İNCELEMESİ BEKLİYOR');
+    expect(JSON.stringify(visible)).not.toContain('HUKUK İNCELEMESİ BEKLİYOR');
+    expect(visible.sections.length).toBeGreaterThan(0);
   });
 
   it('keeps draft status and approved controller contact visible', () => {

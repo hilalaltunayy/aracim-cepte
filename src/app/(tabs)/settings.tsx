@@ -1,10 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import { AppHeader, Card, Screen, SectionHeader, confirmAction } from '@/shared/components/ui';
+import {
+  AppHeader,
+  Card,
+  ErrorBanner,
+  Screen,
+  SectionHeader,
+  confirmAction,
+} from '@/shared/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import {
@@ -18,6 +26,10 @@ import {
 } from '@/shared/theme';
 import { DEVELOPER_INFO } from '@/features/settings/about';
 import { THEME_OPTIONS, type ThemePreference } from '@/features/theme/themePreference';
+import {
+  NOTIFICATION_SETTINGS_ERROR_MESSAGE,
+  openNotificationSystemSettings,
+} from '@/features/settings/systemSettings';
 
 function SettingsRow({
   icon,
@@ -25,12 +37,16 @@ function SettingsRow({
   subtitle,
   onPress,
   danger,
+  disabled = false,
+  loading = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   onPress?: () => void;
   danger?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -38,9 +54,10 @@ function SettingsRow({
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={onPress ? title : undefined}
+      accessibilityState={onPress ? { disabled, busy: loading } : undefined}
       style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]}
       onPress={onPress}
-      disabled={!onPress}
+      disabled={!onPress || disabled}
     >
       <View style={[styles.icon, danger && styles.dangerIcon]}>
         <Ionicons
@@ -54,7 +71,9 @@ function SettingsRow({
         <Text style={[styles.rowTitle, danger && styles.dangerText]}>{title}</Text>
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
-      {onPress ? (
+      {loading ? (
+        <ActivityIndicator color={colors.primaryAction} accessibilityElementsHidden />
+      ) : onPress ? (
         <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
       ) : null}
     </Pressable>
@@ -110,14 +129,38 @@ function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) 
 export default function SettingsScreen() {
   const styles = useThemedStyles(createStyles);
   const { session, signOut, deleteAccount, busy, error: authError } = useAuthStore();
-  const { vehicles, activeVehicleId, clearSection, deleteVehicle, clear } = useDataStore();
+  const {
+    vehicles,
+    activeVehicleId,
+    clearSection,
+    deleteVehicle,
+    clear,
+    loading,
+    refresh,
+    error: dataError,
+  } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const [permission, setPermission] = useState('unknown');
-  const updatePermission = async () =>
-    setPermission((await Notifications.getPermissionsAsync()).status);
+  const previousPermission = useRef('unknown');
+  const applyPermission = useCallback((status: string) => {
+    if (status === 'granted' && previousPermission.current === 'denied') void refresh();
+    previousPermission.current = status;
+    setPermission(status);
+  }, [refresh]);
+  const updatePermission = useCallback(async () => {
+    const status = (await Notifications.getPermissionsAsync()).status;
+    applyPermission(status);
+  }, [applyPermission]);
   useEffect(() => {
-    Notifications.getPermissionsAsync().then((result) => setPermission(result.status));
-  }, []);
+    const initialRefresh = setTimeout(() => void updatePermission(), 0);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void updatePermission();
+    });
+    return () => {
+      clearTimeout(initialRefresh);
+      subscription.remove();
+    };
+  }, [updatePermission]);
   const logout = async () => {
     await signOut();
     clear();
@@ -126,6 +169,10 @@ export default function SettingsScreen() {
   const requestNotifications = async () => {
     await Notifications.requestPermissionsAsync();
     await updatePermission();
+  };
+  const openNotificationSettings = async () => {
+    const opened = await openNotificationSystemSettings(Linking.openSettings);
+    if (!opened) Alert.alert('Ayarlar açılamadı', NOTIFICATION_SETTINGS_ERROR_MESSAGE);
   };
   const removeAccount = () =>
     confirmAction(
@@ -146,6 +193,7 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <AppHeader title="Ayarlar" subtitle="Hesap, bildirimler ve veriler" />
+      {dataError ? <ErrorBanner message={dataError} /> : null}
       <SectionHeader title="Görünüm" />
       <View accessibilityRole="radiogroup">
         <Card style={styles.card}>
@@ -173,7 +221,9 @@ export default function SettingsScreen() {
           title={busy ? 'Hesap siliniyor…' : 'Hesabı ve verilerimi sil'}
           subtitle={authError ?? 'Belgeler dahil tüm kullanıcı verileri kalıcı olarak kaldırılır'}
           danger
-          onPress={busy ? undefined : removeAccount}
+          onPress={removeAccount}
+          disabled={busy}
+          loading={busy}
         />
       </Card>
       <SectionHeader title="Araç" />
@@ -201,7 +251,13 @@ export default function SettingsScreen() {
                 ? 'İzin reddedildi; cihaz ayarlarından değiştirilebilir'
                 : 'Henüz sorulmadı'
           }
-          onPress={permission === 'undetermined' ? () => void requestNotifications() : undefined}
+          onPress={
+            permission === 'undetermined'
+              ? () => void requestNotifications()
+              : permission === 'denied'
+                ? () => void openNotificationSettings()
+                : undefined
+          }
         />
       </Card>
       <SectionHeader title="Veri yönetimi" />
@@ -211,24 +267,32 @@ export default function SettingsScreen() {
           title="Tüm araç kayıtlarını sil"
           danger
           onPress={() => clearData('records', 'Tüm kayıtları sil')}
+          disabled={loading}
+          loading={loading}
         />
         <SettingsRow
           icon="notifications-off-outline"
           title="Tüm hatırlatıcıları sil"
           danger
           onPress={() => clearData('reminders', 'Tüm hatırlatıcıları sil')}
+          disabled={loading}
+          loading={loading}
         />
         <SettingsRow
           icon="scan-outline"
           title="Gövde durumu verilerini sil"
           danger
           onPress={() => clearData('body', 'Gövde durumu verilerini sil')}
+          disabled={loading}
+          loading={loading}
         />
         <SettingsRow
           icon="documents-outline"
           title="Tüm belge kayıtlarını sil"
           danger
           onPress={() => clearData('documents', 'Tüm belgeleri sil')}
+          disabled={loading}
+          loading={loading}
         />
         {vehicle ? (
           <SettingsRow
@@ -241,44 +305,25 @@ export default function SettingsScreen() {
                 'Tüm araç verisini sil',
                 'Araç, kayıtlar, planlar, notlar ve belgeler kalıcı olarak silinecek.',
                 async () => {
-                  if (await deleteVehicle(vehicle.id)) router.replace('/');
+                  if (await deleteVehicle(vehicle.id)) {
+                    router.dismissAll();
+                    router.replace('/vehicle/edit');
+                  }
                 },
               )
             }
+            disabled={loading}
+            loading={loading}
           />
         ) : null}
       </Card>
       <SectionHeader title="Hakkında" />
       <Card style={styles.card}>
         <SettingsRow
-          icon="document-text-outline"
-          title="KVKK Aydınlatma Metni"
-          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
-          onPress={() => router.push('/legal/kvkk-notice' as Href)}
-        />
-        <SettingsRow
           icon="shield-checkmark-outline"
-          title="Gizlilik Politikası"
-          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
-          onPress={() => router.push('/legal/privacy-policy' as Href)}
-        />
-        <SettingsRow
-          icon="time-outline"
-          title="Saklama ve Silme Politikası"
-          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
-          onPress={() => router.push('/legal/retention-and-deletion' as Href)}
-        />
-        <SettingsRow
-          icon="trash-bin-outline"
-          title="Hesap ve Veri Silme"
-          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
-          onPress={() => router.push('/legal/account-and-data-deletion' as Href)}
-        />
-        <SettingsRow
-          icon="mail-outline"
-          title="KVKK Başvuru Bilgileri"
-          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
-          onPress={() => router.push('/legal/kvkk-application' as Href)}
+          title="Yasal ve gizlilik"
+          subtitle="Gizlilik, KVKK ve veri yönetimi belgeleri"
+          onPress={() => router.push('/legal' as Href)}
         />
         <SettingsRow
           icon="code-slash-outline"

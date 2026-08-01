@@ -27,6 +27,7 @@ import {
   requiresVehicleMileageCorrection,
 } from '@/shared/utils/repositoryRules';
 import { useAuthStore } from '@/store/authStore';
+import { resolveActiveVehicleId } from '@/shared/utils/vehicleState';
 
 interface DataState {
   vehicles: Vehicle[];
@@ -44,6 +45,7 @@ interface DataState {
   loading: boolean;
   error: string | null;
   lastReminderNotice: string | null;
+  lastBootstrapDurationMs: number | null;
   setOnboardingSeen: () => void;
   setActiveVehicle: (id: string) => Promise<void>;
   bootstrap: () => Promise<void>;
@@ -95,19 +97,27 @@ export const useDataStore = create<DataState>()(
       const loadActiveData = async (vehicleId: string) => {
         const bundle = await appRepository.loadVehicleData(vehicleId);
         set(bundle);
+        void appRepository
+          .reconcileVehicleData(vehicleId, bundle.reminders)
+          .then((reconciled) => {
+            if (get().activeVehicleId === vehicleId) set(reconciled);
+          })
+          .catch(() => undefined);
+      };
+      const reloadAvailableData = async () => {
+        const vehicles = await appRepository.listVehicles();
+        const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
+        set({ vehicles, activeVehicleId });
+        if (activeVehicleId) await loadActiveData(activeVehicleId);
+        else set(emptyVehicleData);
       };
       const mutate = async (operation: () => Promise<void>): Promise<boolean> => {
         if (!canStartMutation(get().loading)) return false;
         set({ loading: true, error: null });
         try {
           await operation();
-          const activeId = get().activeVehicleId;
-          const vehicles = await appRepository.listVehicles();
-          set({ vehicles });
-          if (activeId && vehicles.some((vehicle) => vehicle.id === activeId)) {
-            await loadActiveData(activeId);
-          }
-          set({ loading: false });
+          await reloadAvailableData();
+          set({ loading: false, bootstrapped: true, bootstrapError: null });
           return true;
         } catch (error) {
           set({ loading: false, error: handleError(error) });
@@ -128,13 +138,19 @@ export const useDataStore = create<DataState>()(
         loading: false,
         error: null,
         lastReminderNotice: null,
+        lastBootstrapDurationMs: null,
 
         setOnboardingSeen: () => set({ onboardingSeen: true }),
 
         setActiveVehicle: async (id) => {
-          set({ activeVehicleId: id, loading: true, error: null });
+          const nextId = resolveActiveVehicleId(get().vehicles, id);
+          if (!nextId) {
+            set({ activeVehicleId: null, ...emptyVehicleData });
+            return;
+          }
+          set({ activeVehicleId: nextId, loading: true, error: null });
           try {
-            await loadActiveData(id);
+            await loadActiveData(nextId);
             set({ loading: false });
           } catch (error) {
             set({ loading: false, error: handleError(error), ...emptyVehicleData });
@@ -142,16 +158,20 @@ export const useDataStore = create<DataState>()(
         },
 
         bootstrap: async () => {
+          const startedAt = Date.now();
           set({ loading: true, error: null, bootstrapError: null, bootstrapped: false });
           try {
             const vehicles = await appRepository.listVehicles();
-            const persistedId = get().activeVehicleId;
-            const activeVehicleId =
-              vehicles.find((vehicle) => vehicle.id === persistedId)?.id ?? vehicles[0]?.id ?? null;
+            const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
             set({ vehicles, activeVehicleId });
             if (activeVehicleId) await loadActiveData(activeVehicleId);
             else set(emptyVehicleData);
-            set({ loading: false, bootstrapped: true, bootstrapError: null });
+            set({
+              loading: false,
+              bootstrapped: true,
+              bootstrapError: null,
+              lastBootstrapDurationMs: Date.now() - startedAt,
+            });
           } catch (error) {
             const message = handleError(error);
             set({ loading: false, bootstrapped: false, error: message, bootstrapError: message });
@@ -159,12 +179,10 @@ export const useDataStore = create<DataState>()(
         },
 
         refresh: async () => {
-          const id = get().activeVehicleId;
-          if (!id) return get().bootstrap();
           set({ loading: true, error: null });
           try {
-            await loadActiveData(id);
-            set({ vehicles: await appRepository.listVehicles(), loading: false });
+            await reloadAvailableData();
+            set({ loading: false, bootstrapped: true, bootstrapError: null });
           } catch (error) {
             set({ loading: false, error: handleError(error) });
           }
@@ -189,7 +207,6 @@ export const useDataStore = create<DataState>()(
         deleteVehicle: (id) =>
           mutate(async () => {
             await appRepository.deleteVehicle(id);
-            set({ activeVehicleId: null, ...emptyVehicleData });
           }),
 
         saveRecord: (draft, id, requestId) => {
@@ -222,7 +239,9 @@ export const useDataStore = create<DataState>()(
               saved.notificationStatus !== 'not_required';
             set({
               lastReminderNotice: notificationFailed
-                ? 'Hatırlatıcı kaydedildi ancak cihaz bildirimi kurulamadı. Hatırlatıcılar ekranında yeniden denenecek.'
+                ? saved.notificationErrorCode === 'NOTIFICATION_TRIGGER_PAST'
+                  ? 'Hatırlatıcı kaydedildi ancak seçilen bildirim zamanı geçmişte kaldığı için cihaz bildirimi kurulmadı. Tarihi veya uyarı zamanını düzenleyebilirsiniz.'
+                  : 'Hatırlatıcı kaydedildi ancak cihaz bildirimi kurulamadı. Hatırlatıcılar ekranında yeniden denenecek.'
                 : null,
             });
           }),
@@ -282,6 +301,7 @@ export const useDataStore = create<DataState>()(
             bootstrapped: false,
             bootstrapError: null,
             lastReminderNotice: null,
+            lastBootstrapDurationMs: null,
             ...emptyVehicleData,
           }),
         clearError: () => set({ error: null }),

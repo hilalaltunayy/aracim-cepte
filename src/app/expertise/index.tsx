@@ -12,6 +12,7 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
+import { getAttachmentTypeLabel } from '@/data/storage/attachmentPresentation';
 
 export default function ExpertiseListScreen() {
   const { colors } = useAppTheme();
@@ -37,12 +38,18 @@ export default function ExpertiseListScreen() {
                 {report.reportNumber ? (
                   <Text style={styles.meta}>Rapor no: {report.reportNumber}</Text>
                 ) : null}
+                <Text style={styles.meta}>
+                  {report.attachmentPath
+                    ? `Ekspertiz eki · ${getAttachmentTypeLabel(report.attachmentPath)}`
+                    : 'Ek dosya yok'}
+                </Text>
               </View>
               <AppButton
                 title="Aç"
                 variant="ghost"
+                compact
                 onPress={() =>
-                  router.push({ pathname: '/expertise/edit', params: { id: report.id } })
+                  router.navigate({ pathname: '/expertise/edit', params: { id: report.id } })
                 }
               />
             </Card>

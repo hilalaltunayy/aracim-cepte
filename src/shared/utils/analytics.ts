@@ -82,6 +82,13 @@ export function getMonthlyTotals(
   });
 }
 
+export function getMonthlyTrendTotal(data: readonly MonthlyTotal[]): number {
+  return data.reduce(
+    (sum, item) => sum + (Number.isFinite(item.total) && item.total > 0 ? item.total : 0),
+    0,
+  );
+}
+
 export function getPreviousMonthComparison(
   records: VehicleRecord[],
   anchor = new Date(),
@@ -146,10 +153,28 @@ export function getCostPerKilometer(records: VehicleRecord[]): number | null {
   return Number.isFinite(result) ? result : null;
 }
 
-export type UrgencyStatus = 'completed' | 'overdue' | 'due' | 'upcoming' | 'planned';
+export const REMINDER_APPROACHING_DAYS = 30;
+export const REMINDER_APPROACHING_KILOMETERS = 1_000;
 
-function urgencyRank(status: UrgencyStatus): number {
-  return { completed: 0, planned: 1, upcoming: 2, due: 3, overdue: 4 }[status];
+export type ReminderDisplayStatus =
+  | 'completed'
+  | 'planned'
+  | 'approaching'
+  | 'today'
+  | 'date_overdue'
+  | 'mileage_due'
+  | 'mileage_overdue'
+  | 'both_overdue';
+
+export interface ReminderDisplay {
+  status: ReminderDisplayStatus;
+  reasons: string[];
+}
+
+function calendarDayDifference(from: Date, to: Date): number {
+  const fromUtc = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((toUtc - fromUtc) / 86_400_000);
 }
 
 export function getReminderKilometerProgress(targetKm: number, currentKm: number) {
@@ -168,30 +193,75 @@ export function getReminderStatus(
   },
   currentKm: number,
   today = todayDateOnly(),
-): UrgencyStatus {
-  if (reminder.completed) return 'completed';
-  const statuses: UrgencyStatus[] = [];
+): ReminderDisplayStatus {
+  return getReminderDisplay(reminder, currentKm, today).status;
+}
+
+export function getReminderDisplay(
+  reminder: {
+    completed: boolean;
+    dueDate: string | null;
+    dueKilometer: number | null;
+  },
+  currentKm: number,
+  today = todayDateOnly(),
+): ReminderDisplay {
+  if (reminder.completed) return { status: 'completed', reasons: ['Tamamlandı'] };
+  let dateStatus: 'planned' | 'approaching' | 'today' | 'overdue' | null = null;
+  let kilometerStatus: 'planned' | 'approaching' | 'due' | 'overdue' | null = null;
+  const reasons: string[] = [];
   if (reminder.dueDate) {
     const due = parseDateOnly(reminder.dueDate);
     const current = parseDateOnly(today);
     if (due && current) {
-      const days = Math.ceil((due.getTime() - current.getTime()) / 86_400_000);
-      statuses.push(days < 0 ? 'overdue' : days <= 30 ? 'upcoming' : 'planned');
+      const days = calendarDayDifference(current, due);
+      dateStatus =
+        days < 0
+          ? 'overdue'
+          : days === 0
+            ? 'today'
+            : days <= REMINDER_APPROACHING_DAYS
+              ? 'approaching'
+              : 'planned';
+      reasons.push(
+        days < 0
+          ? `Tarih ${Math.abs(days)} gün geçti`
+          : days === 0
+            ? 'Tarih bugün'
+            : `Tarihe ${days.toLocaleString('tr-TR')} gün kaldı`,
+      );
     }
   }
   if (reminder.dueKilometer !== null) {
-    const remaining = reminder.dueKilometer - currentKm;
-    statuses.push(
-      remaining < 0
+    const difference = Math.round(reminder.dueKilometer - currentKm);
+    kilometerStatus =
+      difference < 0
         ? 'overdue'
-        : remaining === 0
+        : difference === 0
           ? 'due'
-          : remaining <= 1000
-            ? 'upcoming'
-            : 'planned',
+          : difference <= REMINDER_APPROACHING_KILOMETERS
+            ? 'approaching'
+            : 'planned';
+    reasons.push(
+      difference < 0
+        ? `${Math.abs(difference).toLocaleString('tr-TR')} km aşıldı`
+        : difference === 0
+          ? 'Hedef kilometreye ulaşıldı'
+          : `${difference.toLocaleString('tr-TR')} km kaldı`,
     );
   }
-  return statuses.sort((a, b) => urgencyRank(b) - urgencyRank(a))[0] ?? 'planned';
+
+  if (dateStatus === 'overdue' && kilometerStatus === 'overdue') {
+    return { status: 'both_overdue', reasons };
+  }
+  if (kilometerStatus === 'overdue') return { status: 'mileage_overdue', reasons };
+  if (dateStatus === 'overdue') return { status: 'date_overdue', reasons };
+  if (kilometerStatus === 'due') return { status: 'mileage_due', reasons };
+  if (dateStatus === 'today') return { status: 'today', reasons };
+  if (dateStatus === 'approaching' || kilometerStatus === 'approaching') {
+    return { status: 'approaching', reasons };
+  }
+  return { status: 'planned', reasons };
 }
 
 export type DocumentExpiryStatus = 'expired' | 'approaching' | 'valid' | 'no_expiry';

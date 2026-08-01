@@ -1,7 +1,14 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AppHeader, Card, Screen, SectionHeader } from '@/shared/components/ui';
+import {
+  AppHeader,
+  Card,
+  LoadingScreen,
+  NoVehicleState,
+  Screen,
+  SectionHeader,
+} from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
 import {
   fontFamilies,
@@ -15,6 +22,7 @@ import {
 import { bodyTypeLabels, fuelTypeLabels } from '@/shared/constants/labels';
 import { formatNumber } from '@/shared/utils/format';
 import { getBodyConditionSummary } from '@/shared/utils/analytics';
+import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 
 const sections = [
   {
@@ -46,10 +54,26 @@ const sections = [
 export default function VehicleScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const { vehicles, activeVehicleId, bodyConditions, expertiseReports, notes, documents } =
-    useDataStore();
+  const {
+    vehicles,
+    activeVehicleId,
+    bodyConditions,
+    expertiseReports,
+    notes,
+    documents,
+    bootstrapped,
+  } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
-  if (!vehicle) return null;
+  const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
+  if (vehicleState === 'loading') return <LoadingScreen />;
+  if (!vehicle) {
+    return (
+      <Screen>
+        <AppHeader title="Aracım" subtitle="Araç bilgilerinizi yönetin" />
+        <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   const summary = getBodyConditionSummary(bodyConditions);
   return (
     <Screen>
@@ -114,7 +138,7 @@ export default function VehicleScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${section.title} ekranını aç`}
               style={({ pressed }) => pressed && styles.pressed}
-              onPress={() => router.push(section.route)}
+              onPress={() => router.navigate(section.route)}
             >
               <Card style={styles.sectionCard}>
                 <View style={styles.sectionIcon}>

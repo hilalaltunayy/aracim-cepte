@@ -8,6 +8,7 @@ import { useDataStore } from '@/store/dataStore';
 import { fontFamilies, radii, spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { sortRecords } from '@/shared/utils/analytics';
 import { getSelectionAccessibilityState } from '@/shared/utils/accessibility';
+import { editRecordHref } from '@/shared/utils/routeParams';
 
 type Filter = 'all' | RecordType;
 const filters: { value: Filter; label: string }[] = [
@@ -49,7 +50,7 @@ export default function HistoryScreen() {
             <RecordCard
               key={record.id}
               record={record}
-              onPress={() => router.push({ pathname: '/record/edit', params: { id: record.id } })}
+              onPress={() => router.navigate(editRecordHref(record.id))}
             />
           ))}
         </View>

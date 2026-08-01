@@ -1,5 +1,8 @@
 import { Reminder } from '@/domain/entities';
-import { parseDateOnly } from '@/shared/utils/format';
+import {
+  DEFAULT_NOTIFICATION_LEAD_DAYS,
+  getReminderNotificationTrigger,
+} from './notificationSchedule';
 
 export type ReminderNotificationStatus =
   | 'pending'
@@ -16,7 +19,7 @@ export interface LocalReminderSchedule {
 export interface ReminderNotificationGateway {
   getPermission(requestIfUndetermined: boolean): Promise<'granted' | 'denied' | 'undetermined'>;
   list(): Promise<LocalReminderSchedule[]>;
-  schedule(reminder: Reminder, date: Date): Promise<string>;
+  schedule(reminder: Reminder, date: Date, leadDays: number): Promise<string>;
   cancel(id: string): Promise<void>;
 }
 
@@ -33,7 +36,13 @@ async function cancelAll(gateway: ReminderNotificationGateway, ids: Iterable<str
 export async function synchronizeReminderNotification(
   reminder: Reminder,
   gateway: ReminderNotificationGateway,
-  options: { requestPermission: boolean; forceReschedule?: boolean; staleIds?: string[] },
+  options: {
+    requestPermission: boolean;
+    forceReschedule?: boolean;
+    staleIds?: string[];
+    leadDays?: number;
+    now?: Date;
+  },
 ): Promise<ReminderNotificationSyncResult> {
   try {
     const scheduled = await gateway.list();
@@ -43,12 +52,23 @@ export async function synchronizeReminderNotification(
       ...(reminder.notificationId ? [reminder.notificationId] : []),
       ...matching.map((item) => item.id),
     ];
-    const date = reminder.dueDate ? parseDateOnly(reminder.dueDate) : null;
-    if (date) date.setHours(9, 0, 0, 0);
+    const leadDays = options.leadDays ?? DEFAULT_NOTIFICATION_LEAD_DAYS;
+    const date = reminder.dueDate
+      ? getReminderNotificationTrigger(reminder.dueDate, leadDays, options.now)
+      : null;
 
-    if (reminder.completed || !date || date.getTime() <= Date.now()) {
+    if (reminder.completed || !reminder.dueDate) {
       await cancelAll(gateway, knownIds);
       return { status: 'not_required', notificationId: null, errorCode: null };
+    }
+
+    if (!date) {
+      await cancelAll(gateway, knownIds);
+      return {
+        status: 'failed',
+        notificationId: null,
+        errorCode: 'NOTIFICATION_TRIGGER_PAST',
+      };
     }
 
     if (!options.forceReschedule && matching.length === 1) {
@@ -73,7 +93,7 @@ export async function synchronizeReminderNotification(
       return { status: 'pending', notificationId: null, errorCode: null };
     }
 
-    const notificationId = await gateway.schedule(reminder, date);
+    const notificationId = await gateway.schedule(reminder, date, leadDays);
     return { status: 'scheduled', notificationId, errorCode: null };
   } catch {
     return {

@@ -8,6 +8,8 @@ import {
   EmptyState,
   ErrorBanner,
   FadeIn,
+  LoadingScreen,
+  NoVehicleState,
   Screen,
   SectionHeader,
   StatusBadge,
@@ -34,13 +36,28 @@ import {
 } from '@/shared/utils/analytics';
 import { formatCurrency, formatNumber } from '@/shared/utils/format';
 import { getDashboardShortcutAccessibilityLabel } from '@/shared/utils/accessibility';
+import { createRecordHref, editRecordHref } from '@/shared/utils/routeParams';
+import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const { vehicles, activeVehicleId, records, reminders, error, refresh } = useDataStore();
+  const { vehicles, activeVehicleId, records, reminders, error, refresh, bootstrapped } =
+    useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
-  if (!vehicle) return null;
+  const vehicleState = resolveVehicleScreenState({
+    bootstrapped,
+    vehicleFound: Boolean(vehicle),
+  });
+  if (vehicleState === 'loading') return <LoadingScreen />;
+  if (!vehicle) {
+    return (
+      <Screen>
+        <AppHeader title="Merhaba" subtitle="Aracınızı ekleyerek başlayın" />
+        <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   const totals = getCurrentMonthRecordTypeTotals(records);
   const monthly = getMonthlyTotals(records);
   const comparison = getPreviousMonthComparison(records);
@@ -104,8 +121,8 @@ export default function DashboardScreen() {
             style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
             onPress={() =>
               'route' in action
-                ? router.push(action.route)
-                : router.push({ pathname: '/record/edit', params: { type: action.type } })
+                ? router.navigate(action.route)
+                : router.navigate(createRecordHref(action.type))
             }
           >
             <View style={styles.actionIcon}>
@@ -158,11 +175,13 @@ export default function DashboardScreen() {
             {costPerKm === null ? '—' : `${formatCurrency(costPerKm)}/km`}
           </Text>
           <Text style={styles.metricLabel}>Yaklaşık maliyet</Text>
+          {costPerKm === null ? (
+            <Text style={styles.metricHelp}>
+              Kilometre başına maliyeti hesaplamak için en az iki farklı kilometre kaydı gerekir.
+            </Text>
+          ) : null}
         </Card>
       </View>
-      {costPerKm === null ? (
-        <Text style={styles.insight}>Hesaplamak için yeterli kilometre verisi yok.</Text>
-      ) : null}
       <SectionHeader
         title="Son hareketler"
         actionLabel="Tümünü gör"
@@ -174,7 +193,7 @@ export default function DashboardScreen() {
             <RecordCard
               key={record.id}
               record={record}
-              onPress={() => router.push({ pathname: '/record/edit', params: { id: record.id } })}
+              onPress={() => router.navigate(editRecordHref(record.id))}
             />
           ))}
         </View>
@@ -256,5 +275,6 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     detailMetrics: { flexDirection: 'row', gap: spacing.md },
     detailMetric: { flex: 1, gap: spacing.xs },
     detailValue: { color: colors.navy, ...typography.cardTitle },
+    metricHelp: { color: colors.muted, fontSize: 11, lineHeight: 16 },
     list: { gap: spacing.md },
   });

@@ -7,7 +7,7 @@ import {
 } from './notificationRecovery';
 
 const futureDate = () => {
-  const date = new Date(Date.now() + 86_400_000);
+  const date = new Date(Date.now() + 3 * 86_400_000);
   return date.toISOString().slice(0, 10);
 };
 
@@ -101,5 +101,19 @@ describe('reminder notification recovery', () => {
     );
     expect(result.status).toBe('not_required');
     expect(fake.cancelled).toContain('local-old');
+  });
+
+  it('does not schedule a past lead-time trigger', async () => {
+    const fake = gateway();
+    const result = await synchronizeReminderNotification(
+      reminder({ dueDate: '2026-08-02' }),
+      fake.value,
+      { requestPermission: true, leadDays: 1, now: new Date(2026, 7, 2, 12) },
+    );
+    expect(result).toEqual({
+      status: 'failed',
+      notificationId: null,
+      errorCode: 'NOTIFICATION_TRIGGER_PAST',
+    });
   });
 });

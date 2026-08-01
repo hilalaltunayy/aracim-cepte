@@ -29,6 +29,10 @@ import {
 import { isValidPartKey } from '@/features/bodyCondition/schemas';
 import { createRequestId } from '@/shared/utils/requestId';
 import { reconcileAttachments } from '@/data/storage/attachments';
+import {
+  removeNotificationPreferences,
+  setNotificationLeadDays,
+} from '@/features/reminders/notificationPreferences';
 
 async function ownerId(): Promise<string> {
   const { data, error } = await getSupabaseClient().auth.getUser();
@@ -76,21 +80,22 @@ export class SupabaseAppRepository implements AppRepository {
 
   async deleteVehicle(id: string) {
     const client = getSupabaseClient();
-    const reminders = await client.from('reminders').select('notification_id').eq('vehicle_id', id);
+    const reminders = await client
+      .from('reminders')
+      .select('id, notification_id')
+      .eq('vehicle_id', id);
     if (reminders.error) throw reminders.error;
     const { error } = await client.rpc('delete_vehicle_consistent', { p_vehicle_id: id });
     if (error) throw error;
     await Promise.all(
       (reminders.data ?? []).map((item) => cancelReminderNotification(item.notification_id)),
     );
+    await removeNotificationPreferences((reminders.data ?? []).map((item) => item.id));
     void reconcileAttachments().catch(() => undefined);
   }
 
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
     const client = getSupabaseClient();
-    const metadataRepair = await client.rpc('reconcile_my_attachment_metadata');
-    if (metadataRepair.error) throw metadataRepair.error;
-    void reconcileAttachments().catch(() => undefined);
     const [records, reminders, body, expertise, notes, documents] = await Promise.all([
       client
         .from('vehicle_records')
@@ -120,8 +125,23 @@ export class SupabaseAppRepository implements AppRepository {
       documents.error;
     if (error) throw error;
     const mappedReminders = (reminders.data ?? []).map(mapReminder);
+    return {
+      records: (records.data ?? []).map(mapRecord),
+      reminders: mappedReminders,
+      bodyConditions: (body.data ?? []).map(mapBodyCondition),
+      expertiseReports: (expertise.data ?? []).map(mapExpertise),
+      notes: (notes.data ?? []).map(mapNote),
+      documents: (documents.data ?? []).map(mapDocument),
+    };
+  }
+
+  async reconcileVehicleData(vehicleId: string, reminders: Reminder[]) {
+    const client = getSupabaseClient();
+    const metadataRepair = await client.rpc('reconcile_my_attachment_metadata');
+    if (metadataRepair.error) throw metadataRepair.error;
+    void reconcileAttachments().catch(() => undefined);
     const reconciledReminders = await Promise.all(
-      mappedReminders.map(async (reminder) => {
+      reminders.map(async (reminder) => {
         const sync = await reconcileReminderNotification(reminder, { requestPermission: false });
         if (
           sync.status === reminder.notificationStatus &&
@@ -148,12 +168,19 @@ export class SupabaseAppRepository implements AppRepository {
     if (!allReminderIds.error) {
       await cancelUnknownReminderNotifications(new Set((allReminderIds.data ?? []).map((item) => item.id)));
     }
+    const [expertise, documents] = await Promise.all([
+      client
+        .from('expertise_reports')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('report_date', { ascending: false }),
+      client.from('vehicle_documents').select('*').eq('vehicle_id', vehicleId).order('expiry_date'),
+    ]);
+    if (expertise.error) throw expertise.error;
+    if (documents.error) throw documents.error;
     return {
-      records: (records.data ?? []).map(mapRecord),
       reminders: reconciledReminders,
-      bodyConditions: (body.data ?? []).map(mapBodyCondition),
       expertiseReports: (expertise.data ?? []).map(mapExpertise),
-      notes: (notes.data ?? []).map(mapNote),
       documents: (documents.data ?? []).map(mapDocument),
     };
   }
@@ -209,10 +236,14 @@ export class SupabaseAppRepository implements AppRepository {
     const { data, error } = await query.select('*').single();
     if (error) throw error;
     const saved = mapReminder(required(data, 'Hatırlatıcı kaydedilemedi.'));
+    if (draft.notificationLeadDays !== undefined) {
+      await setNotificationLeadDays(saved.id, draft.notificationLeadDays);
+    }
     const sync = await reconcileReminderNotification(saved, {
       requestPermission: true,
       forceReschedule: true,
       staleIds: previous?.notificationId ? [previous.notificationId] : [],
+      leadDays: draft.notificationLeadDays,
     });
     const synced = await client
       .from('reminders')
@@ -284,6 +315,7 @@ export class SupabaseAppRepository implements AppRepository {
     const { error } = await client.from('reminders').delete().eq('id', id);
     if (error) throw error;
     if (result.data) await cancelReminderNotification(result.data.notification_id);
+    await removeNotificationPreferences([id]);
   }
 
   async saveBodyCondition(
@@ -387,12 +419,13 @@ export class SupabaseAppRepository implements AppRepository {
     if (section === 'reminders') {
       const { data, error: listError } = await client
         .from('reminders')
-        .select('notification_id')
+        .select('id, notification_id')
         .eq('vehicle_id', vehicleId);
       if (listError) throw listError;
       const { error } = await client.from('reminders').delete().eq('vehicle_id', vehicleId);
       if (error) throw error;
       await Promise.all((data ?? []).map((item) => cancelReminderNotification(item.notification_id)));
+      await removeNotificationPreferences((data ?? []).map((item) => item.id));
       return;
     }
     if (section === 'documents') {

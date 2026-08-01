@@ -36,7 +36,7 @@ export function AttachmentField({
           <Text numberOfLines={2} style={styles.fileName}>
             {fileName}
           </Text>
-          <AppButton title="Kaldır" variant="ghost" onPress={onRemove} />
+          <AppButton title="Kaldır" variant="ghost" compact onPress={onRemove} />
         </Card>
       ) : null}
       <View style={styles.actions}>

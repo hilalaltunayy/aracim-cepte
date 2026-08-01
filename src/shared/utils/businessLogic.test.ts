@@ -6,6 +6,7 @@ import {
   getDocumentExpiryStatus,
   getMonthlyTotals,
   getPreviousMonthComparison,
+  getReminderDisplay,
   getReminderKilometerProgress,
   getReminderStatus,
   sortRecords,
@@ -86,14 +87,14 @@ describe('status calculations', () => {
         1000,
         '2026-02-21',
       ),
-    ).toBe('overdue');
+    ).toBe('date_overdue');
     expect(
       getReminderStatus(
         { completed: false, dueDate: null, dueKilometer: 1800 },
         1000,
         '2026-02-01',
       ),
-    ).toBe('upcoming');
+    ).toBe('approaching');
     expect(
       getReminderStatus({ completed: true, dueDate: '2020-01-01', dueKilometer: null }, 1000),
     ).toBe('completed');
@@ -101,8 +102,8 @@ describe('status calculations', () => {
 
   it('distinguishes mileage due from overdue and clamps displayed distances', () => {
     const reminder = { completed: false, dueDate: null, dueKilometer: 50_000 };
-    expect(getReminderStatus(reminder, 50_000, '2026-02-01')).toBe('due');
-    expect(getReminderStatus(reminder, 50_001, '2026-02-01')).toBe('overdue');
+    expect(getReminderStatus(reminder, 50_000, '2026-02-01')).toBe('mileage_due');
+    expect(getReminderStatus(reminder, 50_001, '2026-02-01')).toBe('mileage_overdue');
     expect(getReminderKilometerProgress(50_000, 49_500)).toEqual({
       remaining: 500,
       overdueBy: 0,
@@ -111,6 +112,43 @@ describe('status calculations', () => {
       remaining: 0,
       overdueBy: 250,
     });
+  });
+
+  it('uses local calendar days and explains combined date and mileage reasons', () => {
+    expect(
+      getReminderDisplay(
+        { completed: false, dueDate: '2026-08-02', dueKilometer: null },
+        240_000,
+        '2026-08-02',
+      ),
+    ).toEqual({ status: 'today', reasons: ['Tarih bugün'] });
+    expect(
+      getReminderDisplay(
+        { completed: false, dueDate: '2026-08-01', dueKilometer: 300_000 },
+        240_000,
+        '2026-08-03',
+      ),
+    ).toEqual({
+      status: 'date_overdue',
+      reasons: ['Tarih 2 gün geçti', '60.000 km kaldı'],
+    });
+    expect(
+      getReminderDisplay(
+        { completed: false, dueDate: '2026-08-10', dueKilometer: 15_000 },
+        240_000,
+        '2026-08-02',
+      ),
+    ).toEqual({
+      status: 'mileage_overdue',
+      reasons: ['Tarihe 8 gün kaldı', '225.000 km aşıldı'],
+    });
+    expect(
+      getReminderStatus(
+        { completed: false, dueDate: '2026-08-01', dueKilometer: 15_000 },
+        240_000,
+        '2026-08-02',
+      ),
+    ).toBe('both_overdue');
   });
 
   it('calculates document expiry status from date-only values', () => {

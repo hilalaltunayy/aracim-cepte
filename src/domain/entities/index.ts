@@ -135,7 +135,10 @@ export type RecordDraft = Pick<
   VehicleRecord,
   'recordType' | 'category' | 'amount' | 'recordDate' | 'kilometer' | 'liters' | 'description'
 >;
-export type ReminderDraft = Pick<Reminder, 'title' | 'reminderType' | 'dueDate' | 'dueKilometer'>;
+export type ReminderDraft = Pick<
+  Reminder,
+  'title' | 'reminderType' | 'dueDate' | 'dueKilometer'
+> & { notificationLeadDays?: number };
 export type ExpertiseDraft = Pick<
   ExpertiseReport,
   'reportDate' | 'companyName' | 'overallNote' | 'reportNumber' | 'attachmentPath'

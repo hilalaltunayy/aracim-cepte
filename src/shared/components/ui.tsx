@@ -164,6 +164,7 @@ export function AppButton({
   disabled,
   variant = 'primary',
   icon,
+  compact,
 }: {
   title: string;
   onPress: () => void;
@@ -171,6 +172,7 @@ export function AppButton({
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   icon?: keyof typeof Ionicons.glyphMap;
+  compact?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useStyles();
@@ -191,12 +193,14 @@ export function AppButton({
       accessibilityState={accessibility.state}
       style={({ pressed }) => [
         styles.buttonWrap,
+        compact && styles.buttonWrapCompact,
         pressed && !disabled && !loading && styles.pressed,
       ]}
     >
       <Animated.View
         style={[
           styles.button,
+          compact && styles.buttonCompact,
           styles[`button_${variant}`],
           (disabled || loading) && styles.disabled,
           { transform: [{ scale }] },
@@ -547,6 +551,20 @@ export function EmptyState({
   );
 }
 
+export function NoVehicleState({ onCreate }: { onCreate: () => void }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.noVehicle}>
+      <EmptyState
+        title="Henüz araç yok"
+        message="Araç bilgilerinizi eklediğinizde kayıtlarınız ve planlarınız burada görünecek."
+        icon="car-outline"
+      />
+      <AppButton title="Araç ekle" icon="add" onPress={onCreate} />
+    </View>
+  );
+}
+
 export function LoadingScreen() {
   const { colors } = useAppTheme();
   const styles = useStyles();
@@ -652,6 +670,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     formSectionTitle: { color: colors.textPrimary, ...typography.cardTitle },
     formSectionDescription: { color: colors.textSecondary, ...typography.caption },
     buttonWrap: { minHeight: 52, width: '100%' },
+    buttonWrapCompact: { width: 'auto', minHeight: 42 },
     button: {
       minHeight: 52,
       paddingHorizontal: spacing.xl,
@@ -661,6 +680,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       flexDirection: 'row',
       gap: spacing.sm,
     },
+    buttonCompact: { minHeight: 42, paddingHorizontal: spacing.md },
     pressed: { opacity: 0.78 },
     disabled: { backgroundColor: colors.disabledSurface },
     button_primary: { backgroundColor: colors.primaryAction },
@@ -791,6 +811,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     },
     emptyTitle: { color: colors.textPrimary, ...typography.cardTitle, textAlign: 'center' },
     emptyMessage: { color: colors.textSecondary, ...typography.body, textAlign: 'center' },
+    noVehicle: { gap: spacing.lg },
     loading: {
       flex: 1,
       backgroundColor: colors.screenBackground,

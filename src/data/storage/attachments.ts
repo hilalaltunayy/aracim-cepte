@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
+import { Linking } from 'react-native';
 import { getSupabaseClient } from '@/data/supabase/client';
 import { getFunctionErrorCode } from '@/data/supabase/functionErrors';
 import { AppError } from '@/shared/utils/errors';
@@ -12,6 +12,7 @@ import {
   getAttachmentPickerErrorMessage,
   normalizeAttachmentMime,
 } from './attachmentRules';
+import { openPrivateAttachment } from './openAttachment';
 
 export interface PickedAttachment {
   uri: string;
@@ -135,11 +136,13 @@ export async function reconcileAttachments(): Promise<void> {
 }
 
 export async function openAttachment(path: string): Promise<void> {
-  const { data, error } = await getSupabaseClient()
-    .storage.from('vehicle-attachments')
-    .createSignedUrl(path, 60);
-  if (error || !data.signedUrl) throw error ?? new AppError('Dosya açılamadı.');
-  const supported = await Linking.canOpenURL(data.signedUrl);
-  if (!supported) throw new AppError('Bu dosya türü cihazda açılamıyor.');
-  await Linking.openURL(data.signedUrl);
+  const storage = getSupabaseClient().storage.from('vehicle-attachments');
+  await openPrivateAttachment(path, {
+    async createSignedUrl(objectPath) {
+      const { data, error } = await storage.createSignedUrl(objectPath, 60);
+      return error ? null : (data.signedUrl ?? null);
+    },
+    canOpenUrl: (url) => Linking.canOpenURL(url),
+    openUrl: (url) => Linking.openURL(url),
+  });
 }

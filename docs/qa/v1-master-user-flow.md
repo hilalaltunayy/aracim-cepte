@@ -1,5 +1,23 @@
 # V1 ana kullanıcı akışı denetimi
 
+## TASK-010 cihaz kabulü sonrası güncelleme — 2026-08-02
+
+- Dashboard hızlı aksiyonları ve history kartları doğrulanmış string route parametreleriyle merkezi
+  helper üzerinden `navigate` eder; aktif araç/entity yokluğu güvenli loading/empty state üretir.
+- Dashboard, Araç, Hatırlatıcılar ve Gövde ekranları silinmiş/stale active vehicle durumunda `null`
+  render etmez. Mutation sonrası araç listesi yeniden çözülür ve silinmiş ID temizlenir.
+- Attachment açma kısa ömürlü signed URL üretimi, Android handler ve native open hatalarını tek güvenli
+  boundary'de toplar; kullanıcıya provider/path/URL detayı göstermez.
+- Reminder kartları tarih ve kilometreyi ayrı değerlendirir. Merkezi eşikler tarih için 30 gün,
+  kilometre için 1.000 km'dir; bugün/eşit/aşım durumları ayrı etiketlenir.
+- Mevcut tek-notification-ID sözleşmesi nedeniyle V1 lead-time seçimi tek seçimdir: 7, 3, 1, 0 veya
+  özel gün; varsayılan 1 gün ve cihaz yerel saatinde 09:00. Tercih PII içermeden cihazda saklanır.
+- İlk render yalnız session/araç ve ana veri paketini bekler; attachment/reminder reconciliation
+  tutarlılık garantisini koruyarak arka planda çalışır.
+- 1–2 Ağustos APK'sında bulunan crash/beyaz ekranlar nedeniyle bunların kaynak düzeltmesi `Passed`
+  sayılmaz. Yeni APK için [TASK-010 kabul matrisi](v1-acceptance-test-matrix.md#task-010-android-crash-regression-matrisi--2026-08-02)
+  zorunludur.
+
 **Audit date:** 2026-08-01
 **Kapsam:** 35 kanonik kullanıcı işlemi
 **Kanıt düzeyi:** Kaynak kod + mevcut Vitest + [V1 release kapıları](../release/v1-release-gates.md)

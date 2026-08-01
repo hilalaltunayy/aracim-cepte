@@ -7,6 +7,7 @@ import {
   getCostPerKilometer,
   getCurrentMonthRecordTypeTotals,
   getMonthlyTotals,
+  getMonthlyTrendTotal,
   getPreviousMonthSummary,
   getTotalFuelLiters,
 } from './analytics';
@@ -145,6 +146,27 @@ describe('deterministic Prompt 3 seed calculations', () => {
       '2026-07',
     ]);
     expect(monthly.map((item) => item.total)).toEqual(fixture.expected.sixMonthTotals);
+    expect(getMonthlyTrendTotal(monthly)).toBe(
+      fixture.expected.sixMonthTotals.reduce((sum, value) => sum + value, 0),
+    );
+  });
+
+  it('does not confuse fuel amount with litres and keeps zero comparisons honest', () => {
+    const amountOnly = record('fuel-no-litres', '2026-07-10', 500, null, {
+      recordType: 'fuel',
+      liters: null,
+    });
+    const withLitres = record('fuel-with-litres', '2026-07-11', 500, null, {
+      recordType: 'fuel',
+      liters: 50,
+    });
+    expect(getTotalFuelLiters([amountOnly])).toBe(0);
+    expect(getTotalFuelLiters([amountOnly, withLitres])).toBe(50);
+    expect(getPreviousMonthSummary([], anchor).percentageChange).toBeNull();
+    expect(
+      getPreviousMonthSummary([record('previous', '2026-06-10', 100, null)], anchor)
+        .percentageChange,
+    ).toBe(-100);
   });
 
   it('calculates category percentages and a zero-safe empty state', () => {
