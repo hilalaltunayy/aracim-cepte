@@ -23,4 +23,9 @@ describe('attachment upload rules', () => {
     expect(getAttachmentErrorMessage('ATTACHMENT_BYTES_QUOTA_EXCEEDED')).toContain('25 MB');
     expect(getAttachmentErrorMessage('unknown')).not.toContain('unknown');
   });
+
+  it('returns a safe Turkish error when server-side size validation fails', () => {
+    expect(getAttachmentErrorMessage('ATTACHMENT_SIZE_REQUIRED')).toContain('doğrulanamadı');
+    expect(getAttachmentErrorMessage('ATTACHMENT_SIZE_MISMATCH')).toContain('doğrulanamadı');
+  });
 });

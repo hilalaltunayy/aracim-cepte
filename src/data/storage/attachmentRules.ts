@@ -22,6 +22,9 @@ export function getAttachmentErrorMessage(code: string | null): string {
       return 'Boş dosya yüklenemez.';
     case 'ATTACHMENT_FILE_TOO_LARGE':
       return 'Dosya en fazla 5 MB olabilir.';
+    case 'ATTACHMENT_SIZE_REQUIRED':
+    case 'ATTACHMENT_SIZE_MISMATCH':
+      return 'Dosya boyutu güvenli biçimde doğrulanamadı. Lütfen dosyayı yeniden seçin.';
     case 'ATTACHMENT_TYPE_NOT_ALLOWED':
     case 'ATTACHMENT_CONTENT_MISMATCH':
       return 'Yalnızca PDF, JPG/JPEG ve PNG dosyaları yüklenebilir.';

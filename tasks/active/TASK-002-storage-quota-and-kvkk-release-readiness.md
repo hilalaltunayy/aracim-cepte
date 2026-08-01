@@ -1,6 +1,6 @@
 # TASK-002 — Storage kotası ve KVKK release readiness
 
-**Status:** DEPLOYED — UPLOAD SECURITY E2E FAILED; DEVICE AND LEGAL VERIFICATION PENDING
+**Status:** DEPLOYED — REMOTE UPLOAD E2E PASSED; DEVICE AND LEGAL VERIFICATION PENDING
 **Owner:** Unassigned  
 **Created:** 2026-08-01  
 **Updated:** 2026-08-01
@@ -56,13 +56,14 @@ Function'ları, istemci entegrasyonu, Storage-first silme akışları ve hukuk t
 Server rezervasyonu 10 belge/25 MB toplam kotayı kullanıcı bazlı transaction lock ile korur; bucket ve
 stream limiti 5 MB, allow-list PDF/JPEG/PNG'dir. Object path owner/vehicle/random UUID yapısındadır.
 
-2026-08-01 TASK-004 turunda migration ve iki Edge Function yalnız doğrulanmış
-`eiqxvvnqkbzbhzpthcwo` projesine deploy edildi. Remote bucket private/5 MB/PDF-JPEG-PNG olarak
-doğrulandı; User A/B DB izolasyonu, WebP/sahte MIME reddi, 60 saniyelik URL expiry ve hesap silme
-E2E'si geçti. Ancak izinli PDF upload'u reserved Storage INSERT aşamasında database HTTP 500 ile
-başarısız oldu; 5 MB üzeri istek de kontrollü 413 yerine 503 döndürdü. Bu nedenle belge upload'u,
-Storage cross-user izolasyonu, 10 belge/25 MB kota ve belge silme gate'leri kapanmamıştır. Production
-upload etkinleştirilemez; mevcut migration değiştirilmeden ayrı forward fix ve tekrar E2E gerekir.
+2026-08-01 TASK-004 forward-fix turunda
+`20260801132557_fix_attachment_reservation_storage_policy.sql` ve `upload-attachment` version 2 yalnız
+doğrulanmış `eiqxvvnqkbzbhzpthcwo` projesine deploy edildi. Public `SECURITY DEFINER` RPC kaldırıldı;
+helper Data API'den gizli private şemaya ve güvenli boş `search_path`'e taşındı. Remote hedefli ve tam
+E2E; PDF/JPEG/PNG, WebP/sahte MIME, 5 MB kontrollü 413 + bucket hard limit, User A/B Storage izolasyonu,
+10 belge/25 MB kota, belge silme, signed URL expiry ve hesap silme akışlarını geçti. Teknik upload
+blocker'ı kapanmıştır; Android, provider log, concurrency/reconciliation ve hukuk release gate'leri
+ayrıca açık kalır.
 
 ## Desired behavior
 
@@ -128,9 +129,9 @@ devre dışı bırakılır; çalışmayan veya korunmasız bir upload yolu yayı
       `application/pdf`, `image/jpeg` ve `image/png` kabul edilir; `.jpg` ve `.jpeg` aynı JPEG MIME'a
       eşlenir. Extension ve client beyanına tek başına güvenilmez; magic-byte/içerik doğrulaması,
       spoofed MIME ve bozuk/aktif dosya negatif testleri vardır.
-- [ ] **Private bucket:** `vehicle-attachments` public değildir; anon list/read ve unsigned/public URL
+- [x] **Private bucket:** `vehicle-attachments` public değildir; anon list/read ve unsigned/public URL
       reddedilir. Client bundle'da service-role/secret bulunmaz.
-- [ ] **Owner-scoped path:** Path authenticated kullanıcı ve doğrulanmış araç sahibine bağlıdır,
+- [x] **Owner-scoped path:** Path authenticated kullanıcı ve doğrulanmış araç sahibine bağlıdır,
       PII/orijinal dosya adı içermez ve random object ID kullanır. Başka owner/vehicle prefix spoof'u
       server-side reddedilir.
 - [ ] **Kısa süreli signed URL:** URL yalnız owner check sonrası üretilir, V1 varsayılanı 60 saniyedir,
@@ -375,33 +376,28 @@ Task'ın `Do not change` bölümü.
 - TASK-004 ile forward migration ve `upload-attachment`/`delete-account` doğrulanmış remote projeye
   deploy edildi; iki sentetik kullanıcıyla DB izolasyonu, WebP/sahte MIME reddi, signed URL expiry ve
   hesap silme Auth/DB/Storage/session temizliği kanıtlandı.
+- TASK-004 forward-fix ile izinli PDF/JPEG/PNG, cross-user Storage, 5 MB 413 + bucket hard limit, 11. object/25 MB quota ve belge DB/Storage silme remote E2E'si geçti; callable public helper kaldırıldı.
 - Sentetik QA Auth/profile/vehicle/document/reservation kayıtları ve Storage prefix'leri temizlendi.
 
 #### Skipped
 
-- İzinli upload blocker'ı nedeniyle 11. belge, 25 MB toplam kota, PDF/JPEG/PNG pozitif matrisi,
-  cross-user Storage ve belge metadata/object silme testleri çalıştırılamadı.
 - Provider/dashboard loglarında PII, object path ve signed URL örneklemi yetkili oturum olmadığı için
   incelenemedi.
 - Build kullanıcı talimatı gereği çalıştırılmadı.
 
 #### Failed
 
-- `npx supabase db reset`, Docker Desktop Linux engine pipe'ı bulunmadığı için başlamadan hata verdi.
-  Migration uygulanamadı; `rls_negative.sql` ve `storage_quota.sql` local database testleri bu nedenle
-  çalışmadı.
-- Remote izinli PDF upload'u `ATTACHMENT_UPLOAD_FAILED` verdi; tanı, rezervasyon RPC'si sonrasında
-  policy helper false ve Storage database HTTP 500 gösterdi.
-- 5 MB üzeri remote istek iki denemede kontrollü 413 yerine HTTP 503 verdi.
-- Supabase security advisor authenticated role'e açık `SECURITY DEFINER` reservation helper'ı ve
-  kapalı leaked-password protection için uyarı verdi.
+- `npx supabase db reset`, Docker Desktop Linux engine pipe'ı bulunmadığı için başlamadan hata verdi;
+  `rls_negative.sql` ve `storage_quota.sql` local database testleri bu nedenle çalışmadı. Forward migration
+  onaylı remote projeye ayrıca uygulandı ve eşdeğer kritik kontroller sentetik remote E2E ile geçti.
+- Güncel hedefli ve tam remote upload E2E'de failure yoktur.
+- Supabase Security Advisor leaked-password protection'ın kapalı olduğunu raporlamaya devam ediyor.
 
 #### Manual verification required
 
 - Gerçek Android cihazda upload tür/boyut/adet/toplam kota, hukuk bağlantıları, signed URL expiry ve
   belge/hesap silme akışları.
-- Ayrı forward-fix sonrasında iki kullanıcıyla PDF/JPEG/PNG, cross-user Storage, 10 belge/25 MB kota,
-  5 MB kontrollü red ve belge silme E2E tekrar testi.
+- Paralel quota yarışı, orphan retry/reconciliation ve provider log örneklemi için ayrı teknik kanıt.
 - Supabase region/provider evidence, sekiz hukuk blocker'ı ve production upload enable/temporary-disable
   kararı.
 

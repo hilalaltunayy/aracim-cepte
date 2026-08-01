@@ -25,6 +25,14 @@ export default {
     const vehicleId = request.headers.get('x-vehicle-id')?.trim();
     if (!vehicleId) return jsonResponse(400, { code: 'ATTACHMENT_VEHICLE_REQUIRED' });
 
+    const declaredFileSize = Number(request.headers.get('x-file-size'));
+    if (!Number.isSafeInteger(declaredFileSize) || declaredFileSize < 0) {
+      return jsonResponse(400, { code: 'ATTACHMENT_SIZE_REQUIRED' });
+    }
+    if (declaredFileSize > MAX_ATTACHMENT_BYTES) {
+      return jsonResponse(413, { code: 'ATTACHMENT_FILE_TOO_LARGE' });
+    }
+
     const declaredLength = Number(request.headers.get('content-length') ?? 0);
     if (Number.isFinite(declaredLength) && declaredLength > MAX_ATTACHMENT_BYTES) {
       return jsonResponse(413, { code: 'ATTACHMENT_FILE_TOO_LARGE' });
@@ -41,6 +49,9 @@ export default {
         return jsonResponse(413, { code: 'ATTACHMENT_FILE_TOO_LARGE' });
       }
       return jsonResponse(400, { code: 'ATTACHMENT_UPLOAD_FAILED' });
+    }
+    if (bytes.byteLength !== declaredFileSize) {
+      return jsonResponse(400, { code: 'ATTACHMENT_SIZE_MISMATCH' });
     }
     const validation = validateAttachment(bytes, request.headers.get('content-type'));
     if (!validation.ok) return jsonResponse(400, { code: validation.code });

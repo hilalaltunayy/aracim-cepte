@@ -1,9 +1,55 @@
 # TASK-004 — Supabase deploy and security E2E
 
-**Status:** DEPLOYED — SECURITY E2E FAILED; FORWARD FIX REQUIRED
+**Status:** TECHNICAL SECURITY E2E PASSED — MANUAL RELEASE CHECKS PENDING
 **Owner:** Codex
 **Created:** 2026-08-01
 **Updated:** 2026-08-01
+
+## Forward-fix execution plan — 2026-08-01
+
+### Goal
+
+Reserved Storage INSERT hatasını mevcut migration'ı değiştirmeden gidermek; reservation helper'ını
+Data API'den gizli ve güvenli `search_path` kullanan bir RLS yardımcısına dönüştürmek; upload request
+boyutu sözleşmesini kontrollü 413 üretecek şekilde sertleştirmek ve yalnız hedefli E2E matrisiyle
+kanıtlamak.
+
+### Current state and root-cause evidence
+
+- Sentetik rezervasyon satırının owner, vehicle, path, size, MIME ve expiry alanlarının tamamı beklenen
+  değerlerle eşleşti.
+- Aynı authenticated session ile public helper çağrısı PostgreSQL `42883` verdi. Kök neden,
+  `COALESCE` özel SQL ifadesinin `pg_catalog.coalesce(...)` biçiminde fonksiyon gibi çağrılmasıdır.
+- Storage, INSERT yetkilendirme aşamasında object metadata'yı `DEFAULT` bırakabildiğinden policy'nin
+  `metadata.size/mimetype` değerlerini INSERT anında zorunlu tutması da geçersiz bir varsayımdır.
+- Helper public/exposed schema'da `SECURITY DEFINER` ve authenticated `EXECUTE` yetkili olduğu için
+  doğrudan RPC yüzeyi oluşturur.
+
+### Scope
+
+- Yeni forward migration; private-schema helper, daraltılmış EXECUTE ve reserved INSERT policy fix.
+- Upload Edge Function ve istemci/test request-size header sözleşmesi.
+- Yalnız TASK-004'te listelenen hedefli remote upload/RLS/kota/silme testleri.
+
+### Out of scope
+
+- Mevcut migration'ı düzenlemek, build çalıştırmak, yeni ürün özelliği veya bağımlılık eklemek.
+- Gerçek kullanıcı verisine dokunmak ya da hedef project ref dışına deploy etmek.
+
+### Risks and rollback
+
+- Private helper policy tarafından çağrılamazsa upload fail-closed kalır; migration geri alınmaz,
+  ayrı forward migration hazırlanır.
+- Size header istemci beyanıdır; gerçek byte stream limiti ve bucket 5 MB limiti korunur, header tek
+  güvenlik katmanı değildir.
+- QA yalnız iki sentetik kullanıcı/prefix ile yürütülür ve `finally` cleanup + linked SQL audit yapılır.
+
+### Validation order
+
+1. Migration/helper/policy ve Edge helper testleri.
+2. Remote PDF/JPEG/PNG, WebP/spoof, 5 MB+, cross-user Storage, 10/25 MB ve belge silme hedefli E2E.
+3. Yalnız hedefli E2E geçerse typecheck, lint ve ilgili regresyon testleri.
+4. Advisor, diff, secret/scope ve Markdown link kontrolü; kanıt güncelleme; commit/push.
 
 ## Task ID
 
@@ -31,17 +77,23 @@ edilemez.
 - Local link, public endpoint ve explicit CLI hedefi `eiqxvvnqkbzbhzpthcwo` olarak eşleşti.
 - `20260801111349_enforce_attachment_quotas_and_private_uploads.sql` remote history'ye yalnız forward
   migration olarak uygulandı; son dry-run remote'un güncel olduğunu gösterdi.
-- `upload-attachment` ve `delete-account` remote listede `ACTIVE`, version 1 durumundadır.
+- `upload-attachment` remote listede `ACTIVE`, version 2; `delete-account` version 1 durumundadır.
 - Hosted function runtime'ın Supabase URL/key değişkenleri platform tarafından sağlanır; key
   envanteri yalnız ad/tür düzeyinde doğrulandı ve değerler loglanmadı. Auth gerektiren function probe'u
   runtime konfigürasyonunun çalıştığını doğruladı.
 - Remote bucket private, 5 MB limitli ve yalnız PDF/JPEG/PNG allow-list'li olarak doğrulandı.
 - İki sentetik kullanıcı testinde DB cross-user erişimi reddedildi; WebP ve sahte MIME reddedildi.
-- İzinli PDF upload'u `ATTACHMENT_UPLOAD_FAILED` döndürdü. Tanı testi rezervasyon RPC'sinin başarılı,
-  `is_valid_attachment_reservation` sonucunun false ve doğrudan reserved Storage upload'unun database
-  kaynaklı HTTP 500 olduğunu gösterdi. Bu nedenle Storage izolasyonu, 10/25 MB kotaları ve belge silme
-  E2E'si bloke oldu.
-- 5 MB üzeri istek iki denemede kontrollü 413 yerine uzun bekleme sonrası HTTP 503 döndürdü.
+- Kök neden tanısı rezervasyon satırının doğru olduğunu, public helper'ın ise yanlış
+  `pg_catalog.coalesce(...)` çağrısı nedeniyle PostgreSQL `42883` verdiğini gösterdi. Storage INSERT
+  anında metadata'yı zorunlu tutma varsayımı da geçersizdi.
+- `20260801132557_fix_attachment_reservation_storage_policy.sql` helper'ı Data API'den gizli `private`
+  şemaya, güvenli boş `search_path` ile taşıdı; public RPC'yi kaldırdı ve policy'yi server-generated
+  reservation path'ine bağladı. Security Advisor'ın callable `SECURITY DEFINER` uyarısı kapandı.
+- Upload request-size header preflight'i 5 MB üstünde kontrollü HTTP 413
+  `ATTACHMENT_FILE_TOO_LARGE` döndürüyor; gerçek byte limiti private bucket tarafından ayrıca enforce
+  ediliyor. Header tek güvenlik katmanı değildir.
+- Hedefli ve tam remote E2E; PDF/JPEG/PNG, WebP/spoof, owner path, cross-user Storage, rezervasyonsuz
+  direct upload, 10 belge/25 MB kota, belge silme, signed URL expiry ve hesap silme matrisini geçti.
 - Bağımsız sentetik hesap silme E2E'sinde Auth, DB cascade, Storage cleanup, eski session ve eski signed
   URL reddi doğrulandı. Yaklaşık 60 saniyelik URL 65 saniye sonra erişim sağlamadı.
 - Final cleanup SQL'i sentetik Auth/profile/vehicle/document/reservation sayılarının sıfır olduğunu;
@@ -85,12 +137,12 @@ edilemez.
 - [x] `upload-attachment` ve `delete-account` deployed function listesinde güncel görünür.
 - [x] Gerekli function environment/secret adları vardır; hiçbir secret değeri çıktıya veya commite
       yazılmaz.
-- [ ] User A kendi aracını, belge kaydını ve izinli dosyasını oluşturabilir.
-- [ ] User B, User A'nın DB kayıtlarını, Storage object'ini ve signed URL üretimini kullanamaz.
-- [ ] PDF, JPEG ve PNG kabul edilir; WebP, sahte MIME ve 5 MB üstü dosya reddedilir.
-- [ ] 11. belge ve kullanıcı başına toplam 25 MB sınırını aşan yükleme reddedilir.
-- [ ] Owner için üretilen signed URL yaklaşık 60 saniye sonra erişim sağlamaz.
-- [ ] Belge silme sonunda DB metadata ve Storage object yoktur.
+- [x] User A kendi aracını, belge kaydını ve izinli dosyasını oluşturabilir.
+- [x] User B, User A'nın DB kayıtlarını, Storage object'ini ve signed URL üretimini kullanamaz.
+- [x] PDF, JPEG ve PNG kabul edilir; WebP, sahte MIME ve 5 MB üstü dosya reddedilir.
+- [x] 11. belge ve kullanıcı başına toplam 25 MB sınırını aşan yükleme reddedilir.
+- [x] Owner için üretilen signed URL yaklaşık 60 saniye sonra erişim sağlamaz.
+- [x] Belge silme sonunda DB metadata ve Storage object yoktur.
 - [x] Hesap silme sonunda Auth, uygulama DB satırları ve Storage object'leri yoktur.
 - [x] Silinen hesaba ait eski session ve signed URL erişim sağlamaz.
 - [x] QA artefaktları cleanup ile kaldırılır ve cleanup sonucu ayrı doğrulanır.
@@ -110,19 +162,19 @@ edilemez.
 
 ## Relevant screenshots or evidence
 
-- 2026-08-01 remote CLI kanıtı: linked ref eşleşti; migration history local/remote eşleşti; iki
-  function `ACTIVE` version 1; final dry-run up-to-date.
-- 2026-08-01 E2E kanıtı: User A araç create ve User B DB izolasyonu geçti; WebP/sahte MIME reddi,
-  60 saniyelik URL expiry ve hesap silme E2E geçti. İzinli upload ile 5 MB üstü kontrollü red başarısız.
+- 2026-08-01 remote CLI kanıtı: linked ref eşleşti; forward-fix migration local/remote eşleşti;
+  `upload-attachment` `ACTIVE` version 2 ve `delete-account` version 1.
+- 2026-08-01 hedefli ve tam E2E kanıtı: bütün upload/RLS/kota/MIME/boyut/belge-silme kriterleri ile
+  signed URL ve hesap silme regresyonu geçti.
 - Cleanup kanıtı: Auth/profile/vehicle/document/reservation sayıları sıfır; sentetik Storage prefix'leri
   boş. Kimlik, token, object path ve signed URL kanıta yazılmadı.
-- Security advisor uyarıları: authenticated tarafından çağrılabilen `SECURITY DEFINER`
-  `is_valid_attachment_reservation` fonksiyonunun yetki yüzeyi ayrıca daraltılmalı; leaked-password
-  protection etkin değildir. İkisi de release blocker/follow-up gerektirir.
+- Security advisor sonucu: public/callable `SECURITY DEFINER` uyarısı kapandı. Leaked-password
+  protection hâlâ etkin değildir ve release blocker/follow-up gerektirir.
 
 ## Relevant files
 
 - `supabase/migrations/20260801111349_enforce_attachment_quotas_and_private_uploads.sql`
+- `supabase/migrations/20260801132557_fix_attachment_reservation_storage_policy.sql`
 - `supabase/functions/upload-attachment/`
 - `supabase/functions/delete-account/`
 - `supabase/functions/_shared/`
@@ -195,8 +247,9 @@ onaylandı.
 
 ### Current state
 
-Linked ref, remote migration listesi, function sürümleri, secret adları ve QA credential hazır olma
-durumu henüz doğrulanmadı.
+Linked ref `eiqxvvnqkbzbhzpthcwo` ile eşleşti; forward migration remote'a uygulandı ve
+`upload-attachment` v2 / `delete-account` v1 aktif olarak doğrulandı. Sentetik QA kimlikleri test içinde
+oluşturulup temizlendi; secret değerleri hiçbir çıktıya yazılmadı.
 
 ### Scope
 
@@ -262,34 +315,33 @@ Task'ın `Do not change` bölümü bağlayıcıdır.
 #### Completed
 
 - Project identity fail-closed kapısı geçti; ref `eiqxvvnqkbzbhzpthcwo` olarak üç kaynaktan doğrulandı.
-- Tek pending forward migration uygulandı; history ve boş post-deploy dry-run doğrulandı.
-- `upload-attachment` ve `delete-account` version 1 olarak deploy edildi ve ACTIVE görüldü.
-- Remote probe, private bucket/allow-list/limit envanteri, User A/B DB izolasyonu, WebP ve sahte MIME
-  reddi tamamlandı.
+- İlk migration ve hedefli `20260801132557_fix_attachment_reservation_storage_policy.sql` forward
+  migration'ı uygulandı; local/remote history eşleşti.
+- `upload-attachment` version 2 ve `delete-account` version 1 ACTIVE görüldü.
+- Public helper kaldırıldı; private-schema helper, boş `search_path`, dar EXECUTE ve RLS-only policy
+  kullanımı doğrulandı. İlgili Security Advisor uyarısı kapandı.
+- Remote probe, private bucket/allow-list/limit, User A/B DB ve Storage izolasyonu, PDF/JPEG/PNG,
+  WebP/sahte MIME, 5 MB 413 + bucket hard limit, 10 belge/25 MB kota ve belge DB/Storage silme geçti.
 - 60 saniyelik signed URL expiry ile hesap silme sonrası Auth/DB/Storage/session/URL temizliği geçti.
 - Bütün sentetik QA varlıkları temizlendi ve linked SQL ile sıfır kalıntı doğrulandı.
+- Typecheck, lint, 13 dosyada 75 Vitest testi ve 9 Edge helper testi geçti.
 
 #### Skipped
 
-- 11. belge, 25 MB toplam kota, PDF/JPEG/PNG pozitif matrisi, belge silme ve cross-user Storage testleri
-      izinli upload blocker'ına bağımlı oldukları için çalıştırılamadı.
 - Provider/dashboard log örneklemi dashboard oturumu olmadığı için incelenemedi.
 - Build, Supabase reset ve Android testleri kapsam gereği çalıştırılmadı.
 
 #### Failed
 
-- İzinli PDF upload Edge Function'da HTTP 400 `ATTACHMENT_UPLOAD_FAILED`; reserved Storage INSERT tanısı
-  database kaynaklı HTTP 500 ve reservation policy helper false sonucu verdi.
-- 5 MB üzeri dosya iki denemede uygulamanın kontrollü HTTP 413 cevabı yerine HTTP 503 verdi.
-- Security advisor, authenticated role'e açık `SECURITY DEFINER` rezervasyon helper'ı ve kapalı
-  leaked-password protection için uyarı verdi.
+- Hedefli ve tam remote E2E'de açık teknik failure yoktur.
+- Security Advisor leaked-password protection'ın kapalı olduğunu raporlamaya devam ediyor.
 
 #### Manual verification required
 
 - Gerçek Android cihaz ve release APK üzerinde upload/hata mesajları, belge/hesap silme, loading,
   navigation ve URL expiry davranışı.
 - Provider loglarında PII, object path veya signed URL bulunmadığının yetkili dashboard incelemesi.
-- Upload production'a açılmadan önce ayrı forward-fix migration/function görevi ve tam E2E rerun.
+- KVKK/hukuk gate'leri, leaked-password protection kararı ve production upload enable/disable kararı.
 
 ## Completion checklist
 
@@ -309,7 +361,7 @@ Task'ın `Do not change` bölümü bağlayıcıdır.
 - [x] Project ref ve remote hedef kanıtı bağımsız okunabilir.
 - [x] Migration history değişikliği yalnız forward push kaynaklıdır.
 - [x] Cross-user DB testleri User B session'ıyla yapılmıştır.
-- [ ] Storage negatif testleri reddin beklenen güvenlik sınırından geldiğini kanıtlar.
+- [x] Storage negatif testleri reddin beklenen güvenlik sınırından geldiğini kanıtlar.
 - [x] Cleanup yalnız QA varlıklarını hedefler ve kalıntı yoktur.
 - [ ] Provider logları incelenerek secret/PII/signed URL sızıntısı olmadığı doğrulanmıştır.
 - [x] Açık kritik veya blocker bulgu doğru statüdedir.

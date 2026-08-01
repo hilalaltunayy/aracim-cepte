@@ -78,6 +78,7 @@ export async function uploadAttachment(
       headers: {
         'Content-Type': mimeType,
         'x-vehicle-id': vehicleId,
+        'x-file-size': String(body.byteLength),
       },
     },
   );
