@@ -3,6 +3,21 @@
 **Snapshot date:** 2026-08-01  
 **Release target:** İlk Google Play production Android yayını
 
+## Preview APK build kapısı — TASK-009
+
+**Karar:** READY FOR PREVIEW APK BUILD
+
+2026-08-01 tarihli TASK-009 read-only denetiminde `main` ile `origin/main` aynı TASK-008 commit'inde,
+10 migration local/remote eşleşmiş ve gerekli üç Edge Function `ACTIVE` bulunmuştur. TypeScript, lint,
+28 dosya/127 Vitest testi, Expo Doctor 20/20 ve diff kontrolü geçmiştir. Client kaynak taramasında
+service-role/secret, tema token dosyası dışında runtime renk literal'i veya public Storage URL kullanımı
+bulunmamış; remote `vehicle-attachments` bucket'ı `public=false`, 5 MB ve PDF/JPEG/PNG olarak
+doğrulanmıştır.
+
+Bu karar yalnız yeni bir **preview APK** üreterek aşağıdaki Android manuel kapılarını test etmeye izin
+verir. Production tablosundaki hukuk/KVKK, canlı web URL'leri, gerçek cihaz kabulü, provider log,
+mağaza ve AAB kapıları değişmez; Google Play production readiness iddiası değildir.
+
 ## Durum sözlüğü
 
 - **Not started:** Güncel release kanıtı yok veya çalışma başlamadı.
@@ -44,7 +59,7 @@ değerlendirir.
 | No service-role key in client                 | Passed                       | `docs/release-readiness.md` client'ta secret/service-role olmadığını kaydediyor; her release'te source, env exposure ve bundle secret scan yeniden yapılmalı.                                                                                   |
 | No sensitive data in logs                     | In progress                  | Release-readiness auth/recovery tokenlarının loglanmadığını kaydediyor; filename/path/signed URL/PII dahil release cihazı ve provider log örneklemi eksik.                                                                                      |
 | Real Android device critical flow test passed | Manual verification required | [Manuel kabul testi](../manual-acceptance-test.md) gerçek release ortamında tamamlanıp cihaz/OS/build kimliğiyle imzalanmalı.                                                                                                                   |
-| APK acceptance test passed                    | Manual verification required | [TASK-001](../../tasks/active/TASK-001-android-device-feedback-and-v1-polish.md) kullanıcı geri bildirimi bekliyor; APK kabul sonucu yok.                                                                                                       |
+| APK acceptance test passed                    | Manual verification required | [TASK-001](../../tasks/active/TASK-001-android-device-feedback-and-v1-polish.md) geri bildirimi uygulandı; yeni preview APK üzerinde Android kabul sonucu bekleniyor.                                                                            |
 | Production AAB succeeds                       | Not started                  | Güncel production AAB artifact, signing/build logu ve smoke testi kanıtı yok. AAB build bu dokümantasyon görevinde çalıştırılmadı.                                                                                                              |
 | Store screenshots completed                   | Not started                  | Onaylı telefon ekran görüntüleri, privacy redaction, locale/cihaz ölçüleri ve listing seti yok.                                                                                                                                                 |
 | No known blocker or critical bug              | Failed                       | TASK-008 definer RPC'leri authenticated-only, explicit owner/auth kontrolü, boş search_path ve minimum grant ile bilinçli kullanılıyor; advisor bunları manuel inceleme uyarısı olarak listeliyor. Leaked-password protection, hukuk/KVKK, provider-log ve Android/release artifact gate'leri açık. |
