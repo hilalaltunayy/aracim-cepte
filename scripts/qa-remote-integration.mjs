@@ -3,6 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 
+const expectedProjectRef = 'eiqxvvnqkbzbhzpthcwo';
+const bucketName = 'vehicle-attachments';
+const maxFileBytes = 5 * 1024 * 1024;
+
+class QaFailure extends Error {}
+
 function parseEnvFile(text) {
   return Object.fromEntries(
     text
@@ -22,11 +28,191 @@ function parseEnvFile(text) {
   );
 }
 
+function requireCondition(results, name, condition) {
+  results[name] = Boolean(condition);
+  if (!condition) throw new QaFailure(`${name} failed`);
+}
+
+function createPublicClient(url, anonKey) {
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+function paddedFile(prefix, size) {
+  const bytes = new Uint8Array(size);
+  bytes.set(prefix);
+  return bytes;
+}
+
+async function signIn(client, email, password) {
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error || !data.user || !data.session) throw new QaFailure('syntheticUserSignIn failed');
+  return data;
+}
+
+async function invokeUpload({ url, anonKey, accessToken, vehicleId, bytes, mimeType }) {
+  const response = await fetch(`${url}/functions/v1/upload-attachment`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      authorization: `Bearer ${accessToken}`,
+      'content-type': mimeType,
+      'x-vehicle-id': vehicleId,
+    },
+    body: bytes,
+  });
+  const payload = await response.json().catch(() => ({}));
+  return {
+    ok: response.ok,
+    status: response.status,
+    code: typeof payload.code === 'string' ? payload.code : null,
+    path: typeof payload.path === 'string' ? payload.path : null,
+  };
+}
+
+async function invokeDeleteAccount({ url, anonKey, accessToken }) {
+  const response = await fetch(`${url}/functions/v1/delete-account`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  const payload = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, deleted: payload.deleted === true };
+}
+
+async function diagnoseReservedStorageUpload({
+  adminClient,
+  userClient,
+  ownerId,
+  vehicleId,
+  bytes,
+  mimeType,
+}) {
+  const reservation = await adminClient.rpc('reserve_attachment_upload', {
+    p_owner_id: ownerId,
+    p_vehicle_id: vehicleId,
+    p_size_bytes: bytes.byteLength,
+    p_mime_type: mimeType,
+  });
+  if (reservation.error || !reservation.data?.[0]) {
+    return {
+      reservationRpc: false,
+      reservationPolicyHelper: 'NOT_ATTEMPTED',
+      storageUpload: 'NOT_ATTEMPTED',
+    };
+  }
+
+  const reserved = reservation.data[0];
+  const policyHelper = await userClient.rpc('is_valid_attachment_reservation', {
+    p_object_path: reserved.object_path,
+    p_metadata: { size: bytes.byteLength, mimetype: mimeType },
+  });
+  const storageUpload = await userClient.storage
+    .from(bucketName)
+    .upload(reserved.object_path, bytes, {
+      contentType: mimeType,
+      upsert: false,
+    });
+  await adminClient
+    .from('attachment_upload_reservations')
+    .delete()
+    .eq('id', reserved.reservation_id)
+    .eq('owner_id', ownerId);
+
+  if (!storageUpload.error) {
+    await userClient.storage.from(bucketName).remove([reserved.object_path]);
+    return {
+      reservationRpc: true,
+      reservationPolicyHelper: !policyHelper.error && policyHelper.data === true,
+      storageUpload: 'SUCCEEDED',
+    };
+  }
+
+  const safeStatus = String(storageUpload.error.statusCode ?? 'UNKNOWN').replace(
+    /[^A-Za-z0-9_-]/g,
+    '_',
+  );
+  const safeCode = String(storageUpload.error.error ?? 'UNKNOWN').replace(/[^A-Za-z0-9_-]/g, '_');
+  const message = String(storageUpload.error.message ?? '');
+  const safeCategory = /row.level security/i.test(message)
+    ? 'RLS'
+    : /database/i.test(message)
+      ? 'DATABASE'
+      : /mime|content.type/i.test(message)
+        ? 'CONTENT_TYPE'
+        : 'UNKNOWN';
+  return {
+    reservationRpc: true,
+    reservationPolicyHelper: !policyHelper.error && policyHelper.data === true,
+    storageUpload: `${safeStatus}:${safeCode}:${safeCategory}`,
+  };
+}
+
+async function listOwnerPaths(adminClient, ownerId) {
+  const bucket = adminClient.storage.from(bucketName);
+  const paths = [];
+
+  async function visit(prefix) {
+    let offset = 0;
+    while (true) {
+      const { data, error } = await bucket.list(prefix, {
+        limit: 100,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+      if (error) throw new QaFailure('adminStorageList failed');
+      for (const item of data ?? []) {
+        const childPath = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.id) paths.push(childPath);
+        else await visit(childPath);
+      }
+      if (!data || data.length < 100) break;
+      offset += data.length;
+    }
+  }
+
+  await visit(ownerId);
+  return paths;
+}
+
+async function removeOwnerPaths(adminClient, ownerId) {
+  const paths = await listOwnerPaths(adminClient, ownerId);
+  for (let index = 0; index < paths.length; index += 100) {
+    const { error } = await adminClient.storage
+      .from(bucketName)
+      .remove(paths.slice(index, index + 100));
+    if (error) throw new QaFailure('adminStorageCleanup failed');
+  }
+  return paths.length;
+}
+
+async function authUserExists(adminClient, userId) {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+  return !error && Boolean(data.user);
+}
+
+async function cleanupSyntheticUser(adminClient, userId) {
+  if (!userId) return;
+  await removeOwnerPaths(adminClient, userId);
+  if (await authUserExists(adminClient, userId)) {
+    const { error } = await adminClient.auth.admin.deleteUser(userId);
+    if (error) throw new QaFailure('adminAuthCleanup failed');
+  }
+}
+
 if (process.env.QA_REMOTE_CONFIRM !== 'ARACIM_CEPTE_REMOTE_QA') {
   throw new Error('QA_REMOTE_CONFIRM must exactly equal ARACIM_CEPTE_REMOTE_QA.');
 }
-if (!process.env.QA_TEST_EMAIL || !process.env.QA_TEST_PASSWORD) {
-  throw new Error('Dedicated QA_TEST_EMAIL and QA_TEST_PASSWORD are required.');
+if (process.env.QA_EXPECTED_PROJECT_REF !== expectedProjectRef) {
+  throw new Error(`QA_EXPECTED_PROJECT_REF must exactly equal ${expectedProjectRef}.`);
+}
+if (!process.env.QA_SUPABASE_SECRET_KEY) {
+  throw new Error('QA_SUPABASE_SECRET_KEY is required and must not be written to a file.');
 }
 
 const root = resolve(import.meta.dirname, '..');
@@ -34,216 +220,511 @@ const env = parseEnvFile(await readFile(resolve(root, '.env'), 'utf8'));
 const url = env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 if (!url || !anonKey) throw new Error('Supabase public environment is missing.');
-
-const client = createClient(url, anonKey, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
-const result = {};
-let vehicleId = null;
-let attachmentPath = null;
-
-async function completeChildCrud(table, id, update) {
-  const read = await client.from(table).select('id').eq('id', id).single();
-  const changed = await client.from(table).update(update).eq('id', id).select('id').single();
-  const removed = await client.from(table).delete().eq('id', id);
-  return !read.error && !changed.error && !removed.error;
+if (new URL(url).hostname.split('.')[0] !== expectedProjectRef) {
+  throw new Error('Public Supabase endpoint does not match the approved project ref.');
 }
 
+const adminClient = createClient(url, process.env.QA_SUPABASE_SECRET_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
+const userAClient = createPublicClient(url, anonKey);
+const userBClient = createPublicClient(url, anonKey);
+const results = {};
+const cleanup = { userA: false, userB: false, storageEmpty: false };
+const runId = randomUUID();
+const passwordA = `Qa-A-${randomUUID()}!a9`;
+const passwordB = `Qa-B-${randomUUID()}!b9`;
+const emailA = `qa-task004-a-${runId}@example.com`;
+const emailB = `qa-task004-b-${runId}@example.com`;
+let userAId = null;
+let userBId = null;
+let userADeletedByFunction = false;
+let userBDeletedByFunction = false;
+let failure = null;
+
+const pdfBytes = new TextEncoder().encode('%PDF-1.4\n% TASK-004 synthetic PDF\n%%EOF');
+const jpegBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const pngBytes = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  ),
+);
+const webpBytes = new TextEncoder().encode('RIFF0000WEBPVP8 TASK-004');
+
 try {
-  const signIn = await client.auth.signInWithPassword({
-    email: process.env.QA_TEST_EMAIL.trim().toLowerCase(),
-    password: process.env.QA_TEST_PASSWORD,
+  const createdA = await adminClient.auth.admin.createUser({
+    email: emailA,
+    password: passwordA,
+    email_confirm: true,
+    user_metadata: { display_name: 'TASK-004 QA A' },
   });
-  if (signIn.error || !signIn.data.user) throw new Error('Dedicated QA user sign-in failed.');
-  const userId = signIn.data.user.id;
-  result.login = true;
-  result.sessionRestoration = Boolean((await client.auth.getSession()).data.session);
-  result.profileRead = !(await client.from('profiles').select('id').eq('id', userId).single())
-    .error;
+  const createdB = await adminClient.auth.admin.createUser({
+    email: emailB,
+    password: passwordB,
+    email_confirm: true,
+    user_metadata: { display_name: 'TASK-004 QA B' },
+  });
+  requireCondition(results, 'syntheticUsersCreated', !createdA.error && !createdB.error);
+  userAId = createdA.data.user?.id ?? null;
+  userBId = createdB.data.user?.id ?? null;
+  if (!userAId || !userBId) throw new QaFailure('syntheticUserIds failed');
 
-  const vehicle = await client
+  const authA = await signIn(userAClient, emailA, passwordA);
+  const authB = await signIn(userBClient, emailB, passwordB);
+  requireCondition(results, 'syntheticUsersAuthenticated', true);
+
+  const vehicle = await userAClient
     .from('vehicles')
     .insert({
-      owner_id: userId,
-      brand: 'Kia',
-      model: 'Sportage [REMOTE QA]',
-      year: 2018,
-      plate: '34 RQA 01',
-      current_km: 50_000,
-      fuel_type: 'diesel',
-      body_type: 'suv_crossover',
-      color: 'Beyaz',
+      owner_id: userAId,
+      brand: 'QA',
+      model: 'TASK-004',
+      year: 2020,
+      current_km: 1000,
+      fuel_type: 'gasoline',
+      body_type: 'sedan_hatchback',
     })
     .select('id')
     .single();
-  if (vehicle.error || !vehicle.data) throw new Error('Remote QA vehicle insert failed.');
-  vehicleId = vehicle.data.id;
-  const vehicleUpdate = await client
+  requireCondition(results, 'userACreatesVehicle', !vehicle.error && Boolean(vehicle.data?.id));
+  const vehicleId = vehicle.data.id;
+
+  const userBVehicleRead = await userBClient.from('vehicles').select('id').eq('id', vehicleId);
+  const userBVehicleUpdate = await userBClient
     .from('vehicles')
-    .update({ current_km: 50_100 })
+    .update({ current_km: 999999 })
     .eq('id', vehicleId)
-    .select('id')
-    .single();
-  result.vehicleCrud = !vehicleUpdate.error;
-
-  const record = await client
-    .from('vehicle_records')
-    .insert({
-      owner_id: userId,
-      vehicle_id: vehicleId,
-      record_type: 'fuel',
-      category: 'Yakıt [REMOTE QA]',
-      amount: 100.5,
-      record_date: '2026-07-15',
-      kilometer: 50_100,
-      liters: 2.5,
-      description: 'Geçici entegrasyon kaydı',
-    })
-    .select('id')
-    .single();
-  if (record.error || !record.data) throw new Error('Remote QA record insert failed.');
-  const recordUpdate = await client
-    .from('vehicle_records')
-    .update({ amount: 101.25 })
-    .eq('id', record.data.id)
-    .select('amount')
-    .single();
-  const recordDelete = await client.from('vehicle_records').delete().eq('id', record.data.id);
-  result.recordCrud = !recordUpdate.error && !recordDelete.error;
-
-  const inserts = [
-    client
-      .from('reminders')
-      .insert({
-        owner_id: userId,
-        vehicle_id: vehicleId,
-        title: 'Hatırlatıcı [REMOTE QA]',
-        reminder_type: 'custom',
-        due_date: '2026-08-15',
-        completed: false,
-      })
-      .select('id')
-      .single(),
-    client
-      .from('body_part_conditions')
-      .insert({
-        owner_id: userId,
-        vehicle_id: vehicleId,
-        schema_type: 'suv_crossover',
-        part_key: 'hood',
-        condition: 'original',
-        note: 'REMOTE QA',
-      })
-      .select('id')
-      .single(),
-    client
-      .from('expertise_reports')
-      .insert({
-        owner_id: userId,
-        vehicle_id: vehicleId,
-        report_date: '2026-07-15',
-        company_name: 'REMOTE QA',
-      })
-      .select('id')
-      .single(),
-    client
-      .from('vehicle_notes')
-      .insert({
-        owner_id: userId,
-        vehicle_id: vehicleId,
-        title: 'Not [REMOTE QA]',
-        content: 'Geçici entegrasyon notu',
-      })
-      .select('id')
-      .single(),
-    client
-      .from('vehicle_documents')
-      .insert({
-        owner_id: userId,
-        vehicle_id: vehicleId,
-        document_type: 'custom',
-        title: 'Belge [REMOTE QA]',
-      })
-      .select('id')
-      .single(),
-  ];
-  const [reminder, body, expertise, note, document] = await Promise.all(inserts);
-  if (reminder.error || body.error || expertise.error || note.error || document.error) {
-    throw new Error('One or more child CRUD inserts failed.');
-  }
-  result.reminderCrud = await completeChildCrud('reminders', reminder.data.id, {
-    title: 'Hatırlatıcı güncel [REMOTE QA]',
+    .select('id');
+  const userBCrossOwnerInsert = await userBClient.from('vehicle_documents').insert({
+    owner_id: userAId,
+    vehicle_id: vehicleId,
+    document_type: 'custom',
+    title: 'TASK-004 forbidden',
   });
-  result.bodyConditionCrud = await completeChildCrud('body_part_conditions', body.data.id, {
-    condition: 'painted',
-  });
-  result.expertiseCrud = await completeChildCrud('expertise_reports', expertise.data.id, {
-    overall_note: 'Güncellendi [REMOTE QA]',
-  });
-  result.noteCrud = await completeChildCrud('vehicle_notes', note.data.id, {
-    content: 'Güncellendi [REMOTE QA]',
-  });
-  result.documentCrud = await completeChildCrud('vehicle_documents', document.data.id, {
-    note: 'Güncellendi [REMOTE QA]',
-  });
-
-  attachmentPath = `${userId}/${vehicleId}/${randomUUID()}.png`;
-  const onePixelPng = Uint8Array.from(
-    Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-      'base64',
-    ),
+  requireCondition(
+    results,
+    'crossUserDatabaseDenied',
+    !userBVehicleRead.error &&
+      userBVehicleRead.data.length === 0 &&
+      !userBVehicleUpdate.error &&
+      userBVehicleUpdate.data.length === 0 &&
+      Boolean(userBCrossOwnerInsert.error),
   );
-  const upload = await client.storage
-    .from('vehicle-attachments')
-    .upload(attachmentPath, onePixelPng, {
+
+  const unauthenticatedUpload = await fetch(`${url}/functions/v1/upload-attachment`, {
+    method: 'POST',
+    headers: { apikey: anonKey, 'content-type': 'image/png', 'x-vehicle-id': vehicleId },
+    body: pngBytes,
+  });
+  requireCondition(results, 'uploadFunctionRequiresUserAuth', unauthenticatedUpload.status === 401);
+
+  const webp = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: webpBytes,
+    mimeType: 'image/webp',
+  });
+  requireCondition(
+    results,
+    'webpRejected',
+    webp.status === 400 && webp.code === 'ATTACHMENT_TYPE_NOT_ALLOWED',
+  );
+
+  const fakeMime = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: pngBytes,
+    mimeType: 'application/pdf',
+  });
+  requireCondition(
+    results,
+    'fakeMimeRejected',
+    fakeMime.status === 400 && fakeMime.code === 'ATTACHMENT_CONTENT_MISMATCH',
+  );
+
+  if (process.env.QA_SKIP_LARGE_FILE === 'true') {
+    results.fileOver5MbRejected = 'SKIPPED_BY_EXPLICIT_QA_FLAG';
+  } else {
+    const oversized = await invokeUpload({
+      url,
+      anonKey,
+      accessToken: authA.session.access_token,
+      vehicleId,
+      bytes: paddedFile(pdfBytes, maxFileBytes + 1),
+      mimeType: 'application/pdf',
+    });
+    results.fileOver5MbDiagnostic = `${oversized.status}:${oversized.code ?? 'NO_CODE'}`;
+    requireCondition(results, 'fileOver5MbRejected', oversized.status === 413);
+  }
+
+  try {
+    const vehicleB = await userBClient
+      .from('vehicles')
+      .insert({
+        owner_id: userBId,
+        brand: 'QA',
+        model: 'TASK-004',
+        year: 2020,
+        current_km: 2000,
+        fuel_type: 'gasoline',
+        body_type: 'sedan_hatchback',
+      })
+      .select('id')
+      .single();
+    if (vehicleB.error || !vehicleB.data?.id) throw new QaFailure('accountDeleteVehicleSetup');
+
+    const accountPath = `${userBId}/${vehicleB.data.id}/${randomUUID()}.png`;
+    const adminUpload = await adminClient.storage.from(bucketName).upload(accountPath, pngBytes, {
       contentType: 'image/png',
       upsert: false,
     });
-  if (upload.error) throw new Error('Remote QA attachment upload failed.');
-  const signed = await client.storage
-    .from('vehicle-attachments')
-    .createSignedUrl(attachmentPath, 1);
-  const signedFetch = signed.data?.signedUrl
-    ? await fetch(signed.data.signedUrl, { redirect: 'manual' })
-    : null;
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 2100));
-  const expiredFetch = signed.data?.signedUrl
-    ? await fetch(signed.data.signedUrl, { redirect: 'manual' })
-    : null;
-  const publicFetch = await fetch(
-    `${url}/storage/v1/object/public/vehicle-attachments/${attachmentPath}`,
-    { redirect: 'manual' },
-  );
-  result.attachmentUpload = true;
-  result.signedUrlImmediateAccess = Boolean(signedFetch?.ok);
-  result.signedUrlExpires = Boolean(expiredFetch && !expiredFetch.ok);
-  result.privateBucketRejectsPublic = !publicFetch.ok;
-  const attachmentDelete = await client.storage
-    .from('vehicle-attachments')
-    .remove([attachmentPath]);
-  result.attachmentDelete = !attachmentDelete.error;
-  attachmentPath = null;
+    if (adminUpload.error) throw new QaFailure('accountDeleteStorageSetup');
 
-  const vehicleDelete = await client.from('vehicles').delete().eq('id', vehicleId);
-  if (vehicleDelete.error) throw new Error('Remote QA cleanup failed.');
-  vehicleId = null;
-  result.cascadeCleanup = true;
-
-  if (process.env.QA_SEND_RESET === 'true') {
-    const reset = await client.auth.resetPasswordForEmail(process.env.QA_TEST_EMAIL, {
-      redirectTo: 'http://localhost:8082/auth/reset-password',
+    const accountDocument = await userBClient.from('vehicle_documents').insert({
+      owner_id: userBId,
+      vehicle_id: vehicleB.data.id,
+      document_type: 'custom',
+      title: 'TASK-004 account deletion document',
+      attachment_path: accountPath,
     });
-    result.passwordResetRequest = !reset.error;
-  } else {
-    result.passwordResetRequest = 'manual-opt-in';
+    if (accountDocument.error) throw new QaFailure('accountDeleteDocumentSetup');
+
+    const expiring = await adminClient.storage.from(bucketName).createSignedUrl(accountPath, 60);
+    if (expiring.error || !expiring.data?.signedUrl) throw new QaFailure('signedUrlSetup');
+    const immediateFetch = await fetch(expiring.data.signedUrl, { redirect: 'manual' });
+    requireCondition(results, 'signedUrlImmediateAccess', immediateFetch.ok);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 65_000));
+    const expiredFetch = await fetch(expiring.data.signedUrl, { redirect: 'manual' });
+    requireCondition(results, 'signedUrlExpiresAfterApproximately60Seconds', !expiredFetch.ok);
+
+    const deletionUrl = await adminClient.storage.from(bucketName).createSignedUrl(accountPath, 60);
+    if (deletionUrl.error || !deletionUrl.data?.signedUrl) {
+      throw new QaFailure('accountDeleteSignedUrlSetup');
+    }
+    const accountDelete = await invokeDeleteAccount({
+      url,
+      anonKey,
+      accessToken: authB.session.access_token,
+    });
+    requireCondition(
+      results,
+      'deleteAccountFunctionSucceeds',
+      accountDelete.ok && accountDelete.status === 200 && accountDelete.deleted,
+    );
+    userBDeletedByFunction = true;
+
+    const userBStillExists = await authUserExists(adminClient, userBId);
+    const remainingObjects = await listOwnerPaths(adminClient, userBId);
+    requireCondition(
+      results,
+      'accountDeletionRemovesAuthAndStorage',
+      !userBStillExists && remainingObjects.length === 0,
+    );
+    results.accountDeletionDatabaseCascade = 'REQUIRES_LINKED_SQL_AUDIT';
+
+    const oldSessionUser = await userBClient.auth.getUser(authB.session.access_token);
+    const deletedSignedFetch = await fetch(deletionUrl.data.signedUrl, { redirect: 'manual' });
+    requireCondition(
+      results,
+      'oldSessionAndSignedUrlCannotAccessDeletedData',
+      Boolean(oldSessionUser.error) && !deletedSignedFetch.ok,
+    );
+  } catch (error) {
+    results.independentAccountDeletionE2e = false;
+    results.independentAccountDeletionDiagnostic =
+      error instanceof QaFailure ? error.message : 'unexpectedFailure';
   }
 
-  const logout = await client.auth.signOut({ scope: 'local' });
-  result.logout = !logout.error && !(await client.auth.getSession()).data.session;
-  console.log(JSON.stringify(result, null, 2));
+  const allowedUploads = [];
+  for (const [mimeType, bytes] of [
+    ['application/pdf', pdfBytes],
+    ['image/jpeg', jpegBytes],
+    ['image/png', pngBytes],
+  ]) {
+    const upload = await invokeUpload({
+      url,
+      anonKey,
+      accessToken: authA.session.access_token,
+      vehicleId,
+      bytes,
+      mimeType,
+    });
+    if (!upload.ok || upload.status !== 201 || !upload.path) {
+      results.allowedMimeDiagnostic = await diagnoseReservedStorageUpload({
+        adminClient,
+        userClient: userAClient,
+        ownerId: userAId,
+        vehicleId,
+        bytes,
+        mimeType,
+      });
+      throw new QaFailure(
+        `allowedMimeUpload:${mimeType}:${upload.status}:${upload.code ?? 'NO_CODE'} failed`,
+      );
+    }
+    allowedUploads.push(upload.path);
+  }
+  requireCondition(results, 'pdfJpegPngAccepted', allowedUploads.length === 3);
+  requireCondition(
+    results,
+    'ownerScopedRandomPaths',
+    allowedUploads.every((objectPath) => {
+      const escapedOwner = userAId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedVehicle = vehicleId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`^${escapedOwner}/${escapedVehicle}/[0-9a-f-]{36}\\.(pdf|jpg|png)$`).test(
+        objectPath,
+      );
+    }),
+  );
+
+  const protectedPath = allowedUploads[0];
+  const userBDownload = await userBClient.storage.from(bucketName).download(protectedPath);
+  const userBSigned = await userBClient.storage.from(bucketName).createSignedUrl(protectedPath, 60);
+  const userBList = await userBClient.storage
+    .from(bucketName)
+    .list(`${userAId}/${vehicleId}`, { limit: 100 });
+  const userBRemove = await userBClient.storage.from(bucketName).remove([protectedPath]);
+  const ownerStillReads = await userAClient.storage
+    .from(bucketName)
+    .createSignedUrl(protectedPath, 60);
+  requireCondition(
+    results,
+    'crossUserStorageDenied',
+    Boolean(userBDownload.error) &&
+      Boolean(userBSigned.error) &&
+      (!userBList.error ? (userBList.data?.length ?? 0) === 0 : true) &&
+      !userBRemove.error &&
+      !ownerStillReads.error,
+  );
+  const publicResponse = await fetch(
+    `${url}/storage/v1/object/public/${bucketName}/${protectedPath}`,
+    { redirect: 'manual' },
+  );
+  requireCondition(results, 'privateBucketRejectsPublicUrl', !publicResponse.ok);
+
+  const directPath = `${userAId}/${vehicleId}/${randomUUID()}.png`;
+  const directUpload = await userAClient.storage.from(bucketName).upload(directPath, pngBytes, {
+    contentType: 'image/png',
+    upsert: false,
+  });
+  requireCondition(
+    results,
+    'directStorageUploadWithoutReservationDenied',
+    Boolean(directUpload.error),
+  );
+
+  const allowedCleanup = await userAClient.storage.from(bucketName).remove(allowedUploads);
+  if (allowedCleanup.error) throw new QaFailure('allowedMimeCleanup failed');
+
+  const countPaths = [];
+  for (let index = 0; index < 10; index += 1) {
+    const upload = await invokeUpload({
+      url,
+      anonKey,
+      accessToken: authA.session.access_token,
+      vehicleId,
+      bytes: pngBytes,
+      mimeType: 'image/png',
+    });
+    if (!upload.ok || !upload.path) throw new QaFailure('tenDocumentSetup failed');
+    countPaths.push(upload.path);
+  }
+  const eleventh = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: pngBytes,
+    mimeType: 'image/png',
+  });
+  requireCondition(
+    results,
+    'eleventhDocumentRejected',
+    eleventh.status === 400 && eleventh.code === 'ATTACHMENT_COUNT_QUOTA_EXCEEDED',
+  );
+  const countCleanup = await userAClient.storage.from(bucketName).remove(countPaths);
+  if (countCleanup.error) throw new QaFailure('countQuotaCleanup failed');
+
+  const fiveMbPdf = paddedFile(pdfBytes, maxFileBytes);
+  const byteQuotaPaths = [];
+  for (let index = 0; index < 5; index += 1) {
+    const upload = await invokeUpload({
+      url,
+      anonKey,
+      accessToken: authA.session.access_token,
+      vehicleId,
+      bytes: fiveMbPdf,
+      mimeType: 'application/pdf',
+    });
+    if (!upload.ok || !upload.path) throw new QaFailure('twentyFiveMbSetup failed');
+    byteQuotaPaths.push(upload.path);
+  }
+  const overTotal = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: pngBytes,
+    mimeType: 'image/png',
+  });
+  requireCondition(
+    results,
+    'totalOver25MbRejected',
+    overTotal.status === 400 && overTotal.code === 'ATTACHMENT_BYTES_QUOTA_EXCEEDED',
+  );
+  const byteCleanup = await userAClient.storage.from(bucketName).remove(byteQuotaPaths);
+  if (byteCleanup.error) throw new QaFailure('byteQuotaCleanup failed');
+
+  const documentUpload = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: pdfBytes,
+    mimeType: 'application/pdf',
+  });
+  if (!documentUpload.ok || !documentUpload.path) throw new QaFailure('documentDeleteSetup failed');
+  const document = await userAClient
+    .from('vehicle_documents')
+    .insert({
+      owner_id: userAId,
+      vehicle_id: vehicleId,
+      document_type: 'custom',
+      title: 'TASK-004 synthetic document',
+      attachment_path: documentUpload.path,
+    })
+    .select('id')
+    .single();
+  requireCondition(results, 'userACreatesDocument', !document.error && Boolean(document.data?.id));
+
+  const expiring = await userAClient.storage
+    .from(bucketName)
+    .createSignedUrl(documentUpload.path, 60);
+  if (expiring.error || !expiring.data?.signedUrl) throw new QaFailure('signedUrlCreation failed');
+  const immediateFetch = await fetch(expiring.data.signedUrl, { redirect: 'manual' });
+  requireCondition(results, 'signedUrlImmediateAccess', immediateFetch.ok);
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 65_000));
+  const expiredFetch = await fetch(expiring.data.signedUrl, { redirect: 'manual' });
+  requireCondition(results, 'signedUrlExpiresAfterApproximately60Seconds', !expiredFetch.ok);
+
+  const documentObjectDelete = await userAClient.storage
+    .from(bucketName)
+    .remove([documentUpload.path]);
+  const documentRowDelete = await userAClient
+    .from('vehicle_documents')
+    .delete()
+    .eq('id', document.data.id);
+  const deletedRow = await userAClient
+    .from('vehicle_documents')
+    .select('id')
+    .eq('id', document.data.id);
+  const deletedObject = await userAClient.storage
+    .from(bucketName)
+    .createSignedUrl(documentUpload.path, 60);
+  requireCondition(
+    results,
+    'documentDeletionRemovesDbAndStorage',
+    !documentObjectDelete.error &&
+      !documentRowDelete.error &&
+      !deletedRow.error &&
+      deletedRow.data.length === 0 &&
+      Boolean(deletedObject.error),
+  );
+
+  const accountUpload = await invokeUpload({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+    vehicleId,
+    bytes: pngBytes,
+    mimeType: 'image/png',
+  });
+  if (!accountUpload.ok || !accountUpload.path) throw new QaFailure('accountDeleteSetup failed');
+  const accountDocument = await userAClient.from('vehicle_documents').insert({
+    owner_id: userAId,
+    vehicle_id: vehicleId,
+    document_type: 'custom',
+    title: 'TASK-004 account deletion document',
+    attachment_path: accountUpload.path,
+  });
+  if (accountDocument.error) throw new QaFailure('accountDeleteDocumentSetup failed');
+  const preDeleteSigned = await userAClient.storage
+    .from(bucketName)
+    .createSignedUrl(accountUpload.path, 60);
+  if (preDeleteSigned.error || !preDeleteSigned.data?.signedUrl) {
+    throw new QaFailure('accountDeleteSignedUrlSetup failed');
+  }
+  const accountDelete = await invokeDeleteAccount({
+    url,
+    anonKey,
+    accessToken: authA.session.access_token,
+  });
+  requireCondition(
+    results,
+    'deleteAccountFunctionSucceeds',
+    accountDelete.ok && accountDelete.status === 200 && accountDelete.deleted,
+  );
+  userADeletedByFunction = true;
+
+  const userAStillExists = await authUserExists(adminClient, userAId);
+  const remainingObjects = await listOwnerPaths(adminClient, userAId);
+  requireCondition(
+    results,
+    'accountDeletionRemovesAuthAndStorage',
+    !userAStillExists && remainingObjects.length === 0,
+  );
+  results.accountDeletionDatabaseCascade = 'REQUIRES_LINKED_SQL_AUDIT';
+
+  const oldSessionUser = await userAClient.auth.getUser(authA.session.access_token);
+  const oldSessionRead = await userAClient.from('vehicles').select('id').eq('owner_id', userAId);
+  const deletedSignedFetch = await fetch(preDeleteSigned.data.signedUrl, { redirect: 'manual' });
+  requireCondition(
+    results,
+    'oldSessionAndSignedUrlCannotAccessDeletedData',
+    Boolean(oldSessionUser.error) &&
+      !oldSessionRead.error &&
+      oldSessionRead.data.length === 0 &&
+      !deletedSignedFetch.ok,
+  );
+} catch (error) {
+  failure = error instanceof QaFailure ? error.message : 'unexpectedRemoteQaFailure';
 } finally {
-  if (attachmentPath) await client.storage.from('vehicle-attachments').remove([attachmentPath]);
-  if (vehicleId) await client.from('vehicles').delete().eq('id', vehicleId);
-  await client.auth.signOut({ scope: 'local' });
+  await userAClient.auth.signOut({ scope: 'local' }).catch(() => undefined);
+  await userBClient.auth.signOut({ scope: 'local' }).catch(() => undefined);
+
+  try {
+    if (userAId && !userADeletedByFunction) await cleanupSyntheticUser(adminClient, userAId);
+    if (userBId && !userBDeletedByFunction) await cleanupSyntheticUser(adminClient, userBId);
+
+    cleanup.userA = userAId ? !(await authUserExists(adminClient, userAId)) : true;
+    cleanup.userB = userBId ? !(await authUserExists(adminClient, userBId)) : true;
+    const storageA = userAId ? await listOwnerPaths(adminClient, userAId) : [];
+    const storageB = userBId ? await listOwnerPaths(adminClient, userBId) : [];
+    cleanup.storageEmpty = storageA.length === 0 && storageB.length === 0;
+  } catch (error) {
+    cleanup.verificationError =
+      error instanceof QaFailure ? error.message : 'cleanupVerification failed';
+    if (!failure) failure = 'syntheticQaCleanup failed';
+  }
 }
+
+console.log(
+  JSON.stringify(
+    {
+      projectRef: expectedProjectRef,
+      tests: results,
+      cleanup,
+      databaseCleanupVerification: 'REQUIRES_LINKED_SQL_AUDIT',
+      failure,
+    },
+    null,
+    2,
+  ),
+);
+
+if (failure || Object.values(cleanup).some((value) => value !== true)) process.exitCode = 1;

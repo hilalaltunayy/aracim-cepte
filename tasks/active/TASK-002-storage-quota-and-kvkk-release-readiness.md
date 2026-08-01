@@ -1,6 +1,6 @@
 # TASK-002 — Storage kotası ve KVKK release readiness
 
-**Status:** IMPLEMENTED — AWAITING DATABASE, DEVICE AND LEGAL VERIFICATION  
+**Status:** DEPLOYED — UPLOAD SECURITY E2E FAILED; DEVICE AND LEGAL VERIFICATION PENDING
 **Owner:** Unassigned  
 **Created:** 2026-08-01  
 **Updated:** 2026-08-01
@@ -56,8 +56,13 @@ Function'ları, istemci entegrasyonu, Storage-first silme akışları ve hukuk t
 Server rezervasyonu 10 belge/25 MB toplam kotayı kullanıcı bazlı transaction lock ile korur; bucket ve
 stream limiti 5 MB, allow-list PDF/JPEG/PNG'dir. Object path owner/vehicle/random UUID yapısındadır.
 
-Bu durum remote deploy veya production kabulü değildir. Docker çalışmadığından migration ve SQL
-negatif testleri uygulanamamış; QA/Android E2E ve hukuk incelemesi tamamlanmamıştır.
+2026-08-01 TASK-004 turunda migration ve iki Edge Function yalnız doğrulanmış
+`eiqxvvnqkbzbhzpthcwo` projesine deploy edildi. Remote bucket private/5 MB/PDF-JPEG-PNG olarak
+doğrulandı; User A/B DB izolasyonu, WebP/sahte MIME reddi, 60 saniyelik URL expiry ve hesap silme
+E2E'si geçti. Ancak izinli PDF upload'u reserved Storage INSERT aşamasında database HTTP 500 ile
+başarısız oldu; 5 MB üzeri istek de kontrollü 413 yerine 503 döndürdü. Bu nedenle belge upload'u,
+Storage cross-user izolasyonu, 10 belge/25 MB kota ve belge silme gate'leri kapanmamıştır. Production
+upload etkinleştirilemez; mevcut migration değiştirilmeden ayrı forward fix ve tekrar E2E gerekir.
 
 ## Desired behavior
 
@@ -367,11 +372,17 @@ Task'ın `Do not change` bölümü.
   sınırları belgelendi.
 - TypeScript, lint, 71 Vitest testi, coverage, 9 Edge helper testi, Expo Doctor 20/20 ve diff whitespace
   kontrolü geçti.
+- TASK-004 ile forward migration ve `upload-attachment`/`delete-account` doğrulanmış remote projeye
+  deploy edildi; iki sentetik kullanıcıyla DB izolasyonu, WebP/sahte MIME reddi, signed URL expiry ve
+  hesap silme Auth/DB/Storage/session temizliği kanıtlandı.
+- Sentetik QA Auth/profile/vehicle/document/reservation kayıtları ve Storage prefix'leri temizlendi.
 
 #### Skipped
 
-- Remote deploy/probe/integration; ayrılmış QA hedefi, credential ve açık remote mutation izni olmadığı
-  için çalıştırılmadı.
+- İzinli upload blocker'ı nedeniyle 11. belge, 25 MB toplam kota, PDF/JPEG/PNG pozitif matrisi,
+  cross-user Storage ve belge metadata/object silme testleri çalıştırılamadı.
+- Provider/dashboard loglarında PII, object path ve signed URL örneklemi yetkili oturum olmadığı için
+  incelenemedi.
 - Build kullanıcı talimatı gereği çalıştırılmadı.
 
 #### Failed
@@ -379,12 +390,18 @@ Task'ın `Do not change` bölümü.
 - `npx supabase db reset`, Docker Desktop Linux engine pipe'ı bulunmadığı için başlamadan hata verdi.
   Migration uygulanamadı; `rls_negative.sql` ve `storage_quota.sql` local database testleri bu nedenle
   çalışmadı.
+- Remote izinli PDF upload'u `ATTACHMENT_UPLOAD_FAILED` verdi; tanı, rezervasyon RPC'si sonrasında
+  policy helper false ve Storage database HTTP 500 gösterdi.
+- 5 MB üzeri remote istek iki denemede kontrollü 413 yerine HTTP 503 verdi.
+- Supabase security advisor authenticated role'e açık `SECURITY DEFINER` reservation helper'ı ve
+  kapalı leaked-password protection için uyarı verdi.
 
 #### Manual verification required
 
 - Gerçek Android cihazda upload tür/boyut/adet/toplam kota, hukuk bağlantıları, signed URL expiry ve
   belge/hesap silme akışları.
-- İki ayrılmış QA kullanıcısıyla cross-user Storage/RLS reddi ve hesap silme sonrası object envanteri.
+- Ayrı forward-fix sonrasında iki kullanıcıyla PDF/JPEG/PNG, cross-user Storage, 10 belge/25 MB kota,
+  5 MB kontrollü red ve belge silme E2E tekrar testi.
 - Supabase region/provider evidence, sekiz hukuk blocker'ı ve production upload enable/temporary-disable
   kararı.
 
@@ -395,7 +412,7 @@ Task'ın `Do not change` bölümü.
 - [x] Yalnız onaylı dokümantasyon kapsamı uygulandı.
 - [ ] Teknik acceptance criteria local/QA database ve cihaz kanıtıyla tamamlandı.
 - [x] Çalışabilen otomatik kontroller çalıştırıldı ve sonuçları kaydedildi.
-- [ ] Remote ve device testleri yetkili ortamda çalıştırıldı.
+- [ ] Remote E2E'nin tüm upload kriterleri ve device testleri yetkili ortamda geçti.
 - [x] Dokümantasyon diff'i ve security/privacy etkisi gözden geçirildi.
 - [x] Completed/skipped/failed/manual kontroller ayrı raporlandı.
 
