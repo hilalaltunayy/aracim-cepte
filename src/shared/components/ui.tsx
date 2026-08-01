@@ -20,22 +20,35 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fontFamilies, radii, shadows, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 import { formatDate, parseDateOnly, todayDateOnly, toDateOnly } from '@/shared/utils/format';
 import { withoutOptionalSuffix } from '@/shared/utils/formLabels';
 
+const useStyles = () => useThemedStyles(createStyles);
+
 export function Screen({
   children,
   scroll = true,
   style,
-  backgroundColor = colors.background,
+  backgroundColor,
 }: PropsWithChildren<{
   scroll?: boolean;
   style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
 }>) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
+  const resolvedBackground = backgroundColor ?? colors.screenBackground;
   const { bottom } = useSafeAreaInsets();
   const { screenContentPaddingBottom } = getBottomTabLayout(bottom);
   const body = scroll ? (
@@ -64,7 +77,10 @@ export function Screen({
     </View>
   );
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: resolvedBackground }]}
+      edges={['top', 'left', 'right']}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -100,6 +116,7 @@ export function AppHeader({
   subtitle?: string;
   action?: ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       <View style={styles.headerText}>
@@ -112,6 +129,7 @@ export function AppHeader({
 }
 
 export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
@@ -120,6 +138,7 @@ export function FormSection({
   description,
   children,
 }: PropsWithChildren<{ title?: string; description?: string }>) {
+  const styles = useStyles();
   return (
     <Card style={styles.formSection}>
       {title || description ? (
@@ -148,6 +167,8 @@ export function AppButton({
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   icon?: keyof typeof Ionicons.glyphMap;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   const [scale] = useState(() => new Animated.Value(1));
   return (
     <Pressable
@@ -169,13 +190,21 @@ export function AppButton({
       <Animated.View
         style={[
           styles.button,
-          buttonVariants[variant],
+          styles[`button_${variant}`],
           (disabled || loading) && styles.disabled,
           { transform: [{ scale }] },
         ]}
       >
         {loading ? (
-          <ActivityIndicator color={variant === 'secondary' ? colors.primary : colors.white} />
+          <ActivityIndicator
+            color={
+              disabled
+                ? colors.disabledText
+                : variant === 'secondary'
+                  ? colors.primaryAction
+                  : colors.onPrimary
+            }
+          />
         ) : (
           <>
             {icon ? (
@@ -183,7 +212,11 @@ export function AppButton({
                 name={icon}
                 size={20}
                 color={
-                  variant === 'secondary' || variant === 'ghost' ? colors.primary : colors.white
+                  disabled
+                    ? colors.disabledText
+                    : variant === 'secondary' || variant === 'ghost'
+                      ? colors.primaryAction
+                      : colors.onPrimary
                 }
               />
             ) : null}
@@ -191,6 +224,7 @@ export function AppButton({
               style={[
                 styles.buttonText,
                 (variant === 'secondary' || variant === 'ghost') && styles.buttonTextPrimary,
+                disabled && styles.buttonTextDisabled,
               ]}
             >
               {title}
@@ -208,6 +242,8 @@ export function AppInput({
   multiline,
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   const [focused, setFocused] = useState(false);
   const visibleLabel = withoutOptionalSuffix(label);
   return (
@@ -246,6 +282,8 @@ export function PasswordInput({
   onBlur,
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   const [visible, setVisible] = useState(false);
   const hide = () => setVisible(isPasswordVisibleAfter('cancel'));
 
@@ -305,6 +343,8 @@ export function SelectField<T extends string>({
   options: SelectOption<T>[];
   onChange: (value: T) => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const visibleLabel = withoutOptionalSuffix(label);
   const selected = options.find((option) => option.value === value);
@@ -359,6 +399,8 @@ export function DateField({
   onChange: (value: string | null) => void;
   optional?: boolean;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   const [show, setShow] = useState(false);
   const visibleLabel = withoutOptionalSuffix(label);
   const selected = value ? parseDateOnly(value) : null;
@@ -383,7 +425,7 @@ export function DateField({
                 onChange(event.target.value || null),
               onChange: (event: { target: { value: string } }) =>
                 onChange(event.target.value || null),
-              style: webDateInputStyle,
+              style: createWebDateInputStyle(colors.textPrimary),
             })}
           </View>
           {optional && value ? (
@@ -461,6 +503,7 @@ export function SectionHeader({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -486,6 +529,8 @@ export function EmptyState({
   message: string;
   icon?: keyof typeof Ionicons.glyphMap;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   return (
     <Card style={styles.empty}>
       <View style={styles.emptyIcon}>
@@ -498,6 +543,8 @@ export function EmptyState({
 }
 
 export function LoadingScreen() {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.loading}>
       <ActivityIndicator size="large" color={colors.primary} />
@@ -507,6 +554,8 @@ export function LoadingScreen() {
 }
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
   return (
     <View style={styles.errorBanner}>
       <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
@@ -527,9 +576,10 @@ export function StatusBadge({
   label: string;
   tone?: 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 }) {
+  const styles = useStyles();
   return (
-    <View style={[styles.badge, badgeTones[tone]]}>
-      <Text style={[styles.badgeText, badgeTextTones[tone]]}>{label}</Text>
+    <View style={[styles.badge, styles[`badge_${tone}`]]}>
+      <Text style={[styles.badgeText, styles[`badgeText_${tone}`]]}>{label}</Text>
     </View>
   );
 }
@@ -545,217 +595,220 @@ export function confirmAction(title: string, message: string, onConfirm: () => v
   ]);
 }
 
-const buttonVariants = StyleSheet.create({
-  primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.paleAqua, borderWidth: 1, borderColor: colors.border },
-  danger: { backgroundColor: colors.danger },
-  ghost: { backgroundColor: 'transparent' },
-});
-const badgeTones = StyleSheet.create({
-  info: { backgroundColor: '#E7F1FB' },
-  success: { backgroundColor: '#E2F5EF' },
-  warning: { backgroundColor: '#FFF2DF' },
-  danger: { backgroundColor: '#FDE8E8' },
-  neutral: { backgroundColor: '#EFF3F4' },
-});
-const badgeTextTones = StyleSheet.create({
-  info: { color: colors.info },
-  success: { color: colors.success },
-  warning: { color: '#A86412' },
-  danger: { color: colors.danger },
-  neutral: { color: colors.muted },
-});
-
-const webDateInputStyle = {
+const createWebDateInputStyle = (textColor: string) => ({
   minHeight: 48,
   flex: 1,
   width: '100%',
-  color: colors.navy,
+  color: textColor,
   fontFamily: fontFamilies.regular,
   fontSize: 15,
   border: 'none',
   outline: 'none',
   backgroundColor: 'transparent',
-};
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: colors.background },
-  screenContent: {
-    width: '100%',
-    maxWidth: 720,
-    boxSizing: 'border-box',
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: spacing.lg,
-    gap: 20,
-  },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerText: { flex: 1, gap: spacing.xs },
-  title: { color: colors.navy, ...typography.screenTitle },
-  subtitle: { color: colors.muted, ...typography.body },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-    ...shadows.card,
-  },
-  formSection: { gap: 18 },
-  formSectionHeading: { gap: spacing.xs },
-  formSectionTitle: { color: colors.navy, ...typography.cardTitle },
-  formSectionDescription: { color: colors.muted, ...typography.caption },
-  buttonWrap: { minHeight: 52, width: '100%' },
-  button: {
-    minHeight: 52,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  pressed: { opacity: 0.78 },
-  disabled: { opacity: 0.55 },
-  buttonText: { color: colors.white, ...typography.button },
-  buttonTextPrimary: { color: colors.primary },
-  field: { gap: 7 },
-  fieldLabel: { color: colors.navy, ...typography.label },
-  input: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    color: colors.navy,
-    fontFamily: fontFamilies.regular,
-    fontSize: 15,
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-  },
-  multiline: { minHeight: 110, paddingTop: spacing.md, textAlignVertical: 'top' },
-  inputError: { borderColor: colors.danger },
-  errorText: { color: colors.danger, ...typography.caption },
-  passwordField: { position: 'relative' },
-  passwordInput: { paddingRight: 52 },
-  passwordEye: { position: 'absolute', right: 16, top: 40 },
-  select: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  selectPressed: { backgroundColor: colors.paleAqua, borderColor: colors.borderStrong },
-  selectText: { color: colors.navy, ...typography.bodyMedium, flexShrink: 1 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-    padding: spacing.lg,
-  },
-  modalCard: {
-    maxHeight: '75%',
-    backgroundColor: colors.surface,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  modalTitle: { color: colors.navy, ...typography.sectionTitle },
-  optionList: { maxHeight: 420 },
-  option: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-  },
-  optionSelected: { backgroundColor: colors.paleAqua },
-  optionText: { color: colors.navy, ...typography.body },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  webDateField: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  dateHelper: { color: colors.muted, ...typography.caption },
-  nativePicker: {
-    borderRadius: radii.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pickerDone: { alignSelf: 'flex-end', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  pickerDoneText: { color: colors.primary, ...typography.label },
-  clearButton: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  sectionTitle: { color: colors.navy, ...typography.sectionTitle },
-  sectionAction: { color: colors.primary, ...typography.label },
-  empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: { color: colors.navy, ...typography.cardTitle, textAlign: 'center' },
-  emptyMessage: { color: colors.muted, ...typography.body, textAlign: 'center' },
-  loading: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  loadingText: { color: colors.muted, ...typography.bodyMedium },
-  errorBanner: {
-    backgroundColor: '#FFF2F2',
-    borderRadius: radii.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  errorBannerText: { color: colors.navy, flex: 1, ...typography.caption },
-  retry: { color: colors.danger, ...typography.label },
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  badgeText: { ...typography.status },
 });
+
+const createStyles = ({ colors, shadows }: AppTheme) =>
+  StyleSheet.create({
+    flex: { flex: 1 },
+    safe: { flex: 1, backgroundColor: colors.screenBackground },
+    screenContent: {
+      width: '100%',
+      maxWidth: 720,
+      boxSizing: 'border-box',
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: spacing.lg,
+      gap: 20,
+    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    headerText: { flex: 1, gap: spacing.xs },
+    title: { color: colors.textPrimary, ...typography.screenTitle },
+    subtitle: { color: colors.textSecondary, ...typography.body },
+    card: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      ...shadows.card,
+    },
+    formSection: { gap: 18 },
+    formSectionHeading: { gap: spacing.xs },
+    formSectionTitle: { color: colors.textPrimary, ...typography.cardTitle },
+    formSectionDescription: { color: colors.textSecondary, ...typography.caption },
+    buttonWrap: { minHeight: 52, width: '100%' },
+    button: {
+      minHeight: 52,
+      paddingHorizontal: spacing.xl,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    pressed: { opacity: 0.78 },
+    disabled: { backgroundColor: colors.disabledSurface },
+    button_primary: { backgroundColor: colors.primaryAction },
+    button_secondary: {
+      backgroundColor: colors.paleAqua,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    button_danger: { backgroundColor: colors.error },
+    button_ghost: { backgroundColor: 'transparent' },
+    buttonText: { color: colors.onPrimary, ...typography.button },
+    buttonTextPrimary: { color: colors.primaryAction },
+    buttonTextDisabled: { color: colors.disabledText },
+    field: { gap: 7 },
+    fieldLabel: { color: colors.textPrimary, ...typography.label },
+    input: {
+      minHeight: 54,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.lg,
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.regular,
+      fontSize: 15,
+    },
+    inputFocused: {
+      borderColor: colors.primaryAction,
+      shadowColor: colors.primaryAction,
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+    },
+    multiline: { minHeight: 110, paddingTop: spacing.md, textAlignVertical: 'top' },
+    inputError: { borderColor: colors.error },
+    errorText: { color: colors.error, ...typography.caption },
+    passwordField: { position: 'relative' },
+    passwordInput: { paddingRight: 52 },
+    passwordEye: { position: 'absolute', right: 16, top: 40 },
+    select: {
+      minHeight: 54,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    selectPressed: { backgroundColor: colors.paleAqua, borderColor: colors.borderStrong },
+    selectText: { color: colors.textPrimary, ...typography.bodyMedium, flexShrink: 1 },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: colors.modalOverlay,
+      justifyContent: 'flex-end',
+      padding: spacing.lg,
+    },
+    modalCard: {
+      maxHeight: '75%',
+      backgroundColor: colors.elevatedSurface,
+      borderRadius: radii.xl,
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    modalTitle: { color: colors.textPrimary, ...typography.sectionTitle },
+    optionList: { maxHeight: 420 },
+    option: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.md,
+    },
+    optionSelected: { backgroundColor: colors.paleAqua },
+    optionText: { color: colors.textPrimary, ...typography.body },
+    dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    webDateField: {
+      minHeight: 54,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    dateHelper: { color: colors.textSecondary, ...typography.caption },
+    nativePicker: {
+      borderRadius: radii.lg,
+      overflow: 'hidden',
+      backgroundColor: colors.elevatedSurface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pickerDone: {
+      alignSelf: 'flex-end',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    pickerDoneText: { color: colors.primaryAction, ...typography.label },
+    clearButton: {
+      width: 52,
+      height: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    sectionTitle: { color: colors.textPrimary, ...typography.sectionTitle },
+    sectionAction: { color: colors.primaryAction, ...typography.label },
+    empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
+    emptyIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 18,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyTitle: { color: colors.textPrimary, ...typography.cardTitle, textAlign: 'center' },
+    emptyMessage: { color: colors.textSecondary, ...typography.body, textAlign: 'center' },
+    loading: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.md,
+    },
+    loadingText: { color: colors.textSecondary, ...typography.bodyMedium },
+    errorBanner: {
+      backgroundColor: colors.errorSurface,
+      borderRadius: radii.md,
+      padding: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    errorBannerText: { color: colors.textPrimary, flex: 1, ...typography.caption },
+    retry: { color: colors.error, ...typography.label },
+    badge: {
+      alignSelf: 'flex-start',
+      borderRadius: radii.pill,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    badgeText: { ...typography.status },
+    badge_info: { backgroundColor: colors.infoSurface },
+    badge_success: { backgroundColor: colors.successSurface },
+    badge_warning: { backgroundColor: colors.warningSurface },
+    badge_danger: { backgroundColor: colors.errorSurface },
+    badge_neutral: { backgroundColor: colors.neutralSurface },
+    badgeText_info: { color: colors.info },
+    badgeText_success: { color: colors.success },
+    badgeText_warning: { color: colors.warning },
+    badgeText_danger: { color: colors.error },
+    badgeText_neutral: { color: colors.textSecondary },
+  });

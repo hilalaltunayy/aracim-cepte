@@ -2,7 +2,7 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppButton, Card } from './ui';
 import { PickedAttachment, pickDocument, pickImage } from '@/data/storage/attachments';
-import { colors, spacing, typography } from '@/shared/theme';
+import { spacing, typography, useAppTheme, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { getFriendlyError } from '@/shared/utils/errors';
 
 export function AttachmentField({
@@ -16,6 +16,8 @@ export function AttachmentField({
   onPick: (file: PickedAttachment) => void;
   onRemove: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const fileName = picked?.name ?? existingPath?.split('/').at(-1) ?? null;
   const choose = async (source: 'image' | 'document') => {
     try {
@@ -59,11 +61,12 @@ export function AttachmentField({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { gap: spacing.sm },
-  label: { color: colors.navy, ...typography.label },
-  file: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm },
-  fileName: { flex: 1, color: colors.navy, fontSize: 12 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  action: { flex: 1 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    container: { gap: spacing.sm },
+    label: { color: colors.navy, ...typography.label },
+    file: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm },
+    fileName: { flex: 1, color: colors.navy, fontSize: 12 },
+    actions: { flexDirection: 'row', gap: spacing.sm },
+    action: { flex: 1 },
+  });

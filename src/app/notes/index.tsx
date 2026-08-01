@@ -2,10 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppButton, Card, EmptyState, Screen } from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
-import { colors, spacing, typography } from '@/shared/theme';
+import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
 
 export default function NotesListScreen() {
+  const styles = useThemedStyles(createStyles);
   const notes = useDataStore((state) => state.notes);
   return (
     <Screen>
@@ -38,10 +39,11 @@ export default function NotesListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: { gap: spacing.md },
-  card: { gap: spacing.sm },
-  title: { color: colors.navy, ...typography.cardTitle },
-  content: { color: colors.navy, lineHeight: 21 },
-  date: { color: colors.muted, fontSize: 11 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    list: { gap: spacing.md },
+    card: { gap: spacing.sm },
+    title: { color: colors.navy, ...typography.cardTitle },
+    content: { color: colors.navy, lineHeight: 21 },
+    date: { color: colors.muted, fontSize: 11 },
+  });

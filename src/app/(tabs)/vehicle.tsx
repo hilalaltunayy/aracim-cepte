@@ -3,7 +3,15 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader, Card, Screen, SectionHeader } from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { bodyTypeLabels, fuelTypeLabels } from '@/shared/constants/labels';
 import { formatNumber } from '@/shared/utils/format';
 import { getBodyConditionSummary } from '@/shared/utils/analytics';
@@ -36,6 +44,8 @@ const sections = [
 ] as const;
 
 export default function VehicleScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { vehicles, activeVehicleId, bodyConditions, expertiseReports, notes, documents } =
     useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -125,44 +135,50 @@ export default function VehicleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  vehicleCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  vehicleIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vehicleInfo: { flex: 1, gap: 3 },
-  vehicleName: { color: colors.navy, ...typography.sectionTitle },
-  meta: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  km: { color: colors.primary, fontFamily: fontFamilies.bold, marginTop: spacing.xs },
-  edit: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bodySummary: { gap: spacing.lg },
-  cardTitle: { color: colors.navy, ...typography.cardTitle },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryItem: { alignItems: 'center', gap: 3 },
-  summaryValue: { color: colors.navy, ...typography.sectionTitle },
-  summaryLabel: { color: colors.muted, fontSize: 11 },
-  list: { gap: spacing.md },
-  sectionCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  sectionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  count: { color: colors.primary, fontFamily: fontFamilies.bold },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    vehicleCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    vehicleIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 20,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    vehicleInfo: { flex: 1, gap: 3 },
+    vehicleName: { color: colors.navy, ...typography.sectionTitle },
+    meta: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+    km: { color: colors.primary, fontFamily: fontFamilies.bold, marginTop: spacing.xs },
+    edit: {
+      width: 42,
+      height: 42,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bodySummary: { gap: spacing.lg },
+    cardTitle: { color: colors.navy, ...typography.cardTitle },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    summaryItem: { alignItems: 'center', gap: 3 },
+    summaryValue: { color: colors.navy, ...typography.sectionTitle },
+    summaryLabel: { color: colors.muted, fontSize: 11 },
+    list: { gap: spacing.md },
+    sectionCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    sectionIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    count: { color: colors.primary, fontFamily: fontFamilies.bold },
+    pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
+  });

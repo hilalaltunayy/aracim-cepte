@@ -11,7 +11,7 @@ import {
 } from '@/shared/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
-import { colors, spacing, typography } from '@/shared/theme';
+import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { isValidEmail } from '@/shared/utils/validation';
 import {
   REGISTRATION_LEGAL_LINKS,
@@ -22,6 +22,7 @@ import {
 } from '@/features/auth/registrationFlow';
 
 export default function RegisterScreen() {
+  const styles = useThemedStyles(createStyles);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -116,23 +117,24 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { gap: spacing.xl },
-  successScreen: { justifyContent: 'center', gap: spacing.xl },
-  intro: { gap: spacing.sm },
-  title: { color: colors.navy, ...typography.sectionTitle },
-  subtitle: { color: colors.muted, ...typography.body },
-  legalNotice: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceMuted,
-  },
-  legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  legalLinks: { gap: spacing.sm },
-  legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
-  legalStatus: { color: colors.warning, fontSize: 11, fontWeight: '700' },
-  successMessage: { color: colors.muted, ...typography.body },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    screen: { gap: spacing.xl },
+    successScreen: { justifyContent: 'center', gap: spacing.xl },
+    intro: { gap: spacing.sm },
+    title: { color: colors.navy, ...typography.sectionTitle },
+    subtitle: { color: colors.muted, ...typography.body },
+    legalNotice: {
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceMuted,
+    },
+    legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+    legalLinks: { gap: spacing.sm },
+    legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
+    legalStatus: { color: colors.warning, fontSize: 11, fontWeight: '700' },
+    successMessage: { color: colors.muted, ...typography.body },
+  });

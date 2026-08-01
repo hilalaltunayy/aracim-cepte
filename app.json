@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "aracimcepte",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.hilalaltunay.aracimcepte",
       "supportsTablet": false
@@ -50,7 +50,11 @@
         {
           "backgroundColor": "#EAF8FB",
           "image": "./assets/images/adaptive-foreground.png",
-          "imageWidth": 88
+          "imageWidth": 88,
+          "dark": {
+            "backgroundColor": "#0B151B",
+            "image": "./assets/images/adaptive-foreground.png"
+          }
         }
       ],
       "@react-native-community/datetimepicker"

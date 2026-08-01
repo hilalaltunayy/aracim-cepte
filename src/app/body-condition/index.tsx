@@ -12,11 +12,21 @@ import {
 import { BodyCondition } from '@/domain/entities';
 import { bodyConditionLabels } from '@/shared/constants/labels';
 import { bodySchemas } from '@/features/bodyCondition/schemas';
-import { BodyDiagram, conditionColors } from '@/features/bodyCondition/BodyDiagram';
+import { BodyDiagram } from '@/features/bodyCondition/BodyDiagram';
 import { useDataStore } from '@/store/dataStore';
-import { colors, radii, spacing, typography } from '@/shared/theme';
+import {
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 
 export default function BodyConditionScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const conditionColors = colors.bodyCondition;
   const { vehicles, activeVehicleId, bodyConditions, saveBodyCondition, loading, error } =
     useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -120,35 +130,36 @@ export default function BodyConditionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  editor: { gap: spacing.lg, borderColor: colors.borderStrong },
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  headingCopy: { flex: 1, minWidth: 0 },
-  partHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  partDot: { width: 12, height: 12, borderRadius: 4 },
-  partTitle: { color: colors.navy, ...typography.sectionTitle },
-  hint: { color: colors.muted, ...typography.caption, marginTop: 5 },
-  overviewCard: { gap: spacing.lg },
-  legendTitle: { color: colors.navy, ...typography.cardTitle },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, width: '45%' },
-  swatch: { width: 15, height: 15, borderRadius: 5 },
-  legendText: { color: colors.navy, ...typography.caption },
-  summary: { gap: spacing.sm },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: 10,
-  },
-  summaryName: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
-  summaryDot: { width: 8, height: 8, borderRadius: radii.pill },
-  summaryPart: { color: colors.navy, ...typography.bodyMedium },
-  summaryStatus: { color: colors.muted, ...typography.status },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    editor: { gap: spacing.lg, borderColor: colors.borderStrong },
+    headingRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    headingCopy: { flex: 1, minWidth: 0 },
+    partHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    partDot: { width: 12, height: 12, borderRadius: 4 },
+    partTitle: { color: colors.navy, ...typography.sectionTitle },
+    hint: { color: colors.muted, ...typography.caption, marginTop: 5 },
+    overviewCard: { gap: spacing.lg },
+    legendTitle: { color: colors.navy, ...typography.cardTitle },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, width: '45%' },
+    swatch: { width: 15, height: 15, borderRadius: 5 },
+    legendText: { color: colors.navy, ...typography.caption },
+    summary: { gap: spacing.sm },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 10,
+    },
+    summaryName: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+    summaryDot: { width: 8, height: 8, borderRadius: radii.pill },
+    summaryPart: { color: colors.navy, ...typography.bodyMedium },
+    summaryStatus: { color: colors.muted, ...typography.status },
+  });

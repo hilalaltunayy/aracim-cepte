@@ -10,13 +10,22 @@ import {
   PasswordInput,
   Screen,
 } from '@/shared/components/ui';
-import { colors, fontFamilies, shadows, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
 import { isValidEmail } from '@/shared/utils/validation';
 import { getLoginPrefillEmail } from '@/features/auth/registrationFlow';
 
 export default function LoginScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const [email, setEmail] = useState(() => getLoginPrefillEmail(params.email));
   const [password, setPassword] = useState('');
@@ -28,7 +37,7 @@ export default function LoginScreen() {
   return (
     <Screen style={styles.screen}>
       <View style={styles.logo}>
-        <Ionicons name="car-sport-outline" size={34} color={colors.white} />
+        <Ionicons name="car-sport-outline" size={34} color={colors.onPrimary} />
       </View>
       <View style={styles.heading}>
         <Text style={styles.title}>Tekrar hoş geldiniz</Text>
@@ -82,24 +91,25 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { justifyContent: 'center', gap: spacing.xl, paddingBottom: spacing.xxl },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 21,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.floating,
-  },
-  heading: { gap: spacing.sm },
-  title: { color: colors.navy, ...typography.screenTitle },
-  subtitle: { color: colors.muted, ...typography.body },
-  form: { gap: spacing.lg },
-  forgot: { alignSelf: 'flex-end' },
-  pressed: { opacity: 0.65 },
-  link: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 14 },
-  register: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
-  muted: { color: colors.muted, ...typography.body },
-});
+const createStyles = ({ colors, shadows }: AppTheme) =>
+  StyleSheet.create({
+    screen: { justifyContent: 'center', gap: spacing.xl, paddingBottom: spacing.xxl },
+    logo: {
+      width: 64,
+      height: 64,
+      borderRadius: 21,
+      backgroundColor: colors.primaryAction,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...shadows.floating,
+    },
+    heading: { gap: spacing.sm },
+    title: { color: colors.navy, ...typography.screenTitle },
+    subtitle: { color: colors.muted, ...typography.body },
+    form: { gap: spacing.lg },
+    forgot: { alignSelf: 'flex-end' },
+    pressed: { opacity: 0.65 },
+    link: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 14 },
+    register: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
+    muted: { color: colors.muted, ...typography.body },
+  });

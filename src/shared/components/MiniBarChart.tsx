@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { MonthlyTotal } from '@/shared/utils/analytics';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { formatCurrency } from '@/shared/utils/format';
 
 function Bar({ item, max }: { item: MonthlyTotal; max: number }) {
+  const styles = useThemedStyles(createStyles);
   const [height] = useState(() => new Animated.Value(0));
   const target = max > 0 ? Math.max((item.total / max) * 96, item.total > 0 ? 8 : 2) : 2;
   useEffect(() => {
@@ -21,6 +29,7 @@ function Bar({ item, max }: { item: MonthlyTotal; max: number }) {
 }
 
 export function MiniBarChart({ data }: { data: MonthlyTotal[] }) {
+  const styles = useThemedStyles(createStyles);
   const max = Math.max(...data.map((item) => item.total), 0);
   const current = data.at(-1)?.total ?? 0;
   return (
@@ -41,30 +50,41 @@ export function MiniBarChart({ data }: { data: MonthlyTotal[] }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { gap: spacing.lg },
-  chartHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  kicker: {
-    color: colors.primary,
-    fontFamily: fontFamilies.semibold,
-    fontSize: 10,
-    letterSpacing: 1.05,
-  },
-  value: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 22, lineHeight: 28 },
-  caption: { color: colors.muted, ...typography.caption, paddingBottom: 3 },
-  chart: {
-    height: 122,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-  },
-  barColumn: { alignItems: 'center', gap: spacing.sm, flex: 1 },
-  barTrack: { height: 98, justifyContent: 'flex-end' },
-  bar: { width: 24, backgroundColor: colors.primary, borderRadius: radii.pill },
-  label: { color: colors.muted, ...typography.caption, fontSize: 11, textTransform: 'capitalize' },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    container: { gap: spacing.lg },
+    chartHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    kicker: {
+      color: colors.primary,
+      fontFamily: fontFamilies.semibold,
+      fontSize: 10,
+      letterSpacing: 1.05,
+    },
+    value: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 22, lineHeight: 28 },
+    caption: { color: colors.muted, ...typography.caption, paddingBottom: 3 },
+    chart: {
+      height: 122,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-around',
+    },
+    barColumn: { alignItems: 'center', gap: spacing.sm, flex: 1 },
+    barTrack: {
+      height: 98,
+      justifyContent: 'flex-end',
+      borderBottomColor: colors.chartGrid,
+      borderBottomWidth: 1,
+    },
+    bar: { width: 24, backgroundColor: colors.primary, borderRadius: radii.pill },
+    label: {
+      color: colors.muted,
+      ...typography.caption,
+      fontSize: 11,
+      textTransform: 'capitalize',
+    },
+  });

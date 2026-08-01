@@ -12,7 +12,14 @@ import {
 } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { colors, fontFamilies, typography } from '@/shared/theme';
+import {
+  AppThemeProvider,
+  fontFamilies,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 
@@ -22,6 +29,8 @@ const NativeText = Text as typeof Text & { defaultProps?: { style?: object } };
 const NativeTextInput = TextInput as typeof TextInput & { defaultProps?: { style?: object } };
 
 function BackButton({ fallback = '/(tabs)' }: { fallback?: '/(tabs)' | '/auth/login' }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace(fallback);
@@ -40,6 +49,15 @@ function BackButton({ fallback = '/(tabs)' }: { fallback?: '/(tabs)' | '/auth/lo
 }
 
 export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <RootNavigator />
+    </AppThemeProvider>
+  );
+}
+
+function RootNavigator() {
+  const { colors, scheme } = useAppTheme();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -87,7 +105,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
@@ -173,20 +191,21 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  backButton: {
-    width: 40,
-    height: 40,
-    marginLeft: 4,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backButtonPressed: {
-    backgroundColor: colors.paleAqua,
-    transform: [{ scale: 0.96 }],
-  },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    backButton: {
+      width: 40,
+      height: 40,
+      marginLeft: 4,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    backButtonPressed: {
+      backgroundColor: colors.paleAqua,
+      transform: [{ scale: 0.96 }],
+    },
+  });

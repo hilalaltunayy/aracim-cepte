@@ -15,7 +15,15 @@ import {
 import { RecordCard } from '@/shared/components/entityCards';
 import { MiniBarChart } from '@/shared/components/MiniBarChart';
 import { useDataStore } from '@/store/dataStore';
-import { colors, fontFamilies, radii, shadows, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import {
   getCostPerKilometer,
   getCurrentMonthRecordTypeTotals,
@@ -27,6 +35,8 @@ import {
 import { formatCurrency, formatNumber } from '@/shared/utils/format';
 
 export default function DashboardScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const { vehicles, activeVehicleId, records, reminders, error, refresh } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   if (!vehicle) return null;
@@ -167,71 +177,72 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hero: {
-    width: '100%',
-    minHeight: 214,
-    borderRadius: radii.xl,
-    padding: spacing.xl,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    ...shadows.floating,
-  },
-  heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  heroIdentity: { flex: 1, minWidth: 0, paddingRight: spacing.xs },
-  plate: {
-    color: 'rgba(255,255,255,0.78)',
-    fontFamily: fontFamilies.semibold,
-    fontSize: 12,
-    letterSpacing: 1.15,
-  },
-  vehicleName: {
-    color: colors.white,
-    fontFamily: fontFamilies.bold,
-    fontSize: 21,
-    lineHeight: 27,
-    marginTop: 5,
-  },
-  heroLabel: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
-  km: {
-    color: colors.white,
-    fontFamily: fontFamilies.bold,
-    fontSize: 33,
-    lineHeight: 41,
-    letterSpacing: -0.8,
-  },
-  heroFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  heroFooterText: { color: 'rgba(255,255,255,0.82)', ...typography.body },
-  heroFooterValue: { color: colors.white, ...typography.body, fontFamily: fontFamilies.bold },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  action: { alignItems: 'center', flex: 1, minWidth: 0, gap: 7 },
-  actionPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
-  actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionLabel: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 11 },
-  metrics: { flexDirection: 'row', gap: spacing.sm },
-  metric: { flex: 1, flexBasis: 0, padding: spacing.md, gap: spacing.xs, minWidth: 0 },
-  metricLabel: { color: colors.muted, ...typography.caption },
-  metricValue: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 13 },
-  insight: { color: colors.muted, ...typography.caption, marginTop: spacing.md },
-  detailMetrics: { flexDirection: 'row', gap: spacing.md },
-  detailMetric: { flex: 1, gap: spacing.xs },
-  detailValue: { color: colors.navy, ...typography.cardTitle },
-  list: { gap: spacing.md },
-});
+const createStyles = ({ colors, shadows }: AppTheme) =>
+  StyleSheet.create({
+    headerIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 16,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    hero: {
+      width: '100%',
+      minHeight: 214,
+      borderRadius: radii.xl,
+      padding: spacing.xl,
+      justifyContent: 'space-between',
+      overflow: 'hidden',
+      ...shadows.floating,
+    },
+    heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    heroIdentity: { flex: 1, minWidth: 0, paddingRight: spacing.xs },
+    plate: {
+      color: 'rgba(255,255,255,0.78)',
+      fontFamily: fontFamilies.semibold,
+      fontSize: 12,
+      letterSpacing: 1.15,
+    },
+    vehicleName: {
+      color: colors.white,
+      fontFamily: fontFamilies.bold,
+      fontSize: 21,
+      lineHeight: 27,
+      marginTop: 5,
+    },
+    heroLabel: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
+    km: {
+      color: colors.white,
+      fontFamily: fontFamilies.bold,
+      fontSize: 33,
+      lineHeight: 41,
+      letterSpacing: -0.8,
+    },
+    heroFooter: { flexDirection: 'row', justifyContent: 'space-between' },
+    heroFooterText: { color: 'rgba(255,255,255,0.82)', ...typography.body },
+    heroFooterValue: { color: colors.white, ...typography.body, fontFamily: fontFamilies.bold },
+    actions: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+    action: { alignItems: 'center', flex: 1, minWidth: 0, gap: 7 },
+    actionPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+    actionIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 17,
+      backgroundColor: colors.cardBackground,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionLabel: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 11 },
+    metrics: { flexDirection: 'row', gap: spacing.sm },
+    metric: { flex: 1, flexBasis: 0, padding: spacing.md, gap: spacing.xs, minWidth: 0 },
+    metricLabel: { color: colors.muted, ...typography.caption },
+    metricValue: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 13 },
+    insight: { color: colors.muted, ...typography.caption, marginTop: spacing.md },
+    detailMetrics: { flexDirection: 'row', gap: spacing.md },
+    detailMetric: { flex: 1, gap: spacing.xs },
+    detailValue: { color: colors.navy, ...typography.cardTitle },
+    list: { gap: spacing.md },
+  });

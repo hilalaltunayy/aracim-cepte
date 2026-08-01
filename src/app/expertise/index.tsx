@@ -3,10 +3,19 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppButton, Card, EmptyState, Screen } from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
-import { colors, radii, spacing, typography } from '@/shared/theme';
+import {
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
 
 export default function ExpertiseListScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const reports = useDataStore((state) => state.expertiseReports);
   return (
     <Screen>
@@ -55,18 +64,19 @@ export default function ExpertiseListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  list: { gap: spacing.md },
-  card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  icon: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: { flex: 1, gap: 3 },
-  title: { color: colors.navy, ...typography.cardTitle },
-  meta: { color: colors.muted, fontSize: 12 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    list: { gap: spacing.md },
+    card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+    icon: {
+      width: 48,
+      height: 48,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    content: { flex: 1, gap: 3 },
+    title: { color: colors.navy, ...typography.cardTitle },
+    meta: { color: colors.muted, fontSize: 12 },
+  });

@@ -7,8 +7,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppHeader, Card, Screen, SectionHeader, confirmAction } from '@/shared/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { DEVELOPER_INFO } from '@/features/settings/about';
+import { THEME_OPTIONS, type ThemePreference } from '@/features/theme/themePreference';
 
 function SettingsRow({
   icon,
@@ -23,6 +32,8 @@ function SettingsRow({
   onPress?: () => void;
   danger?: boolean;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -43,7 +54,48 @@ function SettingsRow({
   );
 }
 
+const themeIcons: Record<ThemePreference, keyof typeof Ionicons.glyphMap> = {
+  system: 'phone-portrait-outline',
+  light: 'sunny-outline',
+  dark: 'moon-outline',
+};
+
+function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) {
+  const { colors, preference, setPreference } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
+  const selected = preference === option.value;
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={option.label}
+      accessibilityHint={option.description}
+      accessibilityState={{ checked: selected }}
+      onPress={() => void setPreference(option.value)}
+      style={({ pressed }) => [
+        styles.row,
+        selected && styles.themeRowSelected,
+        pressed && styles.rowPressed,
+      ]}
+    >
+      <View style={styles.icon}>
+        <Ionicons name={themeIcons[option.value]} size={20} color={colors.primaryAction} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowTitle}>{option.label}</Text>
+        <Text style={styles.rowSubtitle}>{option.description}</Text>
+      </View>
+      <Ionicons
+        name={selected ? 'radio-button-on' : 'radio-button-off'}
+        size={22}
+        color={selected ? colors.primaryAction : colors.textSecondary}
+      />
+    </Pressable>
+  );
+}
+
 export default function SettingsScreen() {
+  const styles = useThemedStyles(createStyles);
   const { session, signOut, deleteAccount, busy, error: authError } = useAuthStore();
   const { vehicles, activeVehicleId, clearSection, deleteVehicle, clear } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -81,6 +133,14 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <AppHeader title="Ayarlar" subtitle="Hesap, bildirimler ve veriler" />
+      <SectionHeader title="Görünüm" />
+      <View accessibilityRole="radiogroup">
+        <Card style={styles.card}>
+          {THEME_OPTIONS.map((option) => (
+            <ThemeOptionRow key={option.value} option={option} />
+          ))}
+        </Card>
+      </View>
       <SectionHeader title="Hesap" />
       <Card style={styles.card}>
         <SettingsRow
@@ -229,36 +289,38 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  card: { padding: 0, overflow: 'hidden' },
-  row: {
-    minHeight: 68,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowPressed: { backgroundColor: colors.surfaceMuted },
-  icon: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dangerIcon: { backgroundColor: '#FDECEC' },
-  rowContent: { flex: 1, gap: 3 },
-  rowTitle: {
-    color: colors.navy,
-    ...typography.bodyMedium,
-    fontFamily: fontFamilies.semibold,
-  },
-  rowSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
-  dangerText: { color: colors.danger },
-  about: { gap: spacing.sm },
-  aboutTitle: { color: colors.navy, ...typography.sectionTitle },
-  aboutText: { color: colors.muted, lineHeight: 20 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    card: { padding: 0, overflow: 'hidden' },
+    row: {
+      minHeight: 68,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowPressed: { backgroundColor: colors.elevatedSurface },
+    themeRowSelected: { backgroundColor: colors.paleAqua },
+    icon: {
+      width: 38,
+      height: 38,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dangerIcon: { backgroundColor: colors.errorSurface },
+    rowContent: { flex: 1, gap: 3 },
+    rowTitle: {
+      color: colors.navy,
+      ...typography.bodyMedium,
+      fontFamily: fontFamilies.semibold,
+    },
+    rowSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+    dangerText: { color: colors.danger },
+    about: { gap: spacing.sm },
+    aboutTitle: { color: colors.navy, ...typography.sectionTitle },
+    aboutText: { color: colors.muted, lineHeight: 20 },
+  });

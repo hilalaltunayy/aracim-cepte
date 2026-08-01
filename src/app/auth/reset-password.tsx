@@ -12,12 +12,13 @@ import {
 } from '@/shared/components/ui';
 import { getIncomingRecoveryUrl } from '@/features/auth/recoveryRedirect';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
-import { colors, spacing, typography } from '@/shared/theme';
+import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 
 type Phase = 'loading' | 'ready' | 'success' | 'error';
 
 export default function ResetPasswordScreen() {
+  const styles = useThemedStyles(createStyles);
   const incomingUrl = Linking.useURL();
   const processing = useRef<Promise<boolean> | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
@@ -126,9 +127,10 @@ export default function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { gap: spacing.xl },
-  intro: { gap: spacing.sm },
-  title: { color: colors.navy, ...typography.sectionTitle },
-  body: { color: colors.muted, ...typography.body },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    screen: { gap: spacing.xl },
+    intro: { gap: spacing.sm },
+    title: { color: colors.navy, ...typography.sectionTitle },
+    body: { color: colors.muted, ...typography.body },
+  });

@@ -6,7 +6,15 @@ import {
   reminderTypeLabels,
   documentTypeLabels,
 } from '@/shared/constants/labels';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { formatCurrency, formatDate, formatNumber } from '@/shared/utils/format';
 import { getDocumentExpiryStatus, getReminderStatus } from '@/shared/utils/analytics';
 import { Card, StatusBadge } from './ui';
@@ -18,6 +26,8 @@ const recordIcons = {
 } as const;
 
 export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress?: () => void }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -70,6 +80,8 @@ export function ReminderCard({
   onPress?: () => void;
   onToggle?: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const status = getReminderStatus(reminder, currentKm);
   const [label, tone] = reminderLabels[status];
   return (
@@ -129,6 +141,8 @@ export function DocumentCard({
   document: VehicleDocument;
   onPress?: () => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const status = getDocumentExpiryStatus(document.expiryDate);
   const [label, tone] = documentLabels[status];
   return (
@@ -158,32 +172,33 @@ export function DocumentCard({
   );
 }
 
-const styles = StyleSheet.create({
-  rowCard: { flexDirection: 'row', gap: spacing.md, padding: spacing.md },
-  cardPressed: { opacity: 0.72, transform: [{ scale: 0.992 }] },
-  icon: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    backgroundColor: colors.paleAqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  check: { paddingTop: 7 },
-  content: { flex: 1, gap: spacing.xs },
-  between: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  rowTitle: {
-    color: colors.navy,
-    ...typography.bodyMedium,
-    fontFamily: fontFamilies.semibold,
-    flex: 1,
-  },
-  amount: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 14 },
-  meta: { color: colors.muted, fontSize: 12, lineHeight: 17 },
-  description: { color: colors.navy, fontSize: 13, lineHeight: 18, marginTop: 2 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    rowCard: { flexDirection: 'row', gap: spacing.md, padding: spacing.md },
+    cardPressed: { opacity: 0.72, transform: [{ scale: 0.992 }] },
+    icon: {
+      width: 44,
+      height: 44,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    check: { paddingTop: 7 },
+    content: { flex: 1, gap: spacing.xs },
+    between: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    rowTitle: {
+      color: colors.navy,
+      ...typography.bodyMedium,
+      fontFamily: fontFamilies.semibold,
+      flex: 1,
+    },
+    amount: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 14 },
+    meta: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+    description: { color: colors.navy, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  });

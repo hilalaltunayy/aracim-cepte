@@ -3,7 +3,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { AppButton, FadeIn, Screen } from '@/shared/components/ui';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import {
+  fontFamilies,
+  radii,
+  spacing,
+  typography,
+  useAppTheme,
+  useThemedStyles,
+  type AppTheme,
+} from '@/shared/theme';
 import { useDataStore } from '@/store/dataStore';
 
 function VehicleIllustration() {
@@ -26,6 +34,8 @@ function VehicleIllustration() {
 }
 
 export default function OnboardingScreen() {
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(createStyles);
   const setOnboardingSeen = useDataStore((state) => state.setOnboardingSeen);
   const continueToAuth = () => {
     setOnboardingSeen();
@@ -67,47 +77,48 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  screen: { justifyContent: 'space-between', paddingTop: spacing.xl },
-  brand: { gap: spacing.sm },
-  eyebrow: {
-    color: 'rgba(255,255,255,0.78)',
-    fontFamily: fontFamilies.semibold,
-    fontSize: 11,
-    letterSpacing: 1.25,
-  },
-  title: {
-    color: colors.white,
-    fontFamily: fontFamilies.bold,
-    fontSize: 40,
-    lineHeight: 48,
-    letterSpacing: -1,
-  },
-  message: {
-    color: colors.white,
-    fontFamily: fontFamilies.regular,
-    fontSize: 16,
-    lineHeight: 24,
-    maxWidth: 340,
-  },
-  hero: {
-    marginVertical: spacing.md,
-    borderRadius: radii.xl,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-  },
-  featureRow: { gap: spacing.sm },
-  feature: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.white },
-  featureText: { gap: 2 },
-  featureTitle: { color: colors.white, fontFamily: fontFamilies.semibold, fontSize: 14 },
-  featureMessage: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    gradient: { flex: 1 },
+    screen: { justifyContent: 'space-between', paddingTop: spacing.xl },
+    brand: { gap: spacing.sm },
+    eyebrow: {
+      color: 'rgba(255,255,255,0.78)',
+      fontFamily: fontFamilies.semibold,
+      fontSize: 11,
+      letterSpacing: 1.25,
+    },
+    title: {
+      color: colors.white,
+      fontFamily: fontFamilies.bold,
+      fontSize: 40,
+      lineHeight: 48,
+      letterSpacing: -1,
+    },
+    message: {
+      color: colors.white,
+      fontFamily: fontFamilies.regular,
+      fontSize: 16,
+      lineHeight: 24,
+      maxWidth: 340,
+    },
+    hero: {
+      marginVertical: spacing.md,
+      borderRadius: radii.xl,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      overflow: 'hidden',
+    },
+    featureRow: { gap: spacing.sm },
+    feature: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: 'rgba(255,255,255,0.14)',
+      borderRadius: radii.md,
+      padding: spacing.md,
+    },
+    dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.white },
+    featureText: { gap: 2 },
+    featureTitle: { color: colors.white, fontFamily: fontFamilies.semibold, fontSize: 14 },
+    featureMessage: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
+  });

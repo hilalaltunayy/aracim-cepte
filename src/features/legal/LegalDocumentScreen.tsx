@@ -1,9 +1,10 @@
 import { StyleSheet, Text } from 'react-native';
 import { AppHeader, Card, Screen, StatusBadge } from '@/shared/components/ui';
-import { colors, spacing, typography } from '@/shared/theme';
+import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import type { LegalDocument } from './legalContent';
 
 export function LegalDocumentScreen({ document }: { document: LegalDocument }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <Screen style={styles.screen}>
       <AppHeader
@@ -25,9 +26,10 @@ export function LegalDocumentScreen({ document }: { document: LegalDocument }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { gap: spacing.lg },
-  section: { gap: spacing.sm },
-  title: { color: colors.navy, ...typography.sectionTitle },
-  body: { color: colors.muted, ...typography.body, lineHeight: 22 },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    screen: { gap: spacing.lg },
+    section: { gap: spacing.sm },
+    title: { color: colors.navy, ...typography.sectionTitle },
+    body: { color: colors.muted, ...typography.body, lineHeight: 22 },
+  });

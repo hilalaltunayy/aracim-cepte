@@ -5,7 +5,7 @@ import { AppHeader, EmptyState, Screen } from '@/shared/components/ui';
 import { RecordCard } from '@/shared/components/entityCards';
 import { RecordType } from '@/domain/entities';
 import { useDataStore } from '@/store/dataStore';
-import { colors, fontFamilies, radii, spacing } from '@/shared/theme';
+import { fontFamilies, radii, spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { sortRecords } from '@/shared/utils/analytics';
 
 type Filter = 'all' | RecordType;
@@ -17,6 +17,7 @@ const filters: { value: Filter; label: string }[] = [
 ];
 
 export default function HistoryScreen() {
+  const styles = useThemedStyles(createStyles);
   const [filter, setFilter] = useState<Filter>('all');
   const records = useDataStore((state) => state.records);
   const filtered = sortRecords(records).filter(
@@ -59,20 +60,21 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  filters: { flexDirection: 'row', gap: spacing.sm },
-  pill: {
-    flex: 1,
-    minHeight: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.pill,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pillSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  pillText: { color: colors.muted, fontFamily: fontFamilies.semibold, fontSize: 12 },
-  pillTextSelected: { color: colors.white },
-  list: { gap: spacing.md },
-});
+const createStyles = ({ colors }: AppTheme) =>
+  StyleSheet.create({
+    filters: { flexDirection: 'row', gap: spacing.sm },
+    pill: {
+      flex: 1,
+      minHeight: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.pill,
+      backgroundColor: colors.cardBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pillSelected: { backgroundColor: colors.primaryAction, borderColor: colors.primaryAction },
+    pillText: { color: colors.muted, fontFamily: fontFamilies.semibold, fontSize: 12 },
+    pillTextSelected: { color: colors.onPrimary },
+    list: { gap: spacing.md },
+  });
