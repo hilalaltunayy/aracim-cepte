@@ -15,20 +15,26 @@ import {
 import { useDataStore } from '@/store/dataStore';
 
 function VehicleIllustration() {
+  const { colors } = useAppTheme();
   return (
-    <Svg width="100%" height={260} viewBox="0 0 360 260" accessibilityLabel="Modern araç çizimi">
-      <Circle cx="180" cy="125" r="108" fill="rgba(255,255,255,0.14)" />
+    <Svg width="100%" height={260} viewBox="0 0 360 260" accessible={false}>
+      <Circle cx="180" cy="125" r="108" fill={colors.brandSurfaceStrong} />
       <Path
         d="M76 146c7-22 21-37 42-45l34-14c18-7 44-6 60 2l37 19c14 7 25 19 31 38l7 20H68l8-20Z"
-        fill="#FFFFFF"
+        fill={colors.illustrationBody}
       />
-      <Path d="M132 105l29-12c14-5 32-4 44 2l30 15-103-5Z" fill="#BDECF4" />
-      <Rect x="55" y="153" width="250" height="42" rx="21" fill="#F8FDFF" />
-      <Circle cx="111" cy="194" r="26" fill="#173042" />
-      <Circle cx="111" cy="194" r="12" fill="#85D8E4" />
-      <Circle cx="253" cy="194" r="26" fill="#173042" />
-      <Circle cx="253" cy="194" r="12" fill="#85D8E4" />
-      <Path d="M67 166h33M265 166h31" stroke="#35CFC4" strokeWidth="7" strokeLinecap="round" />
+      <Path d="M132 105l29-12c14-5 32-4 44 2l30 15-103-5Z" fill={colors.illustrationGlass} />
+      <Rect x="55" y="153" width="250" height="42" rx="21" fill={colors.illustrationTrim} />
+      <Circle cx="111" cy="194" r="26" fill={colors.illustrationWheel} />
+      <Circle cx="111" cy="194" r="12" fill={colors.illustrationHub} />
+      <Circle cx="253" cy="194" r="26" fill={colors.illustrationWheel} />
+      <Circle cx="253" cy="194" r="12" fill={colors.illustrationHub} />
+      <Path
+        d="M67 166h33M265 166h31"
+        stroke={colors.illustrationAccent}
+        strokeWidth="7"
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }
@@ -42,7 +48,10 @@ export default function OnboardingScreen() {
     router.replace('/auth/login');
   };
   return (
-    <LinearGradient colors={[colors.primary, colors.aqua]} style={styles.gradient}>
+    <LinearGradient
+      colors={[colors.brandGradientStart, colors.brandGradientEnd]}
+      style={styles.gradient}
+    >
       <Screen style={styles.screen} backgroundColor="transparent">
         <FadeIn>
           <View style={styles.brand}>
@@ -83,20 +92,20 @@ const createStyles = ({ colors }: AppTheme) =>
     screen: { justifyContent: 'space-between', paddingTop: spacing.xl },
     brand: { gap: spacing.sm },
     eyebrow: {
-      color: 'rgba(255,255,255,0.78)',
+      color: colors.onBrandMuted,
       fontFamily: fontFamilies.semibold,
       fontSize: 11,
       letterSpacing: 1.25,
     },
     title: {
-      color: colors.white,
+      color: colors.onBrand,
       fontFamily: fontFamilies.bold,
       fontSize: 40,
       lineHeight: 48,
       letterSpacing: -1,
     },
     message: {
-      color: colors.white,
+      color: colors.onBrand,
       fontFamily: fontFamilies.regular,
       fontSize: 16,
       lineHeight: 24,
@@ -105,7 +114,7 @@ const createStyles = ({ colors }: AppTheme) =>
     hero: {
       marginVertical: spacing.md,
       borderRadius: radii.xl,
-      backgroundColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: colors.brandSurface,
       overflow: 'hidden',
     },
     featureRow: { gap: spacing.sm },
@@ -113,12 +122,12 @@ const createStyles = ({ colors }: AppTheme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      backgroundColor: 'rgba(255,255,255,0.14)',
+      backgroundColor: colors.brandSurfaceStrong,
       borderRadius: radii.md,
       padding: spacing.md,
     },
-    dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.white },
+    dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.onBrand },
     featureText: { gap: 2 },
-    featureTitle: { color: colors.white, fontFamily: fontFamilies.semibold, fontSize: 14 },
-    featureMessage: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
+    featureTitle: { color: colors.onBrand, fontFamily: fontFamilies.semibold, fontSize: 14 },
+    featureMessage: { color: colors.onBrandMuted, ...typography.caption },
   });

@@ -29,7 +29,7 @@ export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string | string[] }>();
   const [email, setEmail] = useState(() => getLoginPrefillEmail(params.email));
   const [password, setPassword] = useState('');
-  const { signIn, busy, error } = useAuthStore();
+  const { signIn, busy, error, sessionNotice } = useAuthStore();
   const submit = async () => {
     if (!isValidEmail(email) || password.length < 6) return;
     if (await signIn(email, password)) router.replace('/');
@@ -49,6 +49,7 @@ export default function LoginScreen() {
         <ErrorBanner message="Bulut bağlantısı henüz yapılmadı. Geliştirici, .env dosyasına Supabase proje URL’si ve yayınlanabilir anahtarı eklemeli." />
       ) : null}
       {error ? <ErrorBanner message={error} /> : null}
+      {sessionNotice ? <ErrorBanner message={sessionNotice} /> : null}
       <FormSection>
         <View style={styles.form}>
           <AppInput

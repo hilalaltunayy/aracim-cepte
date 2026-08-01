@@ -9,13 +9,20 @@ import {
   LoadingScreen,
   Screen,
   SelectField,
+  confirmChoice,
 } from '@/shared/components/ui';
 import { BodyType, FuelType } from '@/domain/entities';
 import { bodyTypeLabels, fuelTypeLabels } from '@/shared/constants/labels';
 import { parseDecimal } from '@/shared/utils/format';
 import { spacing } from '@/shared/theme';
 import { useDataStore } from '@/store/dataStore';
-import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import {
+  VEHICLE_MILEAGE_CORRECTION_MESSAGE,
+  requiresVehicleMileageCorrection,
+  resolveEntityRoute,
+} from '@/shared/utils/repositoryRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function VehicleEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -30,6 +37,27 @@ export default function VehicleEditScreen() {
   const [bodyType, setBodyType] = useState<BodyType>(existing?.bodyType ?? 'sedan_hatchback');
   const [color, setColor] = useState(existing?.color ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const initialValues = {
+    brand: existing?.brand ?? '',
+    model: existing?.model ?? '',
+    year: existing?.year?.toString() ?? '',
+    plate: existing?.plate ?? '',
+    km: existing?.currentKm.toString() ?? '',
+    fuelType: existing?.fuelType ?? 'gasoline',
+    bodyType: existing?.bodyType ?? 'sedan_hatchback',
+    color: existing?.color ?? '',
+  };
+  const isDirty = haveFormValuesChanged(initialValues, {
+    brand,
+    model,
+    year,
+    plate,
+    km,
+    fuelType,
+    bodyType,
+    color,
+  });
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, vehicles, bootstrapped);
   const parsedKm = parseDecimal(km);
   const parsedYear = year ? parseDecimal(year) : null;
@@ -44,9 +72,8 @@ export default function VehicleEditScreen() {
     parsedKm !== null &&
     parsedKm >= 0 &&
     validYear;
-  const submit = async () => {
-    setSubmitted(true);
-    if (!valid || parsedKm === null) return;
+  const save = async (allowMileageDecrease: boolean) => {
+    if (parsedKm === null) return;
     const success = await saveVehicle(
       {
         brand,
@@ -59,8 +86,20 @@ export default function VehicleEditScreen() {
         color: color || null,
       },
       existing?.id,
+      { allowMileageDecrease },
     );
-    if (success) router.replace('/(tabs)');
+    if (success) leaveWithoutPrompt(() => router.replace('/(tabs)'));
+  };
+  const submit = async () => {
+    setSubmitted(true);
+    if (!valid || parsedKm === null) return;
+    if (existing && requiresVehicleMileageCorrection(existing.currentKm, parsedKm)) {
+      confirmChoice('Kilometre düzeltmesi', VEHICLE_MILEAGE_CORRECTION_MESSAGE, 'Onayla', () => {
+        void save(true);
+      });
+      return;
+    }
+    await save(false);
   };
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {

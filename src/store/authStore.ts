@@ -11,7 +11,12 @@ import {
   getPasswordResetFriendlyError,
   logPasswordResetErrorInDevelopment,
 } from '@/features/auth/passwordResetError';
-import { AppError, getFriendlyError } from '@/shared/utils/errors';
+import {
+  getConfirmationResendError,
+  resendSignupConfirmation,
+} from '@/features/auth/confirmationResend';
+import { SESSION_EXPIRED_MESSAGE } from '@/features/auth/sessionRouting';
+import { AppError, getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 
 interface AuthState {
   session: Session | null;
@@ -19,23 +24,29 @@ interface AuthState {
   ready: boolean;
   busy: boolean;
   error: string | null;
+  sessionNotice: string | null;
   initialize: () => Promise<() => void>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signUp: (email: string, password: string, displayName: string) => Promise<boolean>;
+  resendConfirmation: (email: string) => Promise<boolean>;
   sendPasswordReset: (email: string) => Promise<boolean>;
   establishRecovery: (url: string | null) => Promise<boolean>;
   updateRecoveredPassword: (password: string) => Promise<boolean>;
   deleteAccount: () => Promise<boolean>;
   signOut: () => Promise<void>;
+  markSessionExpired: () => void;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+let intentionalSessionEnd = false;
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   recoveryMode: false,
   ready: false,
   busy: false,
   error: null,
+  sessionNotice: null,
 
   initialize: async () => {
     if (!isSupabaseConfigured) {
@@ -43,24 +54,36 @@ export const useAuthStore = create<AuthState>((set) => ({
       return () => undefined;
     }
     const client = getSupabaseClient();
-    const { data } = await client.auth.getSession();
-    set({ session: data.session, ready: true });
-    const subscription = client.auth.onAuthStateChange((event, session) =>
+    const { data, error } = await client.auth.getSession();
+    set({
+      session: data.session,
+      ready: true,
+      sessionNotice: error && isSessionExpiredError(error) ? SESSION_EXPIRED_MESSAGE : null,
+    });
+    const subscription = client.auth.onAuthStateChange((event, session) => {
+      const previousSession = get().session;
+      const unexpectedSignOut =
+        event === 'SIGNED_OUT' && Boolean(previousSession) && !intentionalSessionEnd;
       set((state) => ({
         session,
+        sessionNotice: session
+          ? null
+          : unexpectedSignOut
+            ? SESSION_EXPIRED_MESSAGE
+            : state.sessionNotice,
         recoveryMode:
           event === 'PASSWORD_RECOVERY'
             ? true
             : event === 'SIGNED_OUT'
               ? false
               : state.recoveryMode,
-      })),
-    );
+      }));
+    });
     return () => subscription.data.subscription.unsubscribe();
   },
 
   signIn: async (email, password) => {
-    set({ busy: true, error: null });
+    set({ busy: true, error: null, sessionNotice: null });
     try {
       const { error } = await getSupabaseClient().auth.signInWithPassword({
         email: email.trim().toLowerCase(),
@@ -88,6 +111,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       return true;
     } catch (error) {
       set({ busy: false, error: getFriendlyError(error) });
+      return false;
+    }
+  },
+
+  resendConfirmation: async (email) => {
+    set({ busy: true, error: null });
+    try {
+      await resendSignupConfirmation(getSupabaseClient().auth, email);
+      set({ busy: false });
+      return true;
+    } catch (error) {
+      set({ busy: false, error: getConfirmationResendError(error) });
       return false;
     }
   },
@@ -127,11 +162,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { error } = await client.auth.updateUser({ password });
       if (error) throw error;
+      intentionalSessionEnd = true;
       const { error: signOutError } = await client.auth.signOut({ scope: 'global' });
       if (signOutError) await client.auth.signOut({ scope: 'local' });
-      set({ busy: false, session: null, recoveryMode: false });
+      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
+      intentionalSessionEnd = false;
       return true;
     } catch (error) {
+      intentionalSessionEnd = false;
       set({ busy: false, error: getFriendlyError(error) });
       return false;
     }
@@ -146,22 +184,38 @@ export const useAuthStore = create<AuthState>((set) => ({
         const code = await getFunctionErrorCode(error);
         throw new AppError(getAccountDeletionErrorMessage(code), code ?? 'ACCOUNT_DELETE_FAILED');
       }
+      intentionalSessionEnd = true;
       await client.auth.signOut({ scope: 'local' });
-      set({ busy: false, session: null, recoveryMode: false });
+      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
+      intentionalSessionEnd = false;
       return true;
     } catch (error) {
+      intentionalSessionEnd = false;
       set({ busy: false, error: getFriendlyError(error) });
       return false;
     }
   },
 
   signOut: async () => {
-    set({ busy: true, error: null });
+    intentionalSessionEnd = true;
+    set({ busy: true, error: null, sessionNotice: null });
     try {
       await getSupabaseClient().auth.signOut();
     } finally {
-      set({ busy: false, session: null, recoveryMode: false });
+      intentionalSessionEnd = false;
+      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
     }
+  },
+
+  markSessionExpired: () => {
+    set({ session: null, recoveryMode: false, sessionNotice: SESSION_EXPIRED_MESSAGE });
+    if (!isSupabaseConfigured) return;
+    intentionalSessionEnd = true;
+    void getSupabaseClient()
+      .auth.signOut({ scope: 'local' })
+      .finally(() => {
+        intentionalSessionEnd = false;
+      });
   },
 
   clearError: () => set({ error: null }),

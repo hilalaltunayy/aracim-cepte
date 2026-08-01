@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -22,6 +23,8 @@ import {
 } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
+import { shouldRedirectExpiredSession } from '@/features/auth/sessionRouting';
+import { getReminderNotificationDestination } from '@/features/reminders/notificationRouting';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -66,8 +69,15 @@ function RootNavigator() {
   });
   const initialize = useAuthStore((state) => state.initialize);
   const session = useAuthStore((state) => state.session);
+  const authReady = useAuthStore((state) => state.ready);
+  const recoveryMode = useAuthStore((state) => state.recoveryMode);
   const bootstrap = useDataStore((state) => state.bootstrap);
   const clear = useDataStore((state) => state.clear);
+  const bootstrapped = useDataStore((state) => state.bootstrapped);
+  const reminders = useDataStore((state) => state.reminders);
+  const segments = useSegments();
+  const [pendingNotificationId, setPendingNotificationId] = useState<string | null>(null);
+  const processingNotification = useRef(false);
 
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
@@ -81,6 +91,47 @@ function RootNavigator() {
     if (session?.user.id) void bootstrap();
     else clear();
   }, [session?.user.id, bootstrap, clear]);
+
+  useEffect(() => {
+    if (
+      shouldRedirectExpiredSession({
+        authReady,
+        authenticated: Boolean(session),
+        recoveryMode,
+        segments,
+      })
+    ) {
+      router.replace('/auth/login');
+    }
+  }, [authReady, recoveryMode, segments, session]);
+
+  useEffect(() => {
+    let mounted = true;
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (mounted && response) setPendingNotificationId(response.notification.request.identifier);
+    });
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      setPendingNotificationId(response.notification.request.identifier);
+    });
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingNotificationId || !session || !bootstrapped || processingNotification.current)
+      return;
+    processingNotification.current = true;
+    const destination = getReminderNotificationDestination(pendingNotificationId, reminders);
+    const timer = setTimeout(() => {
+      setPendingNotificationId(null);
+      Notifications.clearLastNotificationResponse();
+      router.push(destination);
+      processingNotification.current = false;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [bootstrapped, pendingNotificationId, reminders, session]);
 
   useEffect(() => {
     if (!fontsLoaded && !fontError) return;

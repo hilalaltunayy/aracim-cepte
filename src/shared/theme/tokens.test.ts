@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { darkColors, getThemeTokens, lightColors } from './tokens';
+import { getButtonLoadingIndicatorColor } from './buttonColors';
 
 function luminance(hex: string) {
   const channels = hex
@@ -32,6 +33,11 @@ describe('semantic theme tokens', () => {
       'error',
       'tabBar',
       'modalOverlay',
+      'brandGradientStart',
+      'brandGradientEnd',
+      'onBrand',
+      'onBrandMuted',
+      'diagramCenterLine',
     ] as const;
     for (const key of required) {
       expect(lightColors[key]).toBeTruthy();
@@ -53,5 +59,51 @@ describe('semantic theme tokens', () => {
       expect(contrast(darkColors.textSecondary, background)).toBeGreaterThanOrEqual(4.5);
     }
     expect(contrast(darkColors.onPrimary, darkColors.primaryAction)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps light actions, supporting copy, status text and control borders readable', () => {
+    expect(contrast(lightColors.onPrimary, lightColors.primaryAction)).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrast(lightColors.primaryAction, lightColors.screenBackground),
+    ).toBeGreaterThanOrEqual(4.5);
+    for (const background of [lightColors.screenBackground, lightColors.cardBackground]) {
+      expect(contrast(lightColors.textSecondary, background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(lightColors.border, background)).toBeGreaterThanOrEqual(3);
+    }
+    for (const [foreground, background] of [
+      [lightColors.success, lightColors.successSurface],
+      [lightColors.warning, lightColors.warningSurface],
+      [lightColors.error, lightColors.errorSurface],
+      [lightColors.info, lightColors.infoSurface],
+    ]) {
+      expect(contrast(foreground, background)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(lightColors.disabledText, lightColors.disabledSurface)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  it('keeps branded gradient copy readable in both themes', () => {
+    for (const colors of [lightColors, darkColors]) {
+      expect(contrast(colors.onBrand, colors.brandGradientStart)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.onBrand, colors.brandGradientEnd)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.onBrandMuted, colors.brandGradientStart)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.onBrandMuted, colors.brandGradientEnd)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('keeps dark control boundaries and disabled progress readable', () => {
+    expect(contrast(darkColors.border, darkColors.cardBackground)).toBeGreaterThanOrEqual(3);
+    expect(contrast(darkColors.disabledText, darkColors.disabledSurface)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  it('uses a visible semantic foreground for loading buttons', () => {
+    for (const colors of [lightColors, darkColors]) {
+      const indicator = getButtonLoadingIndicatorColor(colors);
+      expect(indicator).toBe(colors.disabledText);
+      expect(contrast(indicator, colors.disabledSurface)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

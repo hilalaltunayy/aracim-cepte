@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
+  ATTACHMENT_OPEN_ERROR_MESSAGE,
   MAX_ATTACHMENT_BYTES,
   getAttachmentErrorMessage,
   getAttachmentPickerErrorMessage,
@@ -44,5 +45,12 @@ describe('attachment upload rules', () => {
   it('returns a safe Turkish error when server-side size validation fails', () => {
     expect(getAttachmentErrorMessage('ATTACHMENT_SIZE_REQUIRED')).toContain('doğrulanamadı');
     expect(getAttachmentErrorMessage('ATTACHMENT_SIZE_MISMATCH')).toContain('doğrulanamadı');
+  });
+
+  it('uses one safe retryable message for attachment open failures', () => {
+    expect(ATTACHMENT_OPEN_ERROR_MESSAGE).toBe(
+      'Dosya açılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.',
+    );
+    expect(ATTACHMENT_OPEN_ERROR_MESSAGE).not.toMatch(/signed|supabase|token/i);
   });
 });

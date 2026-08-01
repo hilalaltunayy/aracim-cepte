@@ -8,6 +8,9 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
 export type AllowedAttachmentMime = (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number];
 export type AttachmentPickerSource = 'image' | 'document';
 
+export const ATTACHMENT_OPEN_ERROR_MESSAGE =
+  'Dosya açılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.';
+
 export function normalizeAttachmentMime(
   value: string | null | undefined,
 ): AllowedAttachmentMime | null {

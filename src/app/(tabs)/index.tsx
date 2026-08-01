@@ -33,6 +33,7 @@ import {
   sortRecords,
 } from '@/shared/utils/analytics';
 import { formatCurrency, formatNumber } from '@/shared/utils/format';
+import { getDashboardShortcutAccessibilityLabel } from '@/shared/utils/accessibility';
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
@@ -60,13 +61,21 @@ export default function DashboardScreen() {
         subtitle={`${vehicle.brand} ${vehicle.model} bugün nasıl?`}
         action={
           <View style={styles.headerIcon}>
-            <Ionicons name="car-sport-outline" size={24} color={colors.primary} />
+            <Ionicons
+              name="car-sport-outline"
+              size={24}
+              color={colors.primary}
+              accessible={false}
+            />
           </View>
         }
       />
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
       <FadeIn>
-        <LinearGradient colors={[colors.primary, colors.aqua]} style={styles.hero}>
+        <LinearGradient
+          colors={[colors.brandGradientStart, colors.brandGradientEnd]}
+          style={styles.hero}
+        >
           <View style={styles.heroTop}>
             <View style={styles.heroIdentity}>
               <Text style={styles.plate}>{vehicle.plate ?? 'PLAKA EKLENMEDİ'}</Text>
@@ -90,6 +99,8 @@ export default function DashboardScreen() {
         {actions.map((action) => (
           <Pressable
             key={action.label}
+            accessibilityRole="button"
+            accessibilityLabel={getDashboardShortcutAccessibilityLabel(action.label)}
             style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
             onPress={() =>
               'route' in action
@@ -98,7 +109,7 @@ export default function DashboardScreen() {
             }
           >
             <View style={styles.actionIcon}>
-              <Ionicons name={action.icon} size={22} color={colors.primary} />
+              <Ionicons name={action.icon} size={22} color={colors.primary} accessible={false} />
             </View>
             <Text style={styles.actionLabel}>{action.label}</Text>
           </Pressable>
@@ -116,6 +127,7 @@ export default function DashboardScreen() {
               name={icon as keyof typeof Ionicons.glyphMap}
               size={19}
               color={colors.primary}
+              accessible={false}
             />
             <Text style={styles.metricLabel}>{label}</Text>
             <Text numberOfLines={1} adjustsFontSizeToFit style={styles.metricValue}>
@@ -199,29 +211,29 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
     heroIdentity: { flex: 1, minWidth: 0, paddingRight: spacing.xs },
     plate: {
-      color: 'rgba(255,255,255,0.78)',
+      color: colors.onBrandMuted,
       fontFamily: fontFamilies.semibold,
       fontSize: 12,
       letterSpacing: 1.15,
     },
     vehicleName: {
-      color: colors.white,
+      color: colors.onBrand,
       fontFamily: fontFamilies.bold,
       fontSize: 21,
       lineHeight: 27,
       marginTop: 5,
     },
-    heroLabel: { color: 'rgba(255,255,255,0.82)', ...typography.caption },
+    heroLabel: { color: colors.onBrandMuted, ...typography.caption },
     km: {
-      color: colors.white,
+      color: colors.onBrand,
       fontFamily: fontFamilies.bold,
       fontSize: 33,
       lineHeight: 41,
       letterSpacing: -0.8,
     },
     heroFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-    heroFooterText: { color: 'rgba(255,255,255,0.82)', ...typography.body },
-    heroFooterValue: { color: colors.white, ...typography.body, fontFamily: fontFamilies.bold },
+    heroFooterText: { color: colors.onBrandMuted, ...typography.body },
+    heroFooterValue: { color: colors.onBrand, ...typography.body, fontFamily: fontFamilies.bold },
     actions: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
     action: { alignItems: 'center', flex: 1, minWidth: 0, gap: 7 },
     actionPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },

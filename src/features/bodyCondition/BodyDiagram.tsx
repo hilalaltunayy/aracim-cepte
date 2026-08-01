@@ -118,7 +118,7 @@ export function BodyDiagram({
             />
             <Path
               d="M130 42 L130 392"
-              stroke="rgba(255,255,255,0.42)"
+              stroke={colors.diagramCenterLine}
               strokeWidth={1.5}
               strokeDasharray="4 8"
             />

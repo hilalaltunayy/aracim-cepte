@@ -146,10 +146,18 @@ export function getCostPerKilometer(records: VehicleRecord[]): number | null {
   return Number.isFinite(result) ? result : null;
 }
 
-export type UrgencyStatus = 'completed' | 'overdue' | 'upcoming' | 'planned';
+export type UrgencyStatus = 'completed' | 'overdue' | 'due' | 'upcoming' | 'planned';
 
 function urgencyRank(status: UrgencyStatus): number {
-  return { completed: 0, planned: 1, upcoming: 2, overdue: 3 }[status];
+  return { completed: 0, planned: 1, upcoming: 2, due: 3, overdue: 4 }[status];
+}
+
+export function getReminderKilometerProgress(targetKm: number, currentKm: number) {
+  const difference = Math.round(targetKm - currentKm);
+  return {
+    remaining: Math.max(difference, 0),
+    overdueBy: Math.max(-difference, 0),
+  };
 }
 
 export function getReminderStatus(
@@ -173,7 +181,15 @@ export function getReminderStatus(
   }
   if (reminder.dueKilometer !== null) {
     const remaining = reminder.dueKilometer - currentKm;
-    statuses.push(remaining <= 0 ? 'overdue' : remaining <= 1000 ? 'upcoming' : 'planned');
+    statuses.push(
+      remaining < 0
+        ? 'overdue'
+        : remaining === 0
+          ? 'due'
+          : remaining <= 1000
+            ? 'upcoming'
+            : 'planned',
+    );
   }
   return statuses.sort((a, b) => urgencyRank(b) - urgencyRank(a))[0] ?? 'planned';
 }

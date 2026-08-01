@@ -22,6 +22,7 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 
 export default function BodyConditionScreen() {
   const { colors } = useAppTheme();
@@ -44,13 +45,15 @@ export default function BodyConditionScreen() {
   const [noteOverride, setNoteOverride] = useState<string | null>(null);
   const condition = conditionOverride ?? existing?.condition ?? 'unknown';
   const note = noteOverride ?? existing?.note ?? '';
+  const isDirty =
+    condition !== (existing?.condition ?? 'unknown') || note !== (existing?.note ?? '');
+  useUnsavedChangesGuard(isDirty);
 
   if (!vehicle || !schema) return null;
   const selectPart = (partKey: string) => {
-    const item = bodyConditions.find((entry) => entry.partKey === partKey);
     setSelectedPartOverride(partKey);
-    setConditionOverride(item?.condition ?? 'unknown');
-    setNoteOverride(item?.note ?? '');
+    setConditionOverride(null);
+    setNoteOverride(null);
   };
   const selectedLabel = schema.parts.find((part) => part.key === selectedPart)?.label ?? 'Parça';
   return (

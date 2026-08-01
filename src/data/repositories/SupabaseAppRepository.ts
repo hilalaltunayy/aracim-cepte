@@ -31,7 +31,7 @@ import { nextVehicleMileage } from '@/shared/utils/repositoryRules';
 async function ownerId(): Promise<string> {
   const { data, error } = await getSupabaseClient().auth.getUser();
   if (error || !data.user)
-    throw new AppError('Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.', 'AUTH');
+    throw new AppError('Oturumunuz sona erdi. Lütfen tekrar giriş yapın.', 'AUTH');
   return data.user.id;
 }
 

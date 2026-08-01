@@ -2,56 +2,83 @@
 
 **Audit date:** 2026-08-01
 **Baseline:** `2c5cc0450b558ba94ff0c8e07422db5b4a309cdf`
-**Automated run:** `npm test` — 20 dosya / 98 test geçti
+**Automated run:** TASK-007 sonrası `npm test` — 26 dosya / 121 test geçti
 
 Bu sonuç uygulama, Android veya release artifact kabulü değildir. Vitest yapılandırması `node`
 environment kullanır ve yalnız `src/**/*.test.ts` dosyalarını alır; React Native ekranlarını light ve
 dark provider ile render eden `.test.tsx` altyapısı yoktur.
 
+## TASK-007 düzeltme kanıtı — 2026-08-01
+
+TASK-007, D-01–D-10 ve D-14 için kaynak düzeltmesini uygulamıştır. Bu durum APK veya Android kabulü
+anlamına gelmez. D-11–D-13 bilinçli olarak değiştirilmemiştir ve ayrı güvenlik görevinin açık
+blocker'larıdır.
+
+| ID   | Sonuç               | Otomatik/repository kanıtı                                                                       | Kalan kapı                           |
+| ---- | ------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| D-01 | IMPLEMENTED         | Light action/text kontrast tokenları ve kontrast testleri                                        | Light ekran Android görsel kontrolü  |
+| D-02 | IMPLEMENTED         | `onBrand`/`onBrandMuted` ve daha koyu marka gradient tokenları; onboarding/dashboard literal yok | Hero text Android piksel kontrolü    |
+| D-03 | IMPLEMENTED         | Secondary ve info/success/warning/error semantic tonları testli                                  | Badge/placeholder Android kontrolü   |
+| D-04 | IMPLEMENTED         | Light/dark border tokenları 3:1 hedefiyle testli                                                 | Input/card/divider Android kontrolü  |
+| D-05 | IMPLEMENTED         | Loading spinner `disabledText` tokenını kullanır; iki temada testli                              | Gerçek loading button kontrolü       |
+| D-06 | IMPLEMENTED         | İki edit ekranında safe open error, biten loading ve retry                                       | Native viewer/offline Android testi  |
+| D-07 | IMPLEMENTED         | Session karar yardımcısı, protected-route replace ve güvenli mesaj testli                        | Gerçek expiry/revoke ve loop testi   |
+| D-08 | IMPLEMENTED         | Bootstrap failure ayrı state; connection screen/retry route kararı testli                        | Offline cold-start Android testi     |
+| D-09 | IMPLEMENTED         | Record km guard ve vehicle correction confirmation; rule/store savunması testli                  | Form + hesap regresyon Android testi |
+| D-10 | IMPLEMENTED         | Eşit hedef `due`, aşım `overdue`, clamp edilmiş görünür değerler testli                          | Reminder list/detail Android testi   |
+| D-11 | OPEN — OUT OF SCOPE | TASK-007 backend atomikliğini değiştirmedi                                                       | Ayrı güvenlik görevi                 |
+| D-12 | OPEN — OUT OF SCOPE | TASK-007 DB/OS notification atomikliğini değiştirmedi                                            | Ayrı güvenlik görevi                 |
+| D-13 | OPEN — OUT OF SCOPE | TASK-007 Storage/DB atomikliğini değiştirmedi                                                    | Ayrı güvenlik görevi                 |
+| D-14 | IMPLEMENTED         | Ortak erişilebilirlik yardımcıları ve işaretli pressable role/label/state güncellemeleri         | TalkBack traversal ve state testi    |
+
+Ek kapsam: confirmation resend, dirty-form çıkış guard'ı ve notification tap routing kaynak/test
+olarak eklendi. Gerçek SMTP/deep-link, native back/gesture ve notification lifecycle sonuçları manuel
+kapı olarak kalır.
+
 ## 35 senaryoluk kabul matrisi
 
-| ID    | Senaryo                     | Repository/otomasyon sonucu                                   | Android kabul adımı                               | Beklenen sonuç / güncel durum                                  |
-| ----- | --------------------------- | ------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
-| UF-01 | Onboarding                  | Route decision unit test var                                  | Temiz kurulum → Başlayalım → restart              | Bir kez görünür; **MANUAL REQUIRED**                           |
-| UF-02 | Kayıt                       | Copy/prefill/password helper testleri geçti                   | Yeni hesap, legal linkler, success CTA            | Otomatik login yok; **MANUAL REQUIRED**                        |
-| UF-03 | E-posta doğrulama           | Email confirmation project gate açık; uygulama içi resend yok | Gerçek mailbox ve deep link                       | **MANUAL + HUMAN DECISION REQUIRED**                           |
-| UF-04 | Giriş                       | Store/source ve friendly error var                            | Doğrulanmış hesapla login + restart               | Session restore; **MANUAL REQUIRED**                           |
-| UF-05 | Hatalı giriş                | Error mapping kaynakta                                        | Yanlış parola/doğrulanmamış e-posta               | Raw provider hata yok; **MANUAL REQUIRED**                     |
-| UF-06 | Reset isteği                | Redirect/error helpers testli                                 | Gerçek e-posta teslimatı                          | **MANUAL REQUIRED**                                            |
-| UF-07 | Yeni parola                 | Recovery parsing/validation/error testleri geçti              | Link → yeni parola → eski link                    | **MANUAL REQUIRED**                                            |
-| UF-08 | Çıkış                       | Source flow var                                               | Online/offline logout + back + restart            | **POSSIBLE RISK:** signOut failure semantics                   |
-| UF-09 | Araç oluşturma              | Repository contract kısmi                                     | Yeni hesapla create + restart                     | CRUD gate In progress; **MANUAL REQUIRED**                     |
-| UF-10 | Araç düzenleme              | Validation/source var                                         | Bütün alanları edit + restart                     | **MANUAL REQUIRED**                                            |
-| UF-11 | Kilometre güncelleme        | `nextVehicleMileage` tests passed                             | Record ve direct vehicle edit ile düşük/yüksek km | **CONFIRMED DEFECT:** direct edit düşürebilir                  |
-| UF-12 | Araç silme                  | Normal remote account/storage kanıtı kısmi                    | Child data+file+notification olan araç sil        | **POSSIBLE RISK:** cross-system atomicity                      |
-| UF-13 | Yakıt CRUD                  | Business/repository tests                                     | Create/edit/delete + dashboard/history/restart    | **POSSIBLE RISK:** insert+mileage partial failure              |
-| UF-14 | Bakım CRUD                  | Business/repository tests                                     | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**                         |
-| UF-15 | Diğer masraf CRUD           | Business/repository tests                                     | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**                         |
-| UF-16 | Geçmiş/filtre               | Sort/filter source                                            | Dört filtre ve record deep link                   | **MANUAL REQUIRED**, filter semantics erişilebilirlik defect'i |
-| UF-17 | Dashboard stats             | Analytics edge tests geçti                                    | Fixture değerleriyle görsel karşılaştır           | Hesap source PASS; UI/theme **MANUAL**                         |
-| UF-18 | Reminder create/edit        | Urgency/notification rules testli                             | Tarih, km, ikisi; granted/denied; edit            | **POSSIBLE RISK:** DB/notification ayrışması                   |
-| UF-19 | Reminder delete             | Source cleanup var                                            | Scheduled notification ile delete                 | **POSSIBLE RISK:** cancel-before-delete                        |
-| UF-20 | Reminder complete/reopen    | Source + duplicate mutation guard                             | Offline/rapid toggle + notification list          | **POSSIBLE RISK:** orphan/eksik notification                   |
-| UF-21 | Gövde durumu                | Schema/condition source ve tests                              | Her body type/part/status + restart               | **MANUAL THEME/SVG CHECK**                                     |
-| UF-22 | Ekspertiz                   | CRUD/source var                                               | CRUD, attachment replace/open/delete              | Open error + atomicity defect'leri                             |
-| UF-23 | Belge upload/create         | Remote private/MIME/quota E2E Passed                          | Android picker pozitif matrisi + restart          | Backend PASS; UI **MANUAL**                                    |
-| UF-24 | Belge açma                  | 60 sn signed URL source/remote expiry Passed                  | Online/offline/unsupported viewer                 | **CONFIRMED DEFECT:** open error catch yok                     |
-| UF-25 | Belge silme                 | Normal-path remote cleanup Passed                             | DB+Storage + restart                              | **POSSIBLE RISK:** storage-before-DB failure                   |
-| UF-26 | MIME/boyut/kota             | Remote PDF/JPEG/PNG, WebP/spoof/5MB/10/25 Passed              | Picker üzerinden aynı negatif matris              | Backend PASS; UI copy **MANUAL**                               |
-| UF-27 | Ayarlar/izin/veri temizleme | Source flow var                                               | Permission denied/granted, dört clear             | Error visibility/partial cleanup **RISK**                      |
-| UF-28 | Sistem/Açık/Koyu            | 8 tema token/preference testi geçti                           | Live switch + restart + system change             | Pure logic PASS; render/native **MANUAL**                      |
-| UF-29 | Hukuk sayfaları             | Generated freshness test suite Passed                         | Beş route, scroll/back/light/dark                 | Taslak; **HUMAN LEGAL DECISION**                               |
-| UF-30 | Hesap ve veri silme         | Remote sentetik E2E normal path Passed                        | Gerçek Android UI/offline/retry/old session       | Gate In progress; **MANUAL + HUMAN**                           |
-| UF-31 | Android geri                | Header source ve web history helper var                       | Three-button/gesture/modal/date picker/dirty form | **MANUAL REQUIRED**                                            |
-| UF-32 | Alt sekmeler                | Layout calculation tests geçti                                | Three-button/gesture/narrow/keyboard              | **MANUAL REQUIRED**                                            |
-| UF-33 | İnternet kesintisi          | Friendly mapping var                                          | Existing account offline cold start               | **CONFIRMED DEFECT:** vehicle create'e yanlış yönlenir         |
-| UF-34 | Oturum süresinin dolması    | Error mapping var; global route guard yok                     | Açık her tab/detail'de session revoke             | **CONFIRMED DEFECT:** login redirect yok                       |
-| UF-35 | Kapatıp yeniden açma        | Theme/onboarding/active ID/session source                     | Cold/warm restart online/offline                  | Online **MANUAL**; offline UF-33 defect'i                      |
+| ID    | Senaryo                     | Repository/otomasyon sonucu                           | Android kabul adımı                               | Beklenen sonuç / güncel durum                     |
+| ----- | --------------------------- | ----------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| UF-01 | Onboarding                  | Route decision unit test var                          | Temiz kurulum → Başlayalım → restart              | Bir kez görünür; **MANUAL REQUIRED**              |
+| UF-02 | Kayıt                       | Copy/prefill/password helper testleri geçti           | Yeni hesap, legal linkler, success CTA            | Otomatik login yok; **MANUAL REQUIRED**           |
+| UF-03 | E-posta doğrulama           | Cooldown'lı in-app resend helper/test eklendi         | Gerçek mailbox, rate limit ve deep link           | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-04 | Giriş                       | Store/source ve friendly error var                    | Doğrulanmış hesapla login + restart               | Session restore; **MANUAL REQUIRED**              |
+| UF-05 | Hatalı giriş                | Error mapping kaynakta                                | Yanlış parola/doğrulanmamış e-posta               | Raw provider hata yok; **MANUAL REQUIRED**        |
+| UF-06 | Reset isteği                | Redirect/error helpers testli                         | Gerçek e-posta teslimatı                          | **MANUAL REQUIRED**                               |
+| UF-07 | Yeni parola                 | Recovery parsing/validation/error testleri geçti      | Link → yeni parola → eski link                    | **MANUAL REQUIRED**                               |
+| UF-08 | Çıkış                       | Source flow var                                       | Online/offline logout + back + restart            | **POSSIBLE RISK:** signOut failure semantics      |
+| UF-09 | Araç oluşturma              | Repository contract kısmi                             | Yeni hesapla create + restart                     | CRUD gate In progress; **MANUAL REQUIRED**        |
+| UF-10 | Araç düzenleme              | Validation/source var                                 | Bütün alanları edit + restart                     | **MANUAL REQUIRED**                               |
+| UF-11 | Kilometre güncelleme        | Düşük record reddi ve vehicle correction onayı testli | Record ve direct vehicle edit ile düşük/yüksek km | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-12 | Araç silme                  | Normal remote account/storage kanıtı kısmi            | Child data+file+notification olan araç sil        | **POSSIBLE RISK:** cross-system atomicity         |
+| UF-13 | Yakıt CRUD                  | Business/repository tests                             | Create/edit/delete + dashboard/history/restart    | **POSSIBLE RISK:** insert+mileage partial failure |
+| UF-14 | Bakım CRUD                  | Business/repository tests                             | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**            |
+| UF-15 | Diğer masraf CRUD           | Business/repository tests                             | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**            |
+| UF-16 | Geçmiş/filtre               | Sort/filter + radio role/checked semantics kaynakta   | Dört filtre, TalkBack ve record deep link         | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-17 | Dashboard stats             | Analytics edge tests geçti                            | Fixture değerleriyle görsel karşılaştır           | Hesap source PASS; UI/theme **MANUAL**            |
+| UF-18 | Reminder create/edit        | Urgency/notification rules testli                     | Tarih, km, ikisi; granted/denied; edit            | **POSSIBLE RISK:** DB/notification ayrışması      |
+| UF-19 | Reminder delete             | Source cleanup var                                    | Scheduled notification ile delete                 | **POSSIBLE RISK:** cancel-before-delete           |
+| UF-20 | Reminder complete/reopen    | Source + duplicate mutation guard                     | Offline/rapid toggle + notification list          | **POSSIBLE RISK:** orphan/eksik notification      |
+| UF-21 | Gövde durumu                | Schema/condition source ve tests                      | Her body type/part/status + restart               | **MANUAL THEME/SVG CHECK**                        |
+| UF-22 | Ekspertiz                   | Open loading/safe error/retry kaynakta                | CRUD, attachment replace/open/delete              | Open fix uygulandı; D-13 atomiklik riski açık     |
+| UF-23 | Belge upload/create         | Remote private/MIME/quota E2E Passed                  | Android picker pozitif matrisi + restart          | Backend PASS; UI **MANUAL**                       |
+| UF-24 | Belge açma                  | 60 sn URL + safe open error/loading/retry kaynakta    | Online/offline/unsupported viewer                 | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-25 | Belge silme                 | Normal-path remote cleanup Passed                     | DB+Storage + restart                              | **POSSIBLE RISK:** storage-before-DB failure      |
+| UF-26 | MIME/boyut/kota             | Remote PDF/JPEG/PNG, WebP/spoof/5MB/10/25 Passed      | Picker üzerinden aynı negatif matris              | Backend PASS; UI copy **MANUAL**                  |
+| UF-27 | Ayarlar/izin/veri temizleme | Source flow var                                       | Permission denied/granted, dört clear             | Error visibility/partial cleanup **RISK**         |
+| UF-28 | Sistem/Açık/Koyu            | 8 tema token/preference testi geçti                   | Live switch + restart + system change             | Pure logic PASS; render/native **MANUAL**         |
+| UF-29 | Hukuk sayfaları             | Generated freshness test suite Passed                 | Beş route, scroll/back/light/dark                 | Taslak; **HUMAN LEGAL DECISION**                  |
+| UF-30 | Hesap ve veri silme         | Remote sentetik E2E normal path Passed                | Gerçek Android UI/offline/retry/old session       | Gate In progress; **MANUAL + HUMAN**              |
+| UF-31 | Android geri                | Yedi edit formunda ortak dirty navigation guard var   | Three-button/gesture/modal/date picker/dirty form | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-32 | Alt sekmeler                | Layout calculation tests geçti                        | Three-button/gesture/narrow/keyboard              | **MANUAL REQUIRED**                               |
+| UF-33 | İnternet kesintisi          | Connection state/retry route kararı testli            | Existing account offline cold start               | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-34 | Oturum süresinin dolması    | Protected guard ve güvenli mesaj helper'ı testli      | Açık her tab/detail'de session revoke             | Kaynak uygulandı; **MANUAL REQUIRED**             |
+| UF-35 | Kapatıp yeniden açma        | Theme/onboarding/session + offline retry source       | Cold/warm restart online/offline                  | Kaynak uygulandı; **MANUAL REQUIRED**             |
 
-## Confirmed defect register
+## TASK-006 confirmed defect register — tarihsel baseline
 
-Bu audit'te **14 confirmed defect** vardır. Bunlar kaynak veya deterministik kontrast hesabıyla
-kanıtlanmıştır; runtime'da görülmüş gibi sunulmamıştır.
+TASK-006 audit'inde **14 confirmed defect** vardı. Aşağıdaki tablo ilk bulguyu korur; güncel çözüm
+durumu bu belgenin başındaki TASK-007 tablosudur.
 
 | ID   | Alan          | Defect                                                                                                               | Etki                                                  | Öncelik | Kanıt                                         |
 | ---- | ------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------- | --------------------------------------------- |
@@ -76,11 +103,11 @@ Bu audit'te **15 possible risk** vardır.
 
 | ID    | Risk                                                                                                            | Kapanış kanıtı                                       |
 | ----- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| PR-01 | Confirmation email delivery/deep-link/expired link ve in-app resend yolu kanıtlı değil                          | Gerçek QA mailbox + Android link testi               |
+| PR-01 | Confirmation delivery/deep-link/expired link runtime sonucu kanıtlı değil; resend kaynakta eklendi              | Gerçek QA mailbox + Android link testi               |
 | PR-02 | Password reset delivery, redirect allow-list ve used-link rejection release artifact'ta kanıtlı değil           | QA mailbox + release APK                             |
 | PR-03 | Network failure sırasında logout local/provider session temizliği davranışı belirsiz                            | Offline logout + restart + client session inspection |
 | PR-04 | Araçsız required create ekranından hardware/back sonucu blank/loop üretebilir                                   | Yeni hesap Android back matrisi                      |
-| PR-05 | Notification payload route içeriyor ancak notification response/tap navigation handler kaynakta yok             | Ürün kararı + gerçek notification tap testi          |
+| PR-05 | Notification response handler kaynakta eklendi; killed/background/foreground sonucu kanıtlı değil               | Gerçek notification tap testi                        |
 | PR-06 | Settings error state'i clear/delete hatalarında görünür global banner olarak render edilmiyor                   | Failure injection + UX kararı                        |
 | PR-07 | Theme persistence write failure sessiz; seçim restart'ta geri dönebilir                                         | AsyncStorage failure test + UX kararı                |
 | PR-08 | Manual light/dark seçimi Android navigation bar icon/background'ını açıkça yönetmiyor                           | Three-button/gesture gerçek cihaz                    |
@@ -97,32 +124,31 @@ Bu audit'te **15 possible risk** vardır.
 1. Belge upload gate'leri kapanırsa etkinleştirme, kapanmazsa V1'de devre dışı bırakma kararı.
 2. Supabase Frankfurt aktarımı, Supabase/Resend alt işleyenleri ve profesyonel hukuk incelemesi.
 3. KVKK aydınlatma, privacy, retention/deletion ve incident metinlerinin onay/yayın tarihi.
-4. Offline V1 hedefi: retry-only mi, read-only cache mi?
-5. Düşük kilometre düzeltmesinin ayrı ve audit edilebilir ürün davranışı.
-6. Dirty formda geri navigasyon için discard confirmation.
-7. Notification tap route davranışının V1 acceptance kapsamı.
+4. Onaylanan retry-only offline, kilometre düzeltme, dirty-form ve notification tap davranışlarının
+   Android kabul sonucu.
 
 ## Eksik veya çelişkili akış/doküman kayıtları
 
-| Tür            | Bulgu                                                                                | Audit yorumu                                                                            |
-| -------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Eksik akış     | Kayıt sonrası in-app confirmation e-postası resend kontrolü yok                      | V1 email verification manuel gate'ini güçleştirir; ürün kararı gerekir                  |
-| Eksik akış     | Notification content route taşıyor, notification response/tap navigation handler yok | Tap ile Hatırlatıcılar'a dönüş kaynakta kanıtlanamıyor                                  |
-| Eksik akış     | Offline cold start için retry/offline route state yok                                | UF-33 / D-08 confirmed defect                                                           |
-| Eksik akış     | Session expiry için global protected-route guard yok                                 | UF-34 / D-07 confirmed defect                                                           |
-| Eksik durum    | Mileage reminder modelinde ayrı `due` durumu yok                                     | `remaining=0` overdue olur; D-10                                                        |
-| Çelişki        | `docs/project-status.md` remote Supabase'in bağlı olmadığını söylüyor                | TASK-004 ve güncel release gates remote ref/deploy/E2E kanıtlıyor; belge tarihsel/stale |
-| Çelişki        | `docs/project-status.md` güvenli hesap silme UI'da yok diyor                         | Settings ve `delete-account` akışı mevcut; güncel gate In progress                      |
-| Çelişki        | Release gate APK satırı TASK-001 için “kullanıcı geri bildirimi bekliyor” diyor      | TASK-001 feedback uygulanmış; beklenen şey yeni APK Android acceptance sonucudur        |
-| Stale plan     | TASK-005 implementation step 7 hâlâ `In progress` yazıyor                            | Commit/push tamamlanmış; task completion kaydı kendi içinde tutarsız                    |
-| Tarihsel kayıt | `docs/release-readiness.md` 10 MB/WebP ve eski test sayıları içeriyor                | Belge kendini tarihsel diye işaretliyor; güncel karar için release gates kullanılmalı   |
+| Tür            | Bulgu                                                                           | Audit yorumu                                                                            |
+| -------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Cihaz kanıtı   | Confirmation resend teslimat/deep-link sonucu kaynakla kanıtlanamaz             | Uygulama yolu eklendi; gerçek QA mailbox ve Android testi gerekir                       |
+| Cihaz kanıtı   | Notification tap lifecycle sonucu kaynakla kanıtlanamaz                         | Handler/fallback eklendi; killed/background/foreground testi gerekir                    |
+| Cihaz kanıtı   | Offline cold start ve retry dönüşü kaynakla tam kanıtlanamaz                    | Ayrı connection state eklendi; Android testi gerekir                                    |
+| Cihaz kanıtı   | Session expiry/revoke redirect sonucu kaynakla tam kanıtlanamaz                 | Global protected guard eklendi; Android revoke testi gerekir                            |
+| Çözüldü-kaynak | Mileage reminder modeline `due` ve clamp edilmiş progress eklendi               | Android reminder kartı kontrolü gerekir                                                 |
+| Çelişki        | `docs/project-status.md` remote Supabase'in bağlı olmadığını söylüyor           | TASK-004 ve güncel release gates remote ref/deploy/E2E kanıtlıyor; belge tarihsel/stale |
+| Çelişki        | `docs/project-status.md` güvenli hesap silme UI'da yok diyor                    | Settings ve `delete-account` akışı mevcut; güncel gate In progress                      |
+| Çelişki        | Release gate APK satırı TASK-001 için “kullanıcı geri bildirimi bekliyor” diyor | TASK-001 feedback uygulanmış; beklenen şey yeni APK Android acceptance sonucudur        |
+| Stale plan     | TASK-005 implementation step 7 hâlâ `In progress` yazıyor                       | Commit/push tamamlanmış; task completion kaydı kendi içinde tutarsız                    |
+| Tarihsel kayıt | `docs/release-readiness.md` 10 MB/WebP ve eski test sayıları içeriyor           | Belge kendini tarihsel diye işaretliyor; güncel karar için release gates kullanılmalı   |
 
 ## APK öncesi zorunlu düzeltme kapısı
 
-Yeni acceptance APK'sından önce en az D-01–D-10 ve D-14 kapatılmalıdır; bunlar doğrudan görünür
-erişilebilirlik, temel auth/offline, mileage veya hata recovery davranışıdır. D-11–D-13 veri
+Yeni acceptance APK'sından önce D-01–D-10 ve D-14 için kaynak düzeltmeleri uygulanmıştır; final diff
+audit'i ve otomatik kapılar tamamlandıktan sonra APK alınabilir. Android acceptance yapılmadan bu
+maddeler release açısından Passed sayılamaz. D-11–D-13 veri
 tutarlılığı/security regressions olduğundan production release öncesi blocker'dır ve mümkünse aynı
-APK'dan önce çözülmelidir. Hiçbiri bu audit görevinde düzeltilmemiştir.
+APK'dan önce çözülmelidir. TASK-007 bu üç maddeyi değiştirmemiştir.
 
 ## Yalnız gerçek Android cihazda doğrulanabilecekler
 

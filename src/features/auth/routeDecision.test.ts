@@ -8,6 +8,7 @@ const ready = {
   recoveryMode: false,
   authenticated: false,
   dataBootstrapped: false,
+  dataBootstrapFailed: false,
   vehicleCount: 0,
 };
 
@@ -41,5 +42,17 @@ describe('auth and entry route guard decisions', () => {
         vehicleCount: 1,
       }),
     ).toBe('/(tabs)');
+  });
+
+  it('shows a retryable connection state instead of pretending the user has no vehicle', () => {
+    expect(
+      decideEntryRoute({
+        ...ready,
+        authenticated: true,
+        dataBootstrapFailed: true,
+        dataBootstrapped: false,
+        vehicleCount: 0,
+      }),
+    ).toBe('connection-error');
   });
 });

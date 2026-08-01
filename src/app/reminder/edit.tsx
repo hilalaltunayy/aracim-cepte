@@ -19,6 +19,8 @@ import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function ReminderEditScreen() {
   const params = useLocalSearchParams<{ id?: string; dueDate?: string; title?: string }>();
@@ -34,6 +36,16 @@ export default function ReminderEditScreen() {
   const [date, setDate] = useState<string | null>(existing?.dueDate ?? params.dueDate ?? null);
   const [km, setKm] = useState(existing?.dueKilometer?.toString() ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const isDirty = haveFormValuesChanged(
+    {
+      type: existing?.reminderType ?? 'periodic_maintenance',
+      title: existing?.title ?? params.title ?? reminderTypeLabels.periodic_maintenance,
+      date: existing?.dueDate ?? params.dueDate ?? null,
+      km: existing?.dueKilometer?.toString() ?? '',
+    },
+    { type, title, date, km },
+  );
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(params.id, reminders, bootstrapped);
   const parsedKm = km ? parseDecimal(km) : null;
   const valid =
@@ -53,13 +65,15 @@ export default function ReminderEditScreen() {
       existing?.id,
     );
     if (success) {
-      Alert.alert(
-        'Hatırlatıcı kaydedildi',
-        date
-          ? 'Bildirim izni varsa cihazınızda yerel bildirim planlandı.'
-          : 'Kilometreye dayalı plan kaydedildi.',
-      );
-      goBackOr('/(tabs)/reminders');
+      leaveWithoutPrompt(() => {
+        Alert.alert(
+          'Hatırlatıcı kaydedildi',
+          date
+            ? 'Bildirim izni varsa cihazınızda yerel bildirim planlandı.'
+            : 'Kilometreye dayalı plan kaydedildi.',
+        );
+        goBackOr('/(tabs)/reminders');
+      });
     }
   };
   if (routeState === 'loading') return <LoadingScreen />;
@@ -117,7 +131,9 @@ export default function ReminderEditScreen() {
           variant="danger"
           onPress={() =>
             confirmAction('Hatırlatıcıyı sil', 'Plan ve yerel bildirim kaldırılacak.', async () => {
-              if (await deleteReminder(existing.id)) goBackOr('/(tabs)/reminders');
+              if (await deleteReminder(existing.id)) {
+                leaveWithoutPrompt(() => goBackOr('/(tabs)/reminders'));
+              }
             })
           }
         />

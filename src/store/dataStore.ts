@@ -18,9 +18,15 @@ import {
   VehicleRecord,
 } from '@/domain/entities';
 import { appRepository } from '@/data/repositories/SupabaseAppRepository';
-import { getFriendlyError } from '@/shared/utils/errors';
+import { getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { createSafeStringStorage } from '@/data/storage/safeStorage';
-import { canStartMutation } from '@/shared/utils/repositoryRules';
+import {
+  RECORD_MILEAGE_TOO_LOW_MESSAGE,
+  canStartMutation,
+  isRecordMileageAllowed,
+  requiresVehicleMileageCorrection,
+} from '@/shared/utils/repositoryRules';
+import { useAuthStore } from '@/store/authStore';
 
 interface DataState {
   vehicles: Vehicle[];
@@ -34,13 +40,18 @@ interface DataState {
   onboardingSeen: boolean;
   hydrated: boolean;
   bootstrapped: boolean;
+  bootstrapError: string | null;
   loading: boolean;
   error: string | null;
   setOnboardingSeen: () => void;
   setActiveVehicle: (id: string) => Promise<void>;
   bootstrap: () => Promise<void>;
   refresh: () => Promise<void>;
-  saveVehicle: (draft: VehicleDraft, id?: string) => Promise<boolean>;
+  saveVehicle: (
+    draft: VehicleDraft,
+    id?: string,
+    options?: { allowMileageDecrease?: boolean },
+  ) => Promise<boolean>;
   deleteVehicle: (id: string) => Promise<boolean>;
   saveRecord: (draft: RecordDraft, id?: string) => Promise<boolean>;
   deleteRecord: (id: string) => Promise<boolean>;
@@ -76,6 +87,10 @@ const emptyVehicleData = {
 export const useDataStore = create<DataState>()(
   persist(
     (set, get) => {
+      const handleError = (error: unknown) => {
+        if (isSessionExpiredError(error)) useAuthStore.getState().markSessionExpired();
+        return getFriendlyError(error);
+      };
       const loadActiveData = async (vehicleId: string) => {
         const bundle = await appRepository.loadVehicleData(vehicleId);
         set(bundle);
@@ -94,7 +109,7 @@ export const useDataStore = create<DataState>()(
           set({ loading: false });
           return true;
         } catch (error) {
-          set({ loading: false, error: getFriendlyError(error) });
+          set({ loading: false, error: handleError(error) });
           return false;
         }
       };
@@ -108,6 +123,7 @@ export const useDataStore = create<DataState>()(
         onboardingSeen: false,
         hydrated: false,
         bootstrapped: false,
+        bootstrapError: null,
         loading: false,
         error: null,
 
@@ -119,12 +135,12 @@ export const useDataStore = create<DataState>()(
             await loadActiveData(id);
             set({ loading: false });
           } catch (error) {
-            set({ loading: false, error: getFriendlyError(error), ...emptyVehicleData });
+            set({ loading: false, error: handleError(error), ...emptyVehicleData });
           }
         },
 
         bootstrap: async () => {
-          set({ loading: true, error: null });
+          set({ loading: true, error: null, bootstrapError: null, bootstrapped: false });
           try {
             const vehicles = await appRepository.listVehicles();
             const persistedId = get().activeVehicleId;
@@ -133,9 +149,10 @@ export const useDataStore = create<DataState>()(
             set({ vehicles, activeVehicleId });
             if (activeVehicleId) await loadActiveData(activeVehicleId);
             else set(emptyVehicleData);
-            set({ loading: false, bootstrapped: true });
+            set({ loading: false, bootstrapped: true, bootstrapError: null });
           } catch (error) {
-            set({ loading: false, bootstrapped: true, error: getFriendlyError(error) });
+            const message = handleError(error);
+            set({ loading: false, bootstrapped: false, error: message, bootstrapError: message });
           }
         },
 
@@ -147,15 +164,25 @@ export const useDataStore = create<DataState>()(
             await loadActiveData(id);
             set({ vehicles: await appRepository.listVehicles(), loading: false });
           } catch (error) {
-            set({ loading: false, error: getFriendlyError(error) });
+            set({ loading: false, error: handleError(error) });
           }
         },
 
-        saveVehicle: (draft, id) =>
-          mutate(async () => {
+        saveVehicle: (draft, id, options) => {
+          const existing = id ? get().vehicles.find((vehicle) => vehicle.id === id) : null;
+          if (
+            existing &&
+            requiresVehicleMileageCorrection(existing.currentKm, draft.currentKm) &&
+            !options?.allowMileageDecrease
+          ) {
+            set({ error: 'Kilometre düzeltmesi için kullanıcı onayı gerekiyor.' });
+            return Promise.resolve(false);
+          }
+          return mutate(async () => {
             const saved = await appRepository.saveVehicle(draft, id);
             set({ activeVehicleId: saved.id });
-          }),
+          });
+        },
 
         deleteVehicle: (id) =>
           mutate(async () => {
@@ -163,12 +190,22 @@ export const useDataStore = create<DataState>()(
             set({ activeVehicleId: null, ...emptyVehicleData });
           }),
 
-        saveRecord: (draft, id) =>
-          mutate(async () => {
+        saveRecord: (draft, id) => {
+          const vehicle = activeVehicle();
+          const existing = id ? get().records.find((record) => record.id === id) : null;
+          if (
+            vehicle &&
+            !isRecordMileageAllowed(vehicle.currentKm, draft.kilometer, existing?.kilometer ?? null)
+          ) {
+            set({ error: RECORD_MILEAGE_TOO_LOW_MESSAGE });
+            return Promise.resolve(false);
+          }
+          return mutate(async () => {
             const vehicleId = get().activeVehicleId;
             if (!vehicleId) throw new Error('Aktif araç yok.');
             await appRepository.saveRecord(vehicleId, draft, id);
-          }),
+          });
+        },
 
         deleteRecord: (id) => mutate(() => appRepository.deleteRecord(id)),
 
@@ -228,7 +265,13 @@ export const useDataStore = create<DataState>()(
           }),
 
         clear: () =>
-          set({ vehicles: [], activeVehicleId: null, bootstrapped: false, ...emptyVehicleData }),
+          set({
+            vehicles: [],
+            activeVehicleId: null,
+            bootstrapped: false,
+            bootstrapError: null,
+            ...emptyVehicleData,
+          }),
         clearError: () => set({ error: null }),
         setHydrated: () => set({ hydrated: true }),
       };

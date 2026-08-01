@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   fontFamilies,
+  getButtonLoadingIndicatorColor,
   radii,
   spacing,
   typography,
@@ -33,6 +34,10 @@ import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 import { formatDate, parseDateOnly, todayDateOnly, toDateOnly } from '@/shared/utils/format';
 import { withoutOptionalSuffix } from '@/shared/utils/formLabels';
+import {
+  getButtonAccessibility,
+  getSelectionAccessibilityState,
+} from '@/shared/utils/accessibility';
 
 const useStyles = () => useThemedStyles(createStyles);
 
@@ -170,6 +175,7 @@ export function AppButton({
   const { colors } = useAppTheme();
   const styles = useStyles();
   const [scale] = useState(() => new Animated.Value(1));
+  const accessibility = getButtonAccessibility(title, disabled, loading);
   return (
     <Pressable
       disabled={disabled || loading}
@@ -181,7 +187,8 @@ export function AppButton({
         Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30 }).start()
       }
       accessibilityRole="button"
-      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
+      accessibilityLabel={accessibility.label}
+      accessibilityState={accessibility.state}
       style={({ pressed }) => [
         styles.buttonWrap,
         pressed && !disabled && !loading && styles.pressed,
@@ -196,15 +203,7 @@ export function AppButton({
         ]}
       >
         {loading ? (
-          <ActivityIndicator
-            color={
-              disabled
-                ? colors.disabledText
-                : variant === 'secondary'
-                  ? colors.primaryAction
-                  : colors.onPrimary
-            }
-          />
+          <ActivityIndicator color={getButtonLoadingIndicatorColor(colors)} />
         ) : (
           <>
             {icon ? (
@@ -218,6 +217,7 @@ export function AppButton({
                       ? colors.primaryAction
                       : colors.onPrimary
                 }
+                accessible={false}
               />
             ) : null}
             <Text
@@ -368,6 +368,9 @@ export function SelectField<T extends string>({
               {options.map((option) => (
                 <Pressable
                   key={option.value}
+                  accessibilityRole="radio"
+                  accessibilityLabel={option.label}
+                  accessibilityState={getSelectionAccessibilityState(option.value === value)}
                   style={[styles.option, option.value === value && styles.optionSelected]}
                   onPress={() => {
                     onChange(option.value);
@@ -509,6 +512,8 @@ export function SectionHeader({
       <Text style={styles.sectionTitle}>{title}</Text>
       {actionLabel && onAction ? (
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
           hitSlop={8}
           style={({ pressed }) => pressed && styles.pressed}
           onPress={onAction}
@@ -534,7 +539,7 @@ export function EmptyState({
   return (
     <Card style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={28} color={colors.primary} />
+        <Ionicons name={icon} size={28} color={colors.primary} accessible={false} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyMessage}>{message}</Text>
@@ -557,11 +562,11 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
   const { colors } = useAppTheme();
   const styles = useStyles();
   return (
-    <View style={styles.errorBanner}>
-      <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
+    <View style={styles.errorBanner} accessibilityRole="alert">
+      <Ionicons name="alert-circle-outline" size={20} color={colors.danger} accessible={false} />
       <Text style={styles.errorBannerText}>{message}</Text>
       {onRetry ? (
-        <Pressable onPress={onRetry}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tekrar dene" onPress={onRetry}>
           <Text style={styles.retry}>Tekrar dene</Text>
         </Pressable>
       ) : null}
@@ -585,13 +590,23 @@ export function StatusBadge({
 }
 
 export function confirmAction(title: string, message: string, onConfirm: () => void) {
+  confirmChoice(title, message, 'Sil', onConfirm, true);
+}
+
+export function confirmChoice(
+  title: string,
+  message: string,
+  confirmLabel: string,
+  onConfirm: () => void,
+  destructive = false,
+) {
   if (Platform.OS === 'web') {
     if (globalThis.confirm(`${title}\n\n${message}`)) onConfirm();
     return;
   }
   Alert.alert(title, message, [
     { text: 'Vazgeç', style: 'cancel' },
-    { text: 'Sil', style: 'destructive', onPress: onConfirm },
+    { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: onConfirm },
   ]);
 }
 

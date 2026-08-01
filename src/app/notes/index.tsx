@@ -4,6 +4,7 @@ import { AppButton, Card, EmptyState, Screen } from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
+import { getNoteAccessibilityLabel } from '@/shared/utils/accessibility';
 
 export default function NotesListScreen() {
   const styles = useThemedStyles(createStyles);
@@ -16,6 +17,8 @@ export default function NotesListScreen() {
           {notes.map((note) => (
             <Pressable
               key={note.id}
+              accessibilityRole="button"
+              accessibilityLabel={getNoteAccessibilityLabel(note.title)}
               onPress={() => router.push({ pathname: '/notes/edit', params: { id: note.id } })}
             >
               <Card style={styles.card}>

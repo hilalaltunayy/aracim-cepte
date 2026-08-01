@@ -2,7 +2,7 @@ import type { BodyCondition } from '@/domain/entities';
 import type { ResolvedTheme } from '@/features/theme/themePreference';
 
 const sharedBrand = {
-  primaryDark: '#087DB3',
+  primaryDark: '#076A98',
   aqua: '#31C8BE',
   sky: '#72CBEA',
   white: '#FFFFFF',
@@ -46,6 +46,18 @@ export interface ThemeColors {
   info: string;
   tabBar: string;
   modalOverlay: string;
+  brandGradientStart: string;
+  brandGradientEnd: string;
+  onBrand: string;
+  onBrandMuted: string;
+  brandSurface: string;
+  brandSurfaceStrong: string;
+  illustrationBody: string;
+  illustrationGlass: string;
+  illustrationTrim: string;
+  illustrationWheel: string;
+  illustrationHub: string;
+  illustrationAccent: string;
   paleAqua: string;
   paleBlue: string;
   successSurface: string;
@@ -59,6 +71,7 @@ export interface ThemeColors {
   diagramWindshield: string;
   diagramRearWindow: string;
   diagramWheel: string;
+  diagramCenterLine: string;
   bodyCondition: Record<BodyCondition, string>;
   primary: string;
   primaryDark: string;
@@ -81,20 +94,32 @@ export const lightColors: ThemeColors = {
   cardBackground: '#FFFFFF',
   elevatedSurface: '#F8FBFC',
   textPrimary: '#163244',
-  textSecondary: '#6C7E89',
-  border: '#D9E8EC',
-  borderStrong: '#C7DDE3',
+  textSecondary: '#4F6570',
+  border: '#78929B',
+  borderStrong: '#5B7882',
   inputBackground: '#FFFFFF',
-  disabledSurface: '#E1EAED',
-  disabledText: '#82919A',
-  primaryAction: '#149FD7',
+  disabledSurface: '#DCE5E8',
+  disabledText: '#4F626B',
+  primaryAction: '#0875A8',
   onPrimary: '#FFFFFF',
-  success: '#168665',
-  warning: '#D98222',
-  error: '#C94E54',
-  info: '#2877BC',
+  success: '#0B6B50',
+  warning: '#7A4A00',
+  error: '#A22D36',
+  info: '#155E96',
   tabBar: '#FFFFFF',
   modalOverlay: 'rgba(17, 43, 58, 0.46)',
+  brandGradientStart: '#0875A8',
+  brandGradientEnd: '#087870',
+  onBrand: '#FFFFFF',
+  onBrandMuted: '#E6F5F7',
+  brandSurface: 'rgba(255, 255, 255, 0.12)',
+  brandSurfaceStrong: 'rgba(255, 255, 255, 0.18)',
+  illustrationBody: '#FFFFFF',
+  illustrationGlass: '#BDECF4',
+  illustrationTrim: '#F8FDFF',
+  illustrationWheel: '#173042',
+  illustrationHub: '#85D8E4',
+  illustrationAccent: '#35CFC4',
   paleAqua: '#E8F7FA',
   paleBlue: '#EAF4FB',
   successSurface: '#E2F5EF',
@@ -108,14 +133,15 @@ export const lightColors: ThemeColors = {
   diagramWindshield: '#D9EEF3',
   diagramRearWindow: '#CBE7EE',
   diagramWheel: '#163244',
+  diagramCenterLine: 'rgba(22, 50, 68, 0.34)',
   bodyCondition: lightBodyCondition,
   navy: '#163244',
-  muted: '#6C7E89',
+  muted: '#4F6570',
   background: '#F3F8FA',
   surface: '#FFFFFF',
   surfaceMuted: '#F8FBFC',
-  primary: '#149FD7',
-  danger: '#C94E54',
+  primary: '#0875A8',
+  danger: '#A22D36',
   overlay: 'rgba(17, 43, 58, 0.46)',
 };
 
@@ -130,11 +156,11 @@ export const darkColors: ThemeColors = {
   elevatedSurface: '#182D38',
   textPrimary: '#EDF7FA',
   textSecondary: '#A5B8C1',
-  border: '#29414D',
-  borderStrong: '#385865',
+  border: '#5A7682',
+  borderStrong: '#74909B',
   inputBackground: '#10212A',
   disabledSurface: '#263840',
-  disabledText: '#7F929B',
+  disabledText: '#B7C7CE',
   primaryAction: '#28AFE0',
   onPrimary: '#07151B',
   success: '#59C99E',
@@ -143,6 +169,18 @@ export const darkColors: ThemeColors = {
   info: '#7ABCF4',
   tabBar: '#132630',
   modalOverlay: 'rgba(0, 0, 0, 0.68)',
+  brandGradientStart: '#0B668F',
+  brandGradientEnd: '#08756E',
+  onBrand: '#FFFFFF',
+  onBrandMuted: '#E4F4F6',
+  brandSurface: 'rgba(255, 255, 255, 0.1)',
+  brandSurfaceStrong: 'rgba(255, 255, 255, 0.16)',
+  illustrationBody: '#EDF7FA',
+  illustrationGlass: '#9DD8E2',
+  illustrationTrim: '#DCEEF2',
+  illustrationWheel: '#07151B',
+  illustrationHub: '#72CBD6',
+  illustrationAccent: '#3BD2C5',
   paleAqua: '#15363D',
   paleBlue: '#152F40',
   successSurface: '#163B32',
@@ -156,6 +194,7 @@ export const darkColors: ThemeColors = {
   diagramWindshield: '#24434F',
   diagramRearWindow: '#1D3A45',
   diagramWheel: '#081116',
+  diagramCenterLine: 'rgba(237, 247, 250, 0.42)',
   bodyCondition: darkBodyCondition,
   navy: '#EDF7FA',
   muted: '#A5B8C1',

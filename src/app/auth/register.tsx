@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import {
@@ -20,6 +20,11 @@ import {
   createLoginPrefillHref,
   normalizeRegistrationEmail,
 } from '@/features/auth/registrationFlow';
+import {
+  CONFIRMATION_RESEND_COOLDOWN_MS,
+  CONFIRMATION_RESEND_SUCCESS_MESSAGE,
+  getConfirmationCooldownSeconds,
+} from '@/features/auth/confirmationResend';
 
 export default function RegisterScreen() {
   const styles = useThemedStyles(createStyles);
@@ -28,7 +33,10 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
-  const { signUp, busy, error } = useAuthStore();
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const { signUp, resendConfirmation, busy, error } = useAuthStore();
   const valid = isValidEmail(email) && password.length >= 8 && password === confirmation;
   const submit = async () => {
     if (!valid) return;
@@ -36,6 +44,28 @@ export default function RegisterScreen() {
       setPassword('');
       setConfirmation('');
       setRegisteredEmail(normalizeRegistrationEmail(email));
+      const nextAllowedAt = Date.now() + CONFIRMATION_RESEND_COOLDOWN_MS;
+      setCooldownUntil(nextAllowedAt);
+      setCooldownSeconds(getConfirmationCooldownSeconds(nextAllowedAt));
+    }
+  };
+
+  useEffect(() => {
+    if (!registeredEmail || cooldownUntil <= 0) return;
+    const update = () => setCooldownSeconds(getConfirmationCooldownSeconds(cooldownUntil));
+    update();
+    const timer = setInterval(update, 1_000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil, registeredEmail]);
+
+  const resend = async () => {
+    if (!registeredEmail || cooldownSeconds > 0) return;
+    setResendMessage(null);
+    if (await resendConfirmation(registeredEmail)) {
+      setResendMessage(CONFIRMATION_RESEND_SUCCESS_MESSAGE);
+      const nextAllowedAt = Date.now() + CONFIRMATION_RESEND_COOLDOWN_MS;
+      setCooldownUntil(nextAllowedAt);
+      setCooldownSeconds(getConfirmationCooldownSeconds(nextAllowedAt));
     }
   };
 
@@ -44,6 +74,19 @@ export default function RegisterScreen() {
       <Screen style={styles.successScreen}>
         <FormSection title={REGISTRATION_SUCCESS.title}>
           <Text style={styles.successMessage}>{REGISTRATION_SUCCESS.message}</Text>
+          {error ? <ErrorBanner message={error} /> : null}
+          {resendMessage ? <Text style={styles.resendSuccess}>{resendMessage}</Text> : null}
+          <AppButton
+            title={
+              cooldownSeconds > 0
+                ? `${cooldownSeconds} sn sonra tekrar gönderebilirsiniz`
+                : 'Doğrulama e-postasını tekrar gönder'
+            }
+            variant="secondary"
+            loading={busy}
+            disabled={cooldownSeconds > 0}
+            onPress={() => void resend()}
+          />
           <AppButton
             title={REGISTRATION_SUCCESS.action}
             onPress={() => router.replace(createLoginPrefillHref(registeredEmail))}
@@ -137,4 +180,5 @@ const createStyles = ({ colors }: AppTheme) =>
     legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
     legalStatus: { color: colors.warning, fontSize: 11, fontWeight: '700' },
     successMessage: { color: colors.muted, ...typography.body },
+    resendSuccess: { color: colors.success, ...typography.bodyMedium },
   });

@@ -4,6 +4,39 @@
 **Baseline:** `2c5cc0450b558ba94ff0c8e07422db5b4a309cdf`
 **Audit coverage:** 26 route + 26 ortak/navigation yüzeyi = **52 tema yüzeyi**
 
+## TASK-007 remediation sonucu — 2026-08-01
+
+TASK-006 aşağıdaki tabloları tarihsel baseline olarak korur. TASK-007 sonrasındaki güncel kaynak
+sonucu şöyledir:
+
+- Theme token dosyası ve test fixture'ları hariç `src/**/*.ts(x)` taramasında doğrudan runtime
+  `#hex`/`rgb(a)` occurrence sayısı **0**'dır. Önceki 17 occurrence semantic tokenlara taşınmıştır.
+- `app.json` içindeki icon, notification ve light/dark splash için dört native config rengi bilinçli
+  olarak korunmuştur; JS runtime theme bypass sayılmaz.
+- Light `primaryAction`, secondary text, status badge, border ve disabled text tonları koyulaştırıldı;
+  dark border/disabled text ayrımı güçlendirildi.
+- Onboarding/dashboard için `onBrand`, `onBrandMuted`, marka yüzeyi ve illustration semantic tokenları;
+  BodyDiagram için ayrı center-line tokenı eklendi.
+- Loading button spinner'ı loading/disabled yüzeyde `disabledText` kullanır.
+- TASK-007 sonrası `npm test` sonucu **26 dosya / 121 test PASS**; theme odaklı saf testler güncel
+  light/dark kontrast ve loading spinner sınırlarını kapsar.
+
+| TASK-006 bulgusu     | Güncel kaynak sonucu                                               | Kalan doğrulama                         |
+| -------------------- | ------------------------------------------------------------------ | --------------------------------------- |
+| D-01 primary action  | IMPLEMENTED — normal text ve yüzey kontrast testleri geçiyor       | Android light theme                     |
+| D-02 gradient copy   | IMPLEMENTED — iki endpoint için semantic on-brand testleri geçiyor | Onboarding/dashboard Android screenshot |
+| D-03 secondary/badge | IMPLEMENTED — normal text ve dört status rengi testli              | Placeholder/badge Android screenshot    |
+| D-04 borders         | IMPLEMENTED — light/dark card sınırları 3:1 test eşiğinde          | Input/card/divider Android screenshot   |
+| D-05 spinner         | IMPLEMENTED — iki theme için disabled loading color testli         | Gerçek animasyon/loading state          |
+
+Deterministik güncel oranlar: light on-primary/action `5.10:1`, action/screen `4.76:1`, secondary/card
+`6.13:1`, secondary/screen `5.72:1`, border/card `3.29:1`, border/screen `3.07:1`; light
+info/success/warning/error `5.98 / 5.73 / 6.78 / 6.03:1`; dark border/card `3.33:1`.
+
+React Native screen renderer/snapshot altyapısı hâlâ yoktur. Bu nedenle 52 yüzey için kaynak ve saf
+kontrast coverage'ı güncellenmiş olsa da runtime light/dark render sonucu
+**MANUAL ANDROID CHECK REQUIRED** olarak kalır.
+
 ## Kanıt sınırı
 
 Bu turda çalışan yeni APK, emulator veya screenshot capture yoktur ve build başlatılmamıştır. Kaynak
@@ -32,7 +65,7 @@ temada render edildi” iddiası yapılamaz.
 | Modal/bottom sheet       | PASS coverage + MANUAL        | Surface/overlay/text tokenlı; native focus/back görülmedi                             |
 | Native alert/date picker | MANUAL ANDROID CHECK REQUIRED | App manual override ile sistem görünümü ayrışabilir; zorla redesign yok               |
 
-## 26 route'un light/dark kapsamı
+## TASK-006 tarihsel 26 route light/dark baseline'ı
 
 `Token coverage` kaynak seviyesinde provider/theme token kullanımını; `Audit result` kontrast ve
 runtime boşluklarını gösterir.
@@ -66,7 +99,7 @@ runtime boşluklarını gösterir.
 | `/legal/account-and-data-deletion` | PASS                                          | Aynı legal shared sonucu                                                                          |
 | `/legal/kvkk-application`          | PASS                                          | Aynı legal shared sonucu; contact text tappable değil                                             |
 
-## 26 ortak/navigation tema yüzeyi
+## TASK-006 tarihsel ortak/navigation tema baseline'ı
 
 | ID  | Yüzey                          | Light                          | Dark                                 | Sonuç                                                   |
 | --- | ------------------------------ | ------------------------------ | ------------------------------------ | ------------------------------------------------------- |
@@ -97,7 +130,7 @@ runtime boşluklarını gösterir.
 | T25 | SettingsRow/ThemeOptionRow     | Semantic row/radio             | Semantic row/radio                   | Border/primary light defect; selected state source PASS |
 | T26 | Onboarding/Dashboard gradient  | Marka gradient + white literal | Brighter dark tokens + white literal | **CONFIRMED DEFECT:** endpoint contrast                 |
 
-## Hard-coded renk taraması
+## TASK-006 tarihsel hard-coded renk taraması
 
 Komut kapsamı: bütün `src/**/*.ts(x)`; theme token dosyası ve test fixture'ları ayrı değerlendirildi.
 
@@ -118,7 +151,7 @@ Komut kapsamı: bütün `src/**/*.ts(x)`; theme token dosyası ve test fixture'l
 `onBrand`/`onBrandMuted` ayrımını sağlamıyor; bu nedenle literal taramasında görünmese de kontrast
 bulgusuna dahildir.
 
-## Deterministik kontrast sonuçları
+## TASK-006 tarihsel deterministik kontrast sonuçları
 
 Oranlar WCAG relative luminance formülüyle exact token hex'lerinden hesaplandı. Normal text için
 `4.5:1`, large text için `3:1`, anlamlı control boundary için `3:1` referans alındı.
@@ -153,9 +186,9 @@ Oranlar WCAG relative luminance formülüyle exact token hex'lerinden hesapland�
   dark sistemde veya tersi durumda native splash sistem renginde başlayıp JS tercihine geçer —
   **POSSIBLE RISK**, cold-start video gerekir.
 
-## Test sonucu ve test boşluğu
+## TASK-006 test baseline'ı ve güncel test boşluğu
 
-- `npm test`: **20 dosya / 98 test PASS**.
+- TASK-006 sırasında `npm test`: **20 dosya / 98 test PASS**; TASK-007 güncel sonucu yukarıdadır.
 - Theme-focused pure tests: preference seçenekleri, system çözümü, storage helper, required tokenlar ve
   sınırlı dark contrast assertion'ı var.
 - Mevcut contrast testi yalnız dark primary/secondary ve dark primary action'ı kontrol ettiği için
@@ -165,7 +198,7 @@ Oranlar WCAG relative luminance formülüyle exact token hex'lerinden hesapland�
 - Bu nedenle 52 surface için kaynak coverage denetlendi; hiçbiri runtime light/dark render Passed
   sayılmadı.
 
-## Sonuç sınıflandırması
+## TASK-006 tarihsel sonuç sınıflandırması
 
 - **PASS:** Merkezi provider/token kapsamı, dark ana metin/action/status tokenları, themed modal ve SVG
   kaynak bağlantıları.

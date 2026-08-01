@@ -6,6 +6,7 @@ import {
   getDocumentExpiryStatus,
   getMonthlyTotals,
   getPreviousMonthComparison,
+  getReminderKilometerProgress,
   getReminderStatus,
   sortRecords,
 } from '@/shared/utils/analytics';
@@ -96,6 +97,20 @@ describe('status calculations', () => {
     expect(
       getReminderStatus({ completed: true, dueDate: '2020-01-01', dueKilometer: null }, 1000),
     ).toBe('completed');
+  });
+
+  it('distinguishes mileage due from overdue and clamps displayed distances', () => {
+    const reminder = { completed: false, dueDate: null, dueKilometer: 50_000 };
+    expect(getReminderStatus(reminder, 50_000, '2026-02-01')).toBe('due');
+    expect(getReminderStatus(reminder, 50_001, '2026-02-01')).toBe('overdue');
+    expect(getReminderKilometerProgress(50_000, 49_500)).toEqual({
+      remaining: 500,
+      overdueBy: 0,
+    });
+    expect(getReminderKilometerProgress(50_000, 50_250)).toEqual({
+      remaining: 0,
+      overdueBy: 250,
+    });
   });
 
   it('calculates document expiry status from date-only values', () => {

@@ -14,6 +14,8 @@ import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function NoteEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -22,13 +24,20 @@ export default function NoteEditScreen() {
   const [title, setTitle] = useState(existing?.title ?? '');
   const [content, setContent] = useState(existing?.content ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const isDirty = haveFormValuesChanged(
+    { title: existing?.title ?? '', content: existing?.content ?? '' },
+    { title, content },
+  );
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, notes, bootstrapped);
   const submit = async () => {
     setSubmitted(true);
     if (!title.trim() || !content.trim()) return;
     if (await saveNote({ title, content }, existing?.id)) {
-      Alert.alert('Kaydedildi', 'Araç notunuz kaydedildi.');
-      goBackOr('/notes');
+      leaveWithoutPrompt(() => {
+        Alert.alert('Kaydedildi', 'Araç notunuz kaydedildi.');
+        goBackOr('/notes');
+      });
     }
   };
   if (routeState === 'loading') return <LoadingScreen />;
@@ -68,7 +77,7 @@ export default function NoteEditScreen() {
           variant="danger"
           onPress={() =>
             confirmAction('Notu sil', 'Bu not kalıcı olarak silinecek.', async () => {
-              if (await deleteNote(existing.id)) goBackOr('/notes');
+              if (await deleteNote(existing.id)) leaveWithoutPrompt(() => goBackOr('/notes'));
             })
           }
         />

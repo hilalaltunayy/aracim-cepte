@@ -43,13 +43,20 @@ function SettingsRow({
       disabled={!onPress}
     >
       <View style={[styles.icon, danger && styles.dangerIcon]}>
-        <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
+        <Ionicons
+          name={icon}
+          size={20}
+          color={danger ? colors.danger : colors.primary}
+          accessible={false}
+        />
       </View>
       <View style={styles.rowContent}>
         <Text style={[styles.rowTitle, danger && styles.dangerText]}>{title}</Text>
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
-      {onPress ? <Ionicons name="chevron-forward" size={20} color={colors.muted} /> : null}
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
+      ) : null}
     </Pressable>
   );
 }
@@ -79,7 +86,12 @@ function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) 
       ]}
     >
       <View style={styles.icon}>
-        <Ionicons name={themeIcons[option.value]} size={20} color={colors.primaryAction} />
+        <Ionicons
+          name={themeIcons[option.value]}
+          size={20}
+          color={colors.primaryAction}
+          accessible={false}
+        />
       </View>
       <View style={styles.rowContent}>
         <Text style={styles.rowTitle}>{option.label}</Text>
@@ -89,6 +101,7 @@ function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) 
         name={selected ? 'radio-button-on' : 'radio-button-off'}
         size={22}
         color={selected ? colors.primaryAction : colors.textSecondary}
+        accessible={false}
       />
     </Pressable>
   );

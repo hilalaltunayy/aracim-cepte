@@ -16,7 +16,11 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatCurrency, formatDate, formatNumber } from '@/shared/utils/format';
-import { getDocumentExpiryStatus, getReminderStatus } from '@/shared/utils/analytics';
+import {
+  getDocumentExpiryStatus,
+  getReminderKilometerProgress,
+  getReminderStatus,
+} from '@/shared/utils/analytics';
 import { Card, StatusBadge } from './ui';
 
 const recordIcons = {
@@ -38,7 +42,12 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
     >
       <Card style={styles.rowCard}>
         <View style={styles.icon}>
-          <Ionicons name={recordIcons[record.recordType]} size={22} color={colors.primary} />
+          <Ionicons
+            name={recordIcons[record.recordType]}
+            size={22}
+            color={colors.primary}
+            accessible={false}
+          />
         </View>
         <View style={styles.content}>
           <View style={styles.between}>
@@ -65,6 +74,7 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
 const reminderLabels = {
   completed: ['Tamamlandı', 'success'],
   overdue: ['Süresi Geçti', 'danger'],
+  due: ['Zamanı Geldi', 'warning'],
   upcoming: ['Yaklaşıyor', 'warning'],
   planned: ['Planlandı', 'info'],
 } as const;
@@ -84,6 +94,10 @@ export function ReminderCard({
   const styles = useThemedStyles(createStyles);
   const status = getReminderStatus(reminder, currentKm);
   const [label, tone] = reminderLabels[status];
+  const kilometerProgress =
+    reminder.dueKilometer === null
+      ? null
+      : getReminderKilometerProgress(reminder.dueKilometer, currentKm);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -105,6 +119,7 @@ export function ReminderCard({
             name={reminder.completed ? 'checkmark-circle' : 'ellipse-outline'}
             size={26}
             color={reminder.completed ? colors.success : colors.primary}
+            accessible={false}
           />
         </Pressable>
         <View style={styles.content}>
@@ -121,6 +136,13 @@ export function ReminderCard({
               .filter(Boolean)
               .join(' · ')}
           </Text>
+          {kilometerProgress ? (
+            <Text style={styles.meta}>
+              {kilometerProgress.overdueBy > 0
+                ? `${formatNumber(kilometerProgress.overdueBy)} km geçti`
+                : `${formatNumber(kilometerProgress.remaining)} km kaldı`}
+            </Text>
+          ) : null}
         </View>
       </Card>
     </Pressable>
@@ -155,7 +177,12 @@ export function DocumentCard({
     >
       <Card style={styles.rowCard}>
         <View style={styles.icon}>
-          <Ionicons name="document-text-outline" size={22} color={colors.primary} />
+          <Ionicons
+            name="document-text-outline"
+            size={22}
+            color={colors.primary}
+            accessible={false}
+          />
         </View>
         <View style={styles.content}>
           <View style={styles.between}>

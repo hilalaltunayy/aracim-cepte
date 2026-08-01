@@ -2,6 +2,7 @@ export { AppThemeProvider, useAppTheme, useThemedStyles } from './ThemeProvider'
 export type { AppTheme } from './ThemeProvider';
 export { darkColors, getThemeTokens, lightColors } from './tokens';
 export type { ThemeColors, ThemeShadows } from './tokens';
+export { getButtonLoadingIndicatorColor } from './buttonColors';
 
 export const spacing = {
   xxs: 2,

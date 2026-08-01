@@ -26,6 +26,9 @@ import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function DocumentEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -43,6 +46,30 @@ export default function DocumentEditScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const isDirty = haveFormValuesChanged(
+    {
+      type: existing?.documentType ?? 'registration',
+      title: existing?.title ?? documentTypeLabels.registration,
+      number: existing?.documentNumber ?? '',
+      issueDate: existing?.issueDate ?? null,
+      expiryDate: existing?.expiryDate ?? null,
+      note: existing?.note ?? '',
+      attachmentPath: existing?.attachmentPath ?? null,
+      pickedUri: null,
+    },
+    {
+      type,
+      title,
+      number,
+      issueDate,
+      expiryDate,
+      note,
+      attachmentPath,
+      pickedUri: picked?.uri ?? null,
+    },
+  );
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, documents, bootstrapped);
   const datesValid = !issueDate || !expiryDate || expiryDate >= issueDate;
   const submit = async () => {
@@ -73,8 +100,10 @@ export default function DocumentEditScreen() {
         uploadedPath = null;
         if (existing?.attachmentPath && existing.attachmentPath !== path)
           await deleteAttachment(existing.attachmentPath);
-        Alert.alert('Kaydedildi', 'Belge bilgileri güvenli buluta kaydedildi.');
-        goBackOr('/documents');
+        leaveWithoutPrompt(() => {
+          Alert.alert('Kaydedildi', 'Belge bilgileri güvenli buluta kaydedildi.');
+          goBackOr('/documents');
+        });
       }
     } catch (caught) {
       if (uploadedPath) {
@@ -89,6 +118,18 @@ export default function DocumentEditScreen() {
       setSubmitting(false);
     }
   };
+  const openExistingAttachment = async () => {
+    if (!existing?.attachmentPath || opening) return;
+    setLocalError(null);
+    setOpening(true);
+    try {
+      await openAttachment(existing.attachmentPath);
+    } catch {
+      setLocalError(ATTACHMENT_OPEN_ERROR_MESSAGE);
+    } finally {
+      setOpening(false);
+    }
+  };
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {
     return (
@@ -100,7 +141,7 @@ export default function DocumentEditScreen() {
   }
   return (
     <Screen style={styles.form}>
-      {error || localError ? <ErrorBanner message={error ?? localError ?? ''} /> : null}
+      {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Belge bilgileri">
         <SelectField
           label="Belge türü"
@@ -146,7 +187,8 @@ export default function DocumentEditScreen() {
         <AppButton
           title="Mevcut eki aç"
           variant="secondary"
-          onPress={() => void openAttachment(existing.attachmentPath!)}
+          loading={opening}
+          onPress={() => void openExistingAttachment()}
         />
       ) : null}
       {existing && expiryDate ? (
@@ -170,7 +212,7 @@ export default function DocumentEditScreen() {
           onPress={() =>
             confirmAction('Belgeyi sil', 'Belge bilgileri ve ek dosyası silinecek.', async () => {
               if (await deleteDocument(existing.id)) {
-                goBackOr('/documents');
+                leaveWithoutPrompt(() => goBackOr('/documents'));
               }
             })
           }

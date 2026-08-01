@@ -7,6 +7,7 @@ import { RecordType } from '@/domain/entities';
 import { useDataStore } from '@/store/dataStore';
 import { fontFamilies, radii, spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { sortRecords } from '@/shared/utils/analytics';
+import { getSelectionAccessibilityState } from '@/shared/utils/accessibility';
 
 type Filter = 'all' | RecordType;
 const filters: { value: Filter; label: string }[] = [
@@ -26,10 +27,13 @@ export default function HistoryScreen() {
   return (
     <Screen>
       <AppHeader title="Geçmiş" subtitle={`${records.length} kayıt`} />
-      <View style={styles.filters}>
+      <View style={styles.filters} accessibilityRole="radiogroup">
         {filters.map((item) => (
           <Pressable
             key={item.value}
+            accessibilityRole="radio"
+            accessibilityLabel={`${item.label} kayıtlarını göster`}
+            accessibilityState={getSelectionAccessibilityState(filter === item.value)}
             style={[styles.pill, filter === item.value && styles.pillSelected]}
             onPress={() => setFilter(item.value)}
           >

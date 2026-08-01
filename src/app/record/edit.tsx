@@ -22,11 +22,26 @@ import { parseDecimal, todayDateOnly } from '@/shared/utils/format';
 import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
-import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import {
+  RECORD_MILEAGE_TOO_LOW_MESSAGE,
+  isRecordMileageAllowed,
+  resolveEntityRoute,
+} from '@/shared/utils/repositoryRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function RecordEditScreen() {
   const params = useLocalSearchParams<{ id?: string; type?: RecordType }>();
-  const { records, saveRecord, deleteRecord, loading, error, bootstrapped } = useDataStore();
+  const {
+    records,
+    vehicles,
+    activeVehicleId,
+    saveRecord,
+    deleteRecord,
+    loading,
+    error,
+    bootstrapped,
+  } = useDataStore();
   const existing = useMemo(
     () => records.find((record) => record.id === params.id),
     [records, params.id],
@@ -45,16 +60,40 @@ export default function RecordEditScreen() {
   const [date, setDate] = useState(existing?.recordDate ?? todayDateOnly());
   const [description, setDescription] = useState(existing?.description ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const vehicle = vehicles.find((item) => item.id === activeVehicleId);
+  const initialValues = {
+    type: existing?.recordType ?? params.type ?? 'fuel',
+    category: existing?.category ?? categories[0],
+    amount: existing?.amount.toString() ?? '',
+    liters: existing?.liters?.toString() ?? '',
+    km: existing?.kilometer?.toString() ?? '',
+    date: existing?.recordDate ?? todayDateOnly(),
+    description: existing?.description ?? '',
+  };
+  const isDirty = haveFormValuesChanged(initialValues, {
+    type,
+    category,
+    amount,
+    liters,
+    km,
+    date,
+    description,
+  });
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(params.id, records, bootstrapped);
   const parsedAmount = parseDecimal(amount);
   const parsedLiters = parseDecimal(liters);
   const parsedKm = km ? parseDecimal(km) : null;
+  const mileageAllowed = vehicle
+    ? isRecordMileageAllowed(vehicle.currentKm, parsedKm, existing?.kilometer ?? null)
+    : true;
   const valid =
     parsedAmount !== null &&
     parsedAmount > 0 &&
     Boolean(date) &&
     (type !== 'fuel' || (parsedLiters !== null && parsedLiters > 0)) &&
-    (parsedKm === null || parsedKm >= 0);
+    (parsedKm === null || parsedKm >= 0) &&
+    mileageAllowed;
   const submit = async () => {
     setSubmitted(true);
     if (!valid || parsedAmount === null) return;
@@ -71,14 +110,16 @@ export default function RecordEditScreen() {
       existing?.id,
     );
     if (success) {
-      Alert.alert('Kaydedildi', 'Araç kaydınız başarıyla kaydedildi.');
-      goBackOr();
+      leaveWithoutPrompt(() => {
+        Alert.alert('Kaydedildi', 'Araç kaydınız başarıyla kaydedildi.');
+        goBackOr();
+      });
     }
   };
   const remove = () =>
     existing &&
     confirmAction('Kaydı sil', 'Bu kayıt kalıcı olarak silinecek.', async () => {
-      if (await deleteRecord(existing.id)) goBackOr();
+      if (await deleteRecord(existing.id)) leaveWithoutPrompt(() => goBackOr());
     });
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {
@@ -151,7 +192,11 @@ export default function RecordEditScreen() {
           onChangeText={setKm}
           keyboardType="number-pad"
           error={
-            submitted && parsedKm !== null && parsedKm < 0 ? 'Kilometre negatif olamaz.' : null
+            submitted && parsedKm !== null && parsedKm < 0
+              ? 'Kilometre negatif olamaz.'
+              : submitted && !mileageAllowed
+                ? RECORD_MILEAGE_TOO_LOW_MESSAGE
+                : null
           }
         />
         <DateField label="Tarih" value={date} onChange={(value) => value && setDate(value)} />

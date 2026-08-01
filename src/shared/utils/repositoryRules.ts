@@ -6,6 +6,26 @@ export function nextVehicleMileage(currentMileage: number, recordMileage: number
   return Math.max(currentMileage, Math.round(recordMileage));
 }
 
+export const RECORD_MILEAGE_TOO_LOW_MESSAGE = 'Kilometre mevcut bilinen değerden düşük olamaz.';
+export const VEHICLE_MILEAGE_CORRECTION_MESSAGE =
+  'Girdiğiniz kilometre mevcut değerden düşük. Bu işlemi yalnızca kilometre düzeltmesi yapıyorsanız onaylayın.';
+
+export function isRecordMileageAllowed(
+  currentMileage: number,
+  enteredMileage: number | null,
+  originalMileage: number | null = null,
+): boolean {
+  if (enteredMileage === null || enteredMileage === originalMileage) return true;
+  return enteredMileage >= currentMileage;
+}
+
+export function requiresVehicleMileageCorrection(
+  currentMileage: number,
+  enteredMileage: number,
+): boolean {
+  return Number.isFinite(enteredMileage) && enteredMileage < currentMileage;
+}
+
 export type EntityRouteState = 'create' | 'loading' | 'found' | 'missing';
 
 export function resolveEntityRoute<T extends { id: string }>(

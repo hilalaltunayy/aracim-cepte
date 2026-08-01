@@ -6,7 +6,7 @@ import { getReminderStatus } from '@/shared/utils/analytics';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 
-const urgency = { overdue: 0, upcoming: 1, planned: 2, completed: 3 };
+const urgency = { overdue: 0, due: 1, upcoming: 2, planned: 3, completed: 4 };
 
 export default function RemindersScreen() {
   const { reminders, vehicles, activeVehicleId, toggleReminder } = useDataStore();

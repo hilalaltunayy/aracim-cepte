@@ -23,6 +23,9 @@ import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function ExpertiseEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -47,6 +50,19 @@ export default function ExpertiseEditScreen() {
   const [picked, setPicked] = useState<PickedAttachment | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const isDirty = haveFormValuesChanged(
+    {
+      date: existing?.reportDate ?? null,
+      company: existing?.companyName ?? '',
+      number: existing?.reportNumber ?? '',
+      note: existing?.overallNote ?? '',
+      attachmentPath: existing?.attachmentPath ?? null,
+      pickedUri: null,
+    },
+    { date, company, number, note, attachmentPath, pickedUri: picked?.uri ?? null },
+  );
+  const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, expertiseReports, bootstrapped);
   const submit = async () => {
     if (!activeVehicleId) return;
@@ -73,8 +89,10 @@ export default function ExpertiseEditScreen() {
         uploadedPath = null;
         if (existing?.attachmentPath && existing.attachmentPath !== path)
           await deleteAttachment(existing.attachmentPath);
-        Alert.alert('Kaydedildi', 'Ekspertiz raporu kaydedildi.');
-        goBackOr('/expertise');
+        leaveWithoutPrompt(() => {
+          Alert.alert('Kaydedildi', 'Ekspertiz raporu kaydedildi.');
+          goBackOr('/expertise');
+        });
       }
     } catch (caught) {
       if (uploadedPath) {
@@ -89,12 +107,22 @@ export default function ExpertiseEditScreen() {
       setSubmitting(false);
     }
   };
+  const openExistingAttachment = async () => {
+    if (!existing?.attachmentPath || opening) return;
+    setLocalError(null);
+    setOpening(true);
+    try {
+      await openAttachment(existing.attachmentPath);
+    } catch {
+      setLocalError(ATTACHMENT_OPEN_ERROR_MESSAGE);
+    } finally {
+      setOpening(false);
+    }
+  };
   const remove = () =>
     existing &&
     confirmAction('Raporu sil', 'Bu rapor ve ek dosyası silinecek.', async () => {
-      if (await deleteExpertise(existing.id)) {
-        goBackOr('/expertise');
-      }
+      if (await deleteExpertise(existing.id)) leaveWithoutPrompt(() => goBackOr('/expertise'));
     });
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {
@@ -107,7 +135,7 @@ export default function ExpertiseEditScreen() {
   }
   return (
     <Screen style={styles.form}>
-      {error || localError ? <ErrorBanner message={error ?? localError ?? ''} /> : null}
+      {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Rapor bilgileri">
         <DateField label="Rapor tarihi" value={date} onChange={setDate} optional />
         <AppInput label="Firma adı" value={company} onChangeText={setCompany} />
@@ -127,7 +155,8 @@ export default function ExpertiseEditScreen() {
         <AppButton
           title="Mevcut eki aç"
           variant="secondary"
-          onPress={() => void openAttachment(existing.attachmentPath!)}
+          loading={opening}
+          onPress={() => void openExistingAttachment()}
         />
       ) : null}
       <AppButton title="Raporu kaydet" loading={loading || submitting} onPress={submit} />

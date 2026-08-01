@@ -4,6 +4,31 @@
 **Commit baseline:** `2c5cc0450b558ba94ff0c8e07422db5b4a309cdf`
 **Evidence mode:** Repository source inspection; yeni APK/runtime capture yok
 
+## TASK-007 uygulama deltası — 2026-08-01
+
+Bu bölüm TASK-006 tarihsel envanterini geçersiz kılmadan, TASK-007 kaynak değişiklikleriyle eklenen
+veya değişen durumları kaydeder. Route sayısı **26**, ana kullanıcı işlemi sayısı **35** olarak
+değişmemiştir.
+
+- `/` karar kapısına bootstrap bağlantı hatası için ayrı ekran, güvenli açıklama ve `Tekrar dene`
+  aksiyonu eklendi; belirsiz araç durumu artık araç oluşturma empty-state'i sayılmıyor.
+- Root layout bütün protected route'lar için session guard, foreground/background/cold-start
+  notification response işleme ve silinmiş/geçersiz reminder için Hatırlatıcılar fallback'i içeriyor.
+- `/auth/register` doğrulama başarı durumuna 30 saniyelik istemci cooldown'ı olan `E-postayı tekrar
+gönder` aksiyonu, loading/disabled ve güvenli Türkçe sonuç durumları eklendi.
+- Araç, kayıt, reminder, gövde, ekspertiz, not ve belge edit formlarına ortak kaydedilmemiş değişiklik
+  çıkış onayı eklendi. Header back, gesture ve Android back aynı navigation guard'dan geçer.
+- `/documents/edit` ve `/expertise/edit` ek açma işlemlerinde sonlanan loading, güvenli hata ve yeniden
+  deneme yolu eklendi.
+- Ortak button, seçim, section action, dashboard shortcut, history filter, note/entity/settings
+  pressable'larında role/label/state semantiği genişletildi; dekoratif ikonlar erişilebilirlik
+  ağacından çıkarıldı.
+- Onboarding, dashboard ve BodyDiagram içindeki TASK-006'da sayılan **17 runtime renk literal'ı**
+  semantic tokenlara taşındı. `app.json` içindeki dört doğrulanmış native config rengi değiştirilmedi.
+
+Kaynakta eklenen davranışlar cihaz sonucu değildir. Notification lifecycle, gerçek session revoke,
+TalkBack sırası, dirty-form gesture ve offline→retry hâlâ **MANUAL ANDROID CHECK REQUIRED**.
+
 ## Sayım yöntemi
 
 - **Route:** `src/app` altında `_layout.tsx` olmayan her `.tsx` dosyası.
@@ -76,8 +101,8 @@
 | Success alert       | Reset isteği, kayıtlar, belge/ekspertiz/not, account ve section delete sonrası        | Android üretici teması değişebilir                                                 |
 | Picker error alert  | `Dosya seçilemedi` + güvenli Türkçe message                                           | Seçim cancel alert üretmez; permission denied cihazda doğrulanmalı                 |
 | Empty state         | Ortak ikon, başlık, açıklama card'ı                                                   | Altı kaynak kullanımının iki temada render testi yok                               |
-| Loading             | Root/entity için `LoadingScreen`; mutation sırasında button spinner/disabled          | Spinner kontrastı için confirmed defect kaydedildi                                 |
-| Error               | `ErrorBanner`; yalnız dashboard instance'ı doğrudan `Tekrar dene` aksiyonu alır       | Session/offline global routing eksikleri ana audit'te                              |
+| Loading             | Root/entity için `LoadingScreen`; mutation sırasında button spinner/disabled          | Spinner semantic disabled text tokenına bağlandı; piksel sonucu manuel             |
+| Error               | `ErrorBanner`; dashboard/root/attachment yollarında güvenli retry veya tekrar deneme  | Ağ ve native viewer davranışı gerçek cihazda doğrulanmalı                          |
 | Missing entity      | Silinmiş/erişilemez entity için güvenli metin + fallback button                       | Vehicle/record/reminder/expertise/note/document edit ekranlarında mevcut           |
 
 ## Navigasyon ve link envanteri
@@ -89,8 +114,9 @@
 - Settings'teki beş hukuk row'u uygulama içi route açar.
 - KVKK başvuru içeriğindeki e-posta/URL, `LegalDocumentScreen` içinde düz `Text` olarak render edilir;
   tappable link değildir. **POSSIBLE RISK**.
-- Push notification payload'ında reminder route'u vardır; notification tap handler ile route'a
-  yönlendirme kaynakta bulunamadı. **POSSIBLE RISK** ve **MANUAL ANDROID CHECK REQUIRED**.
+- Push notification response listener'ı reminder notification ID'sini repository kaydıyla eşleştirir;
+  bulunan kaydı edit route'unda, bulunmayan/geçersiz payload'ı Hatırlatıcılar sekmesinde açar.
+  Foreground/background/cold-start sonucu **MANUAL ANDROID CHECK REQUIRED**.
 
 ## Kaynaktan doğrulanamayanlar
 
