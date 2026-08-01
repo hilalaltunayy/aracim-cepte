@@ -101,7 +101,9 @@ Uygulama ayrıntıları için [veri sınıflandırması](docs/security/data-clas
 [tehdit modeli](docs/security/privacy-threat-model.md),
 [Storage politikası](docs/security/storage-policy.md),
 [KVKK readiness](docs/security/kvkk-readiness.md) ve
-[ADR-001](docs/decisions/ADR-001-private-document-storage.md) kaynak kabul edilir.
+[ADR-001](docs/decisions/ADR-001-private-document-storage.md) kaynak kabul edilir. Kullanıcıya
+sunulan hukuk metinlerinin kanonik kaynakları ve üretim akışı için
+[hukuk içeriği dizinini](docs/legal/README.md) izleyin.
 
 ## Gizlilik kuralları
 

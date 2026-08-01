@@ -136,6 +136,27 @@ export default function RootLayout() {
             headerLeft: () => <BackButton fallback="/auth/login" />,
           }}
         />
+        <Stack.Screen
+          name="legal/retention-and-deletion"
+          options={{
+            ...detailOptions('Saklama ve Silme Politikası'),
+            headerLeft: () => <BackButton fallback="/(tabs)" />,
+          }}
+        />
+        <Stack.Screen
+          name="legal/account-and-data-deletion"
+          options={{
+            ...detailOptions('Hesap ve Veri Silme'),
+            headerLeft: () => <BackButton fallback="/(tabs)" />,
+          }}
+        />
+        <Stack.Screen
+          name="legal/kvkk-application"
+          options={{
+            ...detailOptions('KVKK Başvuru Bilgileri'),
+            headerLeft: () => <BackButton fallback="/(tabs)" />,
+          }}
+        />
         <Stack.Screen name="vehicle/edit" options={detailOptions('Araç bilgileri')} />
         <Stack.Screen name="record/edit" options={detailOptions('Kayıt ekle')} />
         <Stack.Screen name="reminder/edit" options={detailOptions('Hatırlatıcı')} />

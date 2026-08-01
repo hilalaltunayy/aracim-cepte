@@ -1,24 +1,21 @@
 import { StyleSheet, Text } from 'react-native';
 import { AppHeader, Card, Screen, StatusBadge } from '@/shared/components/ui';
 import { colors, spacing, typography } from '@/shared/theme';
-import { LegalSection, legalDraftStatus } from './legalContent';
+import type { LegalDocument } from './legalContent';
 
-export function LegalDocumentScreen({
-  title,
-  sections,
-}: {
-  title: string;
-  sections: LegalSection[];
-}) {
+export function LegalDocumentScreen({ document }: { document: LegalDocument }) {
   return (
     <Screen style={styles.screen}>
-      <AppHeader title={title} subtitle="Taslak metin — production hukuki metni değildir" />
-      <StatusBadge label={legalDraftStatus} tone="warning" />
-      {sections.map((section) => (
+      <AppHeader
+        title={document.title}
+        subtitle="Taslak metin — production hukuki metni değildir"
+      />
+      <StatusBadge label={document.status} tone="warning" />
+      {document.sections.map((section) => (
         <Card key={section.title} style={styles.section}>
           <Text style={styles.title}>{section.title}</Text>
-          {section.paragraphs.map((paragraph) => (
-            <Text key={paragraph} style={styles.body}>
+          {section.paragraphs.map((paragraph, paragraphIndex) => (
+            <Text key={`${section.title}-${paragraphIndex}`} style={styles.body}>
               {paragraph}
             </Text>
           ))}

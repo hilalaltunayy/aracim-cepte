@@ -188,6 +188,24 @@ export default function SettingsScreen() {
           subtitle="HUKUK İNCELEMESİ BEKLİYOR"
           onPress={() => router.push('/legal/privacy-policy' as Href)}
         />
+        <SettingsRow
+          icon="time-outline"
+          title="Saklama ve Silme Politikası"
+          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
+          onPress={() => router.push('/legal/retention-and-deletion' as Href)}
+        />
+        <SettingsRow
+          icon="trash-bin-outline"
+          title="Hesap ve Veri Silme"
+          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
+          onPress={() => router.push('/legal/account-and-data-deletion' as Href)}
+        />
+        <SettingsRow
+          icon="mail-outline"
+          title="KVKK Başvuru Bilgileri"
+          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
+          onPress={() => router.push('/legal/kvkk-application' as Href)}
+        />
       </Card>
       <Card style={styles.about}>
         <Text style={styles.aboutTitle}>Aracım Cepte</Text>

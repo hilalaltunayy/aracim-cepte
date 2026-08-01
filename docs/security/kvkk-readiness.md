@@ -12,8 +12,11 @@ incelemesi gerekir. Bu belgede "readiness" terimi kullanılır; nihai uygunluk i
 
 ## Uygulamadaki taslak metinler
 
-Repository'de [KVKK aydınlatma taslağı](../legal/draft-kvkk-notice.md),
-[gizlilik politikası taslağı](../legal/draft-privacy-policy.md) ve
+Repository'de tek kaynaktan yönetilen [hukuk içeriği dizini](../legal/README.md),
+[KVKK aydınlatma taslağı](../legal/kvkk-aydinlatma-metni.md),
+[gizlilik politikası taslağı](../legal/gizlilik-politikasi.md),
+[saklama ve silme politikası](../legal/saklama-ve-silme-politikasi.md),
+[başvuru/hesap silme metni](../legal/kvkk-basvuru-ve-hesap-silme.md) ve
 [ayrı açık rıza değerlendirme sınırları](../legal/explicit-consent-boundaries.md) bulunur. Uygulama içi
 metinler de açıkça **HUKUK İNCELEMESİ BEKLİYOR** olarak işaretlidir. Bunlar yayınlanmış/onaylı hukuki
 metin değildir; kayıt ekranındaki aydınlatma bağlantısı açık rıza beyanı veya zorunlu onay kutusu
