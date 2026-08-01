@@ -1,0 +1,497 @@
+{
+  "version": 1,
+  "anchorDate": "2026-07-15",
+  "expected": {
+    "currentMonthFuel": 4156,
+    "currentMonthMaintenance": 3250.75,
+    "currentMonthExpense": 645.25,
+    "currentMonthTotal": 8052,
+    "previousMonthTotal": 2500,
+    "previousMonthAbsoluteChange": 5552,
+    "previousMonthPercentageChange": 222.08,
+    "sixMonthTotals": [2000, 0, 6000, 2100.25, 2500, 8052],
+    "totalFuelLitres": 353.75,
+    "allTimeTotal": 27552.35,
+    "categoryPercentages": { "fuel": 55.92, "maintenance": 37.39, "expense": 6.69 },
+    "costPerKilometre": 3.15
+  },
+  "vehicles": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "brand": "Kia",
+      "model": "Sportage [QA]",
+      "year": 2018,
+      "plate": "34 QA 2018",
+      "current_km": 89200,
+      "fuel_type": "diesel",
+      "body_type": "suv_crossover",
+      "color": "İnci Beyaz"
+    },
+    {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "brand": "Toyota",
+      "model": "Corolla [QA İzolasyon]",
+      "year": 2020,
+      "plate": "06 QA 2020",
+      "current_km": 44100,
+      "fuel_type": "hybrid",
+      "body_type": "sedan_hatchback",
+      "color": "Gümüş"
+    }
+  ],
+  "records": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1700.1,
+      "record_date": "2025-11-15",
+      "kilometer": 80300,
+      "liters": 42.125,
+      "description": "QA başlangıç yakıtı"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "maintenance",
+      "category": "Periyodik bakım [QA]",
+      "amount": 2850.9,
+      "record_date": "2025-12-05",
+      "kilometer": 81500,
+      "liters": null,
+      "description": "QA periyodik bakım"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000003",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "expense",
+      "category": "Otopark [QA]",
+      "amount": 349.1,
+      "record_date": "2025-12-20",
+      "kilometer": null,
+      "liters": null,
+      "description": "QA kilometre içermeyen gider"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000004",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1900.45,
+      "record_date": "2026-01-10",
+      "kilometer": 82750,
+      "liters": 44.25,
+      "description": "QA yıl sınırı yakıtı"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000005",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "expense",
+      "category": "Otoyol [QA]",
+      "amount": 99.55,
+      "record_date": "2026-01-25",
+      "kilometer": null,
+      "liters": null,
+      "description": "QA ondalıklı gider"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000006",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1800.25,
+      "record_date": "2026-02-08",
+      "kilometer": 83900,
+      "liters": 43.75,
+      "description": "QA şubat yakıtı"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000007",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "expense",
+      "category": "Yıkama [QA]",
+      "amount": 199.75,
+      "record_date": "2026-02-27",
+      "kilometer": null,
+      "liters": null,
+      "description": "QA seyrek ay gideri"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000008",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "maintenance",
+      "category": "Fren bakımı [QA]",
+      "amount": 4200.5,
+      "record_date": "2026-04-05",
+      "kilometer": 85000,
+      "liters": null,
+      "description": "QA tekrarlanan bakım"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000009",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1799.5,
+      "record_date": "2026-04-22",
+      "kilometer": null,
+      "liters": 45.125,
+      "description": "QA kilometre içermeyen yakıt"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000010",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 2100.25,
+      "record_date": "2026-05-18",
+      "kilometer": 86150,
+      "liters": 46.5,
+      "description": "QA mayıs yakıtı"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000011",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1950.5,
+      "record_date": "2026-06-10",
+      "kilometer": 87200,
+      "liters": 44.0,
+      "description": "QA önceki ay yakıtı"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000012",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "expense",
+      "category": "Sigorta [QA]",
+      "amount": 549.5,
+      "record_date": "2026-06-25",
+      "kilometer": null,
+      "liters": null,
+      "description": "QA önceki ay gideri"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000013",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 2345.6,
+      "record_date": "2026-07-03",
+      "kilometer": 88400,
+      "liters": 48.375,
+      "description": "QA cari ay yakıt 1"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000014",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "fuel",
+      "category": "Yakıt alımı [QA]",
+      "amount": 1810.4,
+      "record_date": "2026-07-12",
+      "kilometer": 88850,
+      "liters": 39.625,
+      "description": "QA cari ay yakıt 2"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000015",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "maintenance",
+      "category": "Periyodik bakım [QA]",
+      "amount": 3250.75,
+      "record_date": "2026-07-18",
+      "kilometer": 89050,
+      "liters": null,
+      "description": "QA cari ay bakım"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000016",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "record_type": "expense",
+      "category": "Muayene [QA]",
+      "amount": 645.25,
+      "record_date": "2026-07-17",
+      "kilometer": null,
+      "liters": null,
+      "description": "QA cari ay diğer gider"
+    },
+    {
+      "id": "39999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "record_type": "expense",
+      "category": "İzolasyon gideri [QA]",
+      "amount": 999.99,
+      "record_date": "2026-07-10",
+      "kilometer": 44000,
+      "liters": null,
+      "description": "Yalnızca ikincil araç sorgusunda görünmelidir"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Gecikmiş muayene [QA]",
+      "reminder_type": "inspection",
+      "due_date": "2026-07-01",
+      "due_kilometer": null,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Bugün ödenecek MTV [QA]",
+      "reminder_type": "motor_vehicle_tax",
+      "due_date": "2026-07-15",
+      "due_kilometer": null,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000003",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "30 gün içinde sigorta [QA]",
+      "reminder_type": "traffic_insurance",
+      "due_date": "2026-08-01",
+      "due_kilometer": null,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000004",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Uzak gelecek planı [QA]",
+      "reminder_type": "custom",
+      "due_date": "2026-12-31",
+      "due_kilometer": null,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000005",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Kilometresi geçmiş bakım [QA]",
+      "reminder_type": "periodic_maintenance",
+      "due_date": null,
+      "due_kilometer": 89000,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000006",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "1000 km içinde lastik [QA]",
+      "reminder_type": "tire_change",
+      "due_date": null,
+      "due_kilometer": 90000,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000007",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Planlı kilometre bakımı [QA]",
+      "reminder_type": "periodic_maintenance",
+      "due_date": null,
+      "due_kilometer": 93000,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000008",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Tarih ve kilometre birlikte [QA]",
+      "reminder_type": "custom",
+      "due_date": "2026-08-20",
+      "due_kilometer": 89500,
+      "completed": false,
+      "completed_at": null
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000009",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Tamamlanmış plan [QA]",
+      "reminder_type": "custom",
+      "due_date": "2026-06-01",
+      "due_kilometer": 85000,
+      "completed": true,
+      "completed_at": "2026-06-01T09:00:00.000Z"
+    },
+    {
+      "id": "49999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "title": "İzolasyon hatırlatıcısı [QA]",
+      "reminder_type": "custom",
+      "due_date": "2026-09-01",
+      "due_kilometer": null,
+      "completed": false,
+      "completed_at": null
+    }
+  ],
+  "bodyConditions": [
+    {
+      "id": "50000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "hood",
+      "condition": "original",
+      "note": "Fabrika çıkışı [QA]"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "roof",
+      "condition": "painted",
+      "note": "Tavan boyalı [QA]"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000003",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "left_front_door",
+      "condition": "locally_painted",
+      "note": "Lokal boya [QA]"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000004",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "right_front_fender",
+      "condition": "replaced",
+      "note": "Parça değişmiş [QA]"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000005",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "rear_bumper",
+      "condition": "damaged",
+      "note": "Park hasarı [QA]"
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000006",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "schema_type": "suv_crossover",
+      "part_key": "tailgate",
+      "condition": "unknown",
+      "note": null
+    },
+    {
+      "id": "59999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "schema_type": "sedan_hatchback",
+      "part_key": "hood",
+      "condition": "original",
+      "note": "İzolasyon parçası [QA]"
+    }
+  ],
+  "expertiseReports": [
+    {
+      "id": "60000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "report_date": "2025-11-01",
+      "company_name": "Güven Ekspertiz [QA]",
+      "overall_note": "Başlangıç raporu [QA]",
+      "report_number": "QA-EXP-001",
+      "attachment_path": null
+    },
+    {
+      "id": "60000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "report_date": "2026-06-20",
+      "company_name": "Bağımsız Kontrol [QA]",
+      "overall_note": "Güncel kontrol raporu [QA]",
+      "report_number": "QA-EXP-002",
+      "attachment_path": null
+    },
+    {
+      "id": "69999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "report_date": "2026-01-01",
+      "company_name": "İzolasyon Ekspertiz [QA]",
+      "overall_note": "İkinci araca özel",
+      "report_number": "QA-ISO",
+      "attachment_path": null
+    }
+  ],
+  "notes": [
+    {
+      "id": "70000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Kış lastikleri [QA]",
+      "content": "Depoda 3. rafta saklanıyor. [QA]"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "title": "Servis tercihi [QA]",
+      "content": "Periyodik bakım için randevu notu. [QA]"
+    },
+    {
+      "id": "79999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "title": "İzolasyon notu [QA]",
+      "content": "Yalnızca ikincil araçta görünmelidir."
+    }
+  ],
+  "documents": [
+    {
+      "id": "80000000-0000-4000-8000-000000000001",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "document_type": "registration",
+      "title": "Ruhsat [QA Geçerli]",
+      "document_number": "QA-RUH-001",
+      "issue_date": "2025-07-15",
+      "expiry_date": "2027-07-15",
+      "note": "Geçerli belge senaryosu",
+      "attachment_path": null
+    },
+    {
+      "id": "80000000-0000-4000-8000-000000000002",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "document_type": "traffic_insurance",
+      "title": "Trafik sigortası [QA Yaklaşıyor]",
+      "document_number": "QA-SIG-002",
+      "issue_date": "2025-08-01",
+      "expiry_date": "2026-08-01",
+      "note": "30 gün içinde bitecek",
+      "attachment_path": null
+    },
+    {
+      "id": "80000000-0000-4000-8000-000000000003",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "document_type": "inspection",
+      "title": "Muayene [QA Süresi Dolmuş]",
+      "document_number": "QA-MUA-003",
+      "issue_date": "2024-06-30",
+      "expiry_date": "2026-06-30",
+      "note": "Süresi dolmuş belge",
+      "attachment_path": null
+    },
+    {
+      "id": "80000000-0000-4000-8000-000000000004",
+      "vehicle_id": "11111111-1111-4111-8111-111111111111",
+      "document_type": "custom",
+      "title": "Kullanım kılavuzu [QA Süresiz]",
+      "document_number": null,
+      "issue_date": null,
+      "expiry_date": null,
+      "note": "Bitiş tarihi olmayan belge",
+      "attachment_path": null
+    },
+    {
+      "id": "89999999-9999-4999-8999-999999999999",
+      "vehicle_id": "22222222-2222-4222-8222-222222222222",
+      "document_type": "custom",
+      "title": "İzolasyon belgesi [QA]",
+      "document_number": null,
+      "issue_date": null,
+      "expiry_date": null,
+      "note": "Yalnızca ikinci araç",
+      "attachment_path": null
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+-- Intentionally empty. Production-like sample vehicle data is not seeded because every row
+-- must belong to a real Supabase Auth user.

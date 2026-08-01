@@ -5,6 +5,11 @@ node_modules/
 
 # Expo
 .expo/
+.expo-start*.log
+.expo-web-*.log
+.qa-export/
+coverage/
+.expo-go-qr.png
 dist/
 web-build/
 expo-env.d.ts
@@ -13,10 +18,14 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.apk
+*.aab
+*.apks
 
 # Metro
 .metro-health-check*
@@ -31,12 +40,31 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env.*
+!.env.example
+
+# local credentials and service configuration
+credentials.json
+*service-account*.json
+google-services.json
+GoogleService-Info.plist
 
 # typescript
 *.tsbuildinfo
 
 example
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
+supabase/.cache/
+supabase/.local/
+
+# private QA evidence and screenshots
+qa/screenshots/
+qa/evidence/
+docs/prompt-2-audit/*.jpg
 
 # generated native folders
 /ios

@@ -1,56 +1,130 @@
-# Welcome to your Expo app 👋
+# Aracım Cepte
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aracım Cepte; Türkiye’deki araç sahiplerinin yakıt, bakım, diğer masraf, hatırlatıcı,
+gövde durumu, ekspertiz, not ve belgelerini tek araç odaklı bir arayüzde yönetmesini sağlayan
+Expo tabanlı mobil MVP’dir. Veri modeli ve repository katmanı birden fazla aracı destekleyecek
+şekilde tasarlanmıştır.
 
-## Get started
+## Teknoloji
 
-1. Install dependencies
+- Expo SDK 57, React Native 0.86, React 19 ve strict TypeScript
+- Expo Router
+- Supabase Auth, Postgres, RLS ve özel Storage bucket
+- Zustand ve AsyncStorage
+- React Native StyleSheet, SVG ve Linear Gradient
+- Expo Notifications, Image Picker ve Document Picker
+- Vitest ve Expo ESLint
 
-   ```bash
-   npm install
-   ```
+## Ön koşullar
 
-2. Start the app
+- Node.js 20 veya üzeri (bu proje Node.js 24 ile doğrulandı)
+- npm
+- Fiziksel önizleme için güncel Expo Go
+- Yerel Supabase için çalışan Docker Desktop
+- Uzak kullanım için bir Supabase projesi
 
-   ```bash
-   npx expo start
-   ```
+## Kurulum
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```powershell
+npm install
+Copy-Item .env.example .env
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+`.env` içinde yalnızca mobil istemcide kullanılabilen proje değerlerini girin:
 
-### Other setup steps
+```dotenv
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_LEGACY_ANON_KEY
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+`service_role`, secret key veya veritabanı parolasını mobil uygulamaya eklemeyin.
 
-## Learn more
+## Supabase kurulumu
 
-To learn more about developing your project with Expo, look at the following resources:
+Yerel geliştirme:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```powershell
+npx supabase start
+npx supabase db reset
+npx supabase gen types typescript --local > src/data/supabase/database.types.ts
+```
 
-## Join the community
+Uzak proje:
 
-Join our community of developers creating universal apps.
+```powershell
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Tarayıcı girişi tamamlandıktan sonra `.env` değerlerini Dashboard’daki **Connect** ekranından
+alın. Mobil uygulamada yayınlanabilir key veya eski anon key kullanılabilir; secret/service-role
+key kullanılamaz.
+
+## Geliştirme komutları
+
+```powershell
+npm run start:clear
+npm run android
+npm run web
+npm run typecheck
+npm run lint
+npm test
+npx expo-doctor
+```
+
+## Expo Go önizleme
+
+1. Bilgisayar ve telefonun aynı Wi-Fi ağında olduğundan emin olun.
+2. Proje kökünde `npm run start:clear` çalıştırın.
+3. Android telefona Expo Go kurun ve terminalde görünen QR kodu Expo Go ile tarayın.
+4. LAN erişimi engellenirse `npx expo start --tunnel` kullanın.
+
+Yerel bildirimler Expo Go’da çalışır. Uzaktan push bildirimi bu MVP’nin kapsamında değildir.
+
+## Web önizleme
+
+```powershell
+npm run web
+```
+
+Web önizleme hızlı görsel kontrol içindir. Sistem bildirimleri, dosya açma davranışları,
+fotoğraf izinleri ve yerel cihaz entegrasyonları tarayıcıya göre farklılık gösterebilir; son
+inceleme fiziksel Android cihazda yapılmalıdır.
+
+## Prompt 3 QA ve release kontrolleri
+
+```powershell
+npm run test:coverage
+npm run qa:remote:probe
+npx supabase db query --linked --file supabase/tests/rls_negative.sql
+npx expo export --platform web --output-dir .qa-export/web --clear
+npx expo export --platform android --output-dir .qa-export/android --clear
+```
+
+Deterministik fixture ve authenticated remote CRUD komutları için
+[QA seed belgesi](docs/qa-seed.md), parola dönüş URL’leri için
+[Supabase Auth redirect belgesi](docs/supabase-auth-redirects.md), sayısal kurallar için
+[hesaplama spesifikasyonu](docs/calculation-specification.md), manuel test için
+[kabul listesi](docs/manual-acceptance-test.md) ve kalan riskler için
+[release-readiness raporu](docs/release-readiness.md) kullanılmalıdır.
+
+## Mimari özeti
+
+Rota dosyaları `src/app` altında yalnızca ekran kompozisyonu yapar. Domain modelleri
+`src/domain`, Supabase ve mapper’lar `src/data`, özellik mantığı `src/features`, ortak UI ve saf
+hesaplamalar `src/shared`, oturum dışı istemci durumu `src/store` altındadır. Ayrıntılar için
+[mimari belgesi](docs/architecture.md) ve [veritabanı belgesi](docs/database.md) dosyalarına bakın.
+
+## Sorun giderme
+
+- “Supabase bağlantısı henüz yapılandırılmadı”: `.env` dosyasını oluşturup Expo sunucusunu
+  yeniden başlatın.
+- Docker pipe/motor hatası: Docker Desktop’ı açın ve `docker version` komutunda Server sürümü
+  görünene kadar bekleyin.
+- Ağ hatası: telefon ve bilgisayarı aynı ağa alın veya Expo tunnel kullanın.
+- Bildirim reddedildi: cihazın uygulama ayarlarından izni açın.
+- Metro önbelleği: `npm run start:clear`.
+
+Android paket adı ve iOS bundle identifier `com.hilalaltunay.aracimcepte` olarak ayarlandı.
+Mağaza kaydından önce bu kimliğin küresel benzersizliği doğrulanmalıdır.

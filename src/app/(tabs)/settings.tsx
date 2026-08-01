@@ -1,0 +1,240 @@
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { Ionicons } from '@expo/vector-icons';
+import { AppHeader, Card, Screen, SectionHeader, confirmAction } from '@/shared/components/ui';
+import { useAuthStore } from '@/store/authStore';
+import { useDataStore } from '@/store/dataStore';
+import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+
+function SettingsRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  danger,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle?: string;
+  onPress?: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? title : undefined}
+      style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]}
+      onPress={onPress}
+      disabled={!onPress}
+    >
+      <View style={[styles.icon, danger && styles.dangerIcon]}>
+        <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={[styles.rowTitle, danger && styles.dangerText]}>{title}</Text>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={colors.muted} /> : null}
+    </Pressable>
+  );
+}
+
+export default function SettingsScreen() {
+  const { session, signOut, deleteAccount, busy, error: authError } = useAuthStore();
+  const { vehicles, activeVehicleId, clearSection, deleteVehicle, clear } = useDataStore();
+  const vehicle = vehicles.find((item) => item.id === activeVehicleId);
+  const [permission, setPermission] = useState('unknown');
+  const updatePermission = async () =>
+    setPermission((await Notifications.getPermissionsAsync()).status);
+  useEffect(() => {
+    Notifications.getPermissionsAsync().then((result) => setPermission(result.status));
+  }, []);
+  const logout = async () => {
+    await signOut();
+    clear();
+    router.replace('/auth/login');
+  };
+  const requestNotifications = async () => {
+    await Notifications.requestPermissionsAsync();
+    await updatePermission();
+  };
+  const removeAccount = () =>
+    confirmAction(
+      'Hesabı kalıcı olarak sil',
+      'Hesabınız, araç verileriniz ve belge dosyalarınız kalıcı olarak silinecek. Bu işlem geri alınamaz.',
+      async () => {
+        if (await deleteAccount()) {
+          clear();
+          Alert.alert('Hesap silindi', 'Hesabınız ve kullanıcı verileriniz silindi.');
+          router.replace('/auth/login');
+        }
+      },
+    );
+  const clearData = (section: 'records' | 'reminders' | 'body' | 'documents', title: string) =>
+    confirmAction(title, 'Bu işlem geri alınamaz.', async () => {
+      if (await clearSection(section)) Alert.alert('Tamamlandı', 'Seçilen veriler silindi.');
+    });
+  return (
+    <Screen>
+      <AppHeader title="Ayarlar" subtitle="Hesap, bildirimler ve veriler" />
+      <SectionHeader title="Hesap" />
+      <Card style={styles.card}>
+        <SettingsRow
+          icon="mail-outline"
+          title="E-posta"
+          subtitle={session?.user.email ?? 'E-posta bilgisi yok'}
+        />
+        <SettingsRow
+          icon="key-outline"
+          title="Şifre yenile"
+          subtitle="E-posta ile güvenli yenileme bağlantısı"
+          onPress={() => router.push('/auth/forgot-password')}
+        />
+        <SettingsRow icon="log-out-outline" title="Çıkış yap" onPress={() => void logout()} />
+        <SettingsRow
+          icon="trash-outline"
+          title={busy ? 'Hesap siliniyor…' : 'Hesabı ve verilerimi sil'}
+          subtitle={authError ?? 'Belgeler dahil tüm kullanıcı verileri kalıcı olarak kaldırılır'}
+          danger
+          onPress={busy ? undefined : removeAccount}
+        />
+      </Card>
+      <SectionHeader title="Araç" />
+      <Card style={styles.card}>
+        <SettingsRow
+          icon="car-outline"
+          title={vehicle ? `${vehicle.brand} ${vehicle.model}` : 'Araç yok'}
+          subtitle={vehicle?.plate ?? 'Plaka eklenmedi'}
+          onPress={
+            vehicle
+              ? () => router.push({ pathname: '/vehicle/edit', params: { id: vehicle.id } })
+              : undefined
+          }
+        />
+      </Card>
+      <SectionHeader title="Bildirimler" />
+      <Card style={styles.card}>
+        <SettingsRow
+          icon="notifications-outline"
+          title="Bildirim izni"
+          subtitle={
+            permission === 'granted'
+              ? 'İzin verildi'
+              : permission === 'denied'
+                ? 'İzin reddedildi; cihaz ayarlarından değiştirilebilir'
+                : 'Henüz sorulmadı'
+          }
+          onPress={permission === 'undetermined' ? () => void requestNotifications() : undefined}
+        />
+      </Card>
+      <SectionHeader title="Veri yönetimi" />
+      <Card style={styles.card}>
+        <SettingsRow
+          icon="receipt-outline"
+          title="Tüm araç kayıtlarını sil"
+          danger
+          onPress={() => clearData('records', 'Tüm kayıtları sil')}
+        />
+        <SettingsRow
+          icon="notifications-off-outline"
+          title="Tüm hatırlatıcıları sil"
+          danger
+          onPress={() => clearData('reminders', 'Tüm hatırlatıcıları sil')}
+        />
+        <SettingsRow
+          icon="scan-outline"
+          title="Gövde durumu verilerini sil"
+          danger
+          onPress={() => clearData('body', 'Gövde durumu verilerini sil')}
+        />
+        <SettingsRow
+          icon="documents-outline"
+          title="Tüm belge kayıtlarını sil"
+          danger
+          onPress={() => clearData('documents', 'Tüm belgeleri sil')}
+        />
+        {vehicle ? (
+          <SettingsRow
+            icon="trash-outline"
+            title="Tüm araç verisini sil"
+            subtitle="Araç ve ilişkili bütün kayıtlar"
+            danger
+            onPress={() =>
+              confirmAction(
+                'Tüm araç verisini sil',
+                'Araç, kayıtlar, planlar, notlar ve belgeler kalıcı olarak silinecek.',
+                async () => {
+                  if (await deleteVehicle(vehicle.id)) router.replace('/');
+                },
+              )
+            }
+          />
+        ) : null}
+      </Card>
+      <SectionHeader title="Hakkında" />
+      <Card style={styles.card}>
+        <SettingsRow
+          icon="document-text-outline"
+          title="KVKK Aydınlatma Metni"
+          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
+          onPress={() => router.push('/legal/kvkk-notice' as Href)}
+        />
+        <SettingsRow
+          icon="shield-checkmark-outline"
+          title="Gizlilik Politikası"
+          subtitle="HUKUK İNCELEMESİ BEKLİYOR"
+          onPress={() => router.push('/legal/privacy-policy' as Href)}
+        />
+      </Card>
+      <Card style={styles.about}>
+        <Text style={styles.aboutTitle}>Aracım Cepte</Text>
+        <Text style={styles.aboutText}>Sürüm {Constants.expoConfig?.version ?? '1.0.0'}</Text>
+        <Text style={styles.aboutText}>
+          Araç giderlerini, bakımları ve önemli tarihleri tek yerde düzenleyen kişisel araç
+          asistanı.
+        </Text>
+        <Text style={styles.aboutText}>
+          Hesap ve araç verileri Supabase üzerinde kullanıcıya özel RLS kurallarıyla korunur. Ekler
+          özel depoda tutulur ve yalnızca kısa süreli imzalı bağlantılarla açılır.
+        </Text>
+      </Card>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { padding: 0, overflow: 'hidden' },
+  row: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  rowPressed: { backgroundColor: colors.surfaceMuted },
+  icon: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.md,
+    backgroundColor: colors.paleAqua,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerIcon: { backgroundColor: '#FDECEC' },
+  rowContent: { flex: 1, gap: 3 },
+  rowTitle: {
+    color: colors.navy,
+    ...typography.bodyMedium,
+    fontFamily: fontFamilies.semibold,
+  },
+  rowSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  dangerText: { color: colors.danger },
+  about: { gap: spacing.sm },
+  aboutTitle: { color: colors.navy, ...typography.sectionTitle },
+  aboutText: { color: colors.muted, lineHeight: 20 },
+});
