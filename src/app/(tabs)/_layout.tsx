@@ -1,6 +1,8 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamilies, radii, shadows } from '@/shared/theme';
+import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 
 const icons = {
   index: ['home-outline', 'home'],
@@ -11,6 +13,9 @@ const icons = {
 } as const;
 
 export default function TabLayout() {
+  const { bottom } = useSafeAreaInsets();
+  const layout = getBottomTabLayout(bottom);
+
   return (
     <Tabs
       screenOptions={({ route }) => ({
@@ -20,14 +25,14 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: 'absolute',
+          bottom: layout.bottomOffset,
           marginHorizontal: 12,
-          marginBottom: 10,
-          height: 68,
+          height: layout.height,
           borderRadius: radii.lg,
           borderTopWidth: 0,
           backgroundColor: colors.white,
           paddingTop: 7,
-          paddingBottom: 7,
+          paddingBottom: layout.paddingBottom,
           ...shadows.floating,
         },
         tabBarItemStyle: { borderRadius: radii.md },

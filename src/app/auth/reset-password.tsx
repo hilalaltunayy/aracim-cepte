@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { Ionicons } from '@expo/vector-icons';
 import {
   AppButton,
-  AppInput,
   ErrorBanner,
   FormSection,
   LoadingScreen,
+  PasswordInput,
   Screen,
 } from '@/shared/components/ui';
 import { getIncomingRecoveryUrl } from '@/features/auth/recoveryRedirect';
@@ -24,8 +23,6 @@ export default function ResetPasswordScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const [confirmationVisible, setConfirmationVisible] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { establishRecovery, updateRecoveredPassword, busy, error, clearError } = useAuthStore();
   const validationError = validateNewPassword(password, confirmation);
@@ -102,38 +99,22 @@ export default function ResetPasswordScreen() {
       </View>
       {error ? <ErrorBanner message={error} /> : null}
       <FormSection title="Yeni şifre">
-        <View>
-          <AppInput
-            label="Yeni şifre"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!passwordVisible}
-            autoComplete="new-password"
-            maxLength={72}
-            style={styles.passwordInput}
-            error={submitted && validationError?.includes('en az') ? validationError : null}
-          />
-          <VisibilityButton
-            visible={passwordVisible}
-            onPress={() => setPasswordVisible((value) => !value)}
-          />
-        </View>
-        <View>
-          <AppInput
-            label="Yeni şifre tekrar"
-            value={confirmation}
-            onChangeText={setConfirmation}
-            secureTextEntry={!confirmationVisible}
-            autoComplete="new-password"
-            maxLength={72}
-            style={styles.passwordInput}
-            error={submitted && validationError?.includes('eşleşmiyor') ? validationError : null}
-          />
-          <VisibilityButton
-            visible={confirmationVisible}
-            onPress={() => setConfirmationVisible((value) => !value)}
-          />
-        </View>
+        <PasswordInput
+          label="Yeni şifre"
+          value={password}
+          onChangeText={setPassword}
+          autoComplete="new-password"
+          maxLength={72}
+          error={submitted && validationError?.includes('en az') ? validationError : null}
+        />
+        <PasswordInput
+          label="Yeni şifre tekrar"
+          value={confirmation}
+          onChangeText={setConfirmation}
+          autoComplete="new-password"
+          maxLength={72}
+          error={submitted && validationError?.includes('eşleşmiyor') ? validationError : null}
+        />
         <AppButton
           title="Şifreyi güncelle"
           loading={busy}
@@ -145,26 +126,9 @@ export default function ResetPasswordScreen() {
   );
 }
 
-function VisibilityButton({ visible, onPress }: { visible: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={visible ? 'Şifreyi gizle' : 'Şifreyi göster'}
-      hitSlop={8}
-      style={({ pressed }) => [styles.eye, pressed && styles.pressed]}
-      onPress={onPress}
-    >
-      <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.muted} />
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { gap: spacing.xl },
   intro: { gap: spacing.sm },
   title: { color: colors.navy, ...typography.sectionTitle },
   body: { color: colors.muted, ...typography.body },
-  passwordInput: { paddingRight: 52 },
-  eye: { position: 'absolute', right: 16, bottom: 16 },
-  pressed: { opacity: 0.65 },
 });

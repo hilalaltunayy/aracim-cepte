@@ -8,6 +8,7 @@ import { AppHeader, Card, Screen, SectionHeader, confirmAction } from '@/shared/
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import { DEVELOPER_INFO } from '@/features/settings/about';
 
 function SettingsRow({
   icon,
@@ -205,6 +206,11 @@ export default function SettingsScreen() {
           title="KVKK Başvuru Bilgileri"
           subtitle="HUKUK İNCELEMESİ BEKLİYOR"
           onPress={() => router.push('/legal/kvkk-application' as Href)}
+        />
+        <SettingsRow
+          icon="code-slash-outline"
+          title={DEVELOPER_INFO.title}
+          subtitle={DEVELOPER_INFO.name}
         />
       </Card>
       <Card style={styles.about}>

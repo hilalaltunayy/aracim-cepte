@@ -146,7 +146,7 @@ export default function RecordEditScreen() {
           />
         ) : null}
         <AppInput
-          label={`Kilometre${type === 'expense' ? ' (isteğe bağlı)' : ''}`}
+          label="Kilometre"
           value={km}
           onChangeText={setKm}
           keyboardType="number-pad"
@@ -155,12 +155,7 @@ export default function RecordEditScreen() {
           }
         />
         <DateField label="Tarih" value={date} onChange={(value) => value && setDate(value)} />
-        <AppInput
-          label="Açıklama (isteğe bağlı)"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-        />
+        <AppInput label="Açıklama" value={description} onChangeText={setDescription} multiline />
       </FormSection>
       <AppButton title="Kaydet" loading={loading} onPress={submit} />
       {existing ? <AppButton title="Kaydı sil" variant="danger" onPress={remove} /> : null}

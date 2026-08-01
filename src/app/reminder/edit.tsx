@@ -96,9 +96,9 @@ export default function ReminderEditScreen() {
           onChangeText={setTitle}
           error={submitted && !title.trim() ? 'Başlık gereklidir.' : null}
         />
-        <DateField label="Tarih (isteğe bağlı)" value={date} onChange={setDate} optional />
+        <DateField label="Tarih" value={date} onChange={setDate} optional />
         <AppInput
-          label="Kilometre (isteğe bağlı)"
+          label="Kilometre"
           value={km}
           onChangeText={setKm}
           keyboardType="number-pad"

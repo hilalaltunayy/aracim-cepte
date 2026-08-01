@@ -93,14 +93,14 @@ export default function VehicleEditScreen() {
           error={submitted && !model.trim() ? 'Model gereklidir.' : null}
         />
         <AppInput
-          label="Model yılı (isteğe bağlı)"
+          label="Model yılı"
           value={year}
           onChangeText={setYear}
           keyboardType="number-pad"
           error={submitted && !validYear ? 'Geçerli bir model yılı girin.' : null}
         />
         <AppInput
-          label="Plaka (isteğe bağlı)"
+          label="Plaka"
           value={plate}
           onChangeText={(value) => setPlate(value.toLocaleUpperCase('tr-TR'))}
           autoCapitalize="characters"
@@ -138,12 +138,7 @@ export default function VehicleEditScreen() {
             label: bodyTypeLabels[value],
           }))}
         />
-        <AppInput
-          label="Araç rengi (isteğe bağlı)"
-          value={color}
-          onChangeText={setColor}
-          autoCapitalize="words"
-        />
+        <AppInput label="Araç rengi" value={color} onChangeText={setColor} autoCapitalize="words" />
       </FormSection>
       <AppButton
         title={existing ? 'Değişiklikleri kaydet' : 'Aracımı kaydet'}

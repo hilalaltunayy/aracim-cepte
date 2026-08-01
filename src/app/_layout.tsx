@@ -12,7 +12,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { colors, fontFamilies } from '@/shared/theme';
+import { colors, fontFamilies, typography } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 
@@ -94,7 +94,7 @@ export default function RootLayout() {
           headerShadowVisible: false,
           headerTintColor: colors.navy,
           headerTitleAlign: 'center',
-          headerTitleStyle: { fontFamily: fontFamilies.semibold, fontSize: 17 },
+          headerTitleStyle: { ...typography.cardTitle },
           contentStyle: { backgroundColor: colors.background },
         }}
       >

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { BodyCondition, BodyPartCondition, BodyType } from '@/domain/entities';
 import { bodySchemas } from './schemas';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import { colors, radii, spacing, typography } from '@/shared/theme';
 
 export const conditionColors: Record<BodyCondition, string> = {
   original: '#72B99C',
@@ -123,18 +123,16 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: colors.primary,
-    fontFamily: fontFamilies.semibold,
-    fontSize: 10,
-    letterSpacing: 1.1,
+    ...typography.eyebrow,
   },
-  canvasTitle: { color: colors.navy, ...typography.cardTitle, marginTop: spacing.xs },
+  canvasTitle: { color: colors.navy, ...typography.sectionTitle, marginTop: spacing.xxs },
   tapHint: {
     borderRadius: radii.pill,
     backgroundColor: colors.paleAqua,
     paddingHorizontal: spacing.md,
     paddingVertical: 7,
   },
-  tapHintText: { color: colors.primaryDark, ...typography.caption },
+  tapHintText: { color: colors.primaryDark, ...typography.status },
   diagram: {
     width: '100%',
     height: 430,

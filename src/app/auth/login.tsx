@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AppButton, AppInput, ErrorBanner, FormSection, Screen } from '@/shared/components/ui';
+import {
+  AppButton,
+  AppInput,
+  ErrorBanner,
+  FormSection,
+  PasswordInput,
+  Screen,
+} from '@/shared/components/ui';
 import { colors, fontFamilies, shadows, spacing, typography } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
 import { isValidEmail } from '@/shared/utils/validation';
+import { getLoginPrefillEmail } from '@/features/auth/registrationFlow';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const [email, setEmail] = useState(() => getLoginPrefillEmail(params.email));
   const [password, setPassword] = useState('');
-  const [visible, setVisible] = useState(false);
   const { signIn, busy, error } = useAuthStore();
   const submit = async () => {
     if (!isValidEmail(email) || password.length < 6) return;
@@ -43,30 +51,13 @@ export default function LoginScreen() {
             keyboardType="email-address"
             placeholder="ornek@eposta.com"
           />
-          <View>
-            <AppInput
-              label="Şifre"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!visible}
-              autoComplete="current-password"
-              placeholder="En az 6 karakter"
-              style={styles.passwordInput}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={visible ? 'Şifreyi gizle' : 'Şifreyi göster'}
-              hitSlop={8}
-              style={({ pressed }) => [styles.eye, pressed && styles.pressed]}
-              onPress={() => setVisible((value) => !value)}
-            >
-              <Ionicons
-                name={visible ? 'eye-off-outline' : 'eye-outline'}
-                size={21}
-                color={colors.muted}
-              />
-            </Pressable>
-          </View>
+          <PasswordInput
+            label="Şifre"
+            value={password}
+            onChangeText={setPassword}
+            autoComplete="current-password"
+            placeholder="En az 6 karakter"
+          />
           <Pressable
             style={({ pressed }) => [styles.forgot, pressed && styles.pressed]}
             onPress={() => router.push('/auth/forgot-password')}
@@ -106,8 +97,6 @@ const styles = StyleSheet.create({
   title: { color: colors.navy, ...typography.screenTitle },
   subtitle: { color: colors.muted, ...typography.body },
   form: { gap: spacing.lg },
-  passwordInput: { paddingRight: 52 },
-  eye: { position: 'absolute', right: 16, bottom: 16 },
   forgot: { alignSelf: 'flex-end' },
   pressed: { opacity: 0.65 },
   link: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 14 },

@@ -1,26 +1,57 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
-import { AppButton, AppInput, ErrorBanner, FormSection, Screen } from '@/shared/components/ui';
+import {
+  AppButton,
+  AppInput,
+  ErrorBanner,
+  FormSection,
+  PasswordInput,
+  Screen,
+} from '@/shared/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
 import { colors, spacing, typography } from '@/shared/theme';
 import { isValidEmail } from '@/shared/utils/validation';
+import {
+  REGISTRATION_LEGAL_LINKS,
+  REGISTRATION_LEGAL_NOTICE,
+  REGISTRATION_SUCCESS,
+  createLoginPrefillHref,
+  normalizeRegistrationEmail,
+} from '@/features/auth/registrationFlow';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const { signUp, busy, error } = useAuthStore();
   const valid = isValidEmail(email) && password.length >= 8 && password === confirmation;
   const submit = async () => {
     if (!valid) return;
     if (await signUp(email, password, name)) {
-      Alert.alert('Hesabınız oluşturuldu', 'Artık araç bilgilerinizi ekleyebilirsiniz.');
-      router.replace('/');
+      setPassword('');
+      setConfirmation('');
+      setRegisteredEmail(normalizeRegistrationEmail(email));
     }
   };
+
+  if (registeredEmail) {
+    return (
+      <Screen style={styles.successScreen}>
+        <FormSection title={REGISTRATION_SUCCESS.title}>
+          <Text style={styles.successMessage}>{REGISTRATION_SUCCESS.message}</Text>
+          <AppButton
+            title={REGISTRATION_SUCCESS.action}
+            onPress={() => router.replace(createLoginPrefillHref(registeredEmail))}
+          />
+        </FormSection>
+      </Screen>
+    );
+  }
+
   return (
     <Screen style={styles.screen}>
       <View style={styles.intro}>
@@ -31,7 +62,7 @@ export default function RegisterScreen() {
       </View>
       {error ? <ErrorBanner message={error} /> : null}
       <FormSection>
-        <AppInput label="Adınız (isteğe bağlı)" value={name} onChangeText={setName} />
+        <AppInput label="Adınız" value={name} onChangeText={setName} />
         <AppInput
           label="E-posta"
           value={email}
@@ -40,45 +71,38 @@ export default function RegisterScreen() {
           autoComplete="email"
           keyboardType="email-address"
         />
-        <AppInput
+        <PasswordInput
           label="Şifre"
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
           autoComplete="new-password"
           error={
             password.length > 0 && password.length < 8 ? 'Şifre en az 8 karakter olmalı.' : null
           }
         />
-        <AppInput
+        <PasswordInput
           label="Şifre tekrar"
           value={confirmation}
           onChangeText={setConfirmation}
-          secureTextEntry
           autoComplete="new-password"
           error={
             confirmation.length > 0 && confirmation !== password ? 'Şifreler eşleşmiyor.' : null
           }
         />
         <View style={styles.legalNotice}>
-          <Text style={styles.legalCaption}>
-            Aşağıdaki metinler bilgilendirme amaçlı taslaktır ve genel bir açık rıza kutusu
-            değildir.
-          </Text>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel="KVKK Aydınlatma Metni’ni aç"
-            onPress={() => router.push('/legal/kvkk-notice' as Href)}
-          >
-            <Text style={styles.legalLink}>KVKK Aydınlatma Metni’ni okudum</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel="Gizlilik Politikası’nı aç"
-            onPress={() => router.push('/legal/privacy-policy' as Href)}
-          >
-            <Text style={styles.legalLink}>Gizlilik Politikası</Text>
-          </Pressable>
+          <Text style={styles.legalCaption}>{REGISTRATION_LEGAL_NOTICE}</Text>
+          <View style={styles.legalLinks}>
+            {REGISTRATION_LEGAL_LINKS.map((link) => (
+              <Pressable
+                key={link.href}
+                accessibilityRole="link"
+                accessibilityLabel={link.accessibilityLabel}
+                onPress={() => router.push(link.href as Href)}
+              >
+                <Text style={styles.legalLink}>{link.title}</Text>
+              </Pressable>
+            ))}
+          </View>
           <Text style={styles.legalStatus}>HUKUK İNCELEMESİ BEKLİYOR</Text>
         </View>
         <AppButton
@@ -94,6 +118,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   screen: { gap: spacing.xl },
+  successScreen: { justifyContent: 'center', gap: spacing.xl },
   intro: { gap: spacing.sm },
   title: { color: colors.navy, ...typography.sectionTitle },
   subtitle: { color: colors.muted, ...typography.body },
@@ -106,6 +131,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+  legalLinks: { gap: spacing.sm },
   legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
   legalStatus: { color: colors.warning, fontSize: 11, fontWeight: '700' },
+  successMessage: { color: colors.muted, ...typography.body },
 });

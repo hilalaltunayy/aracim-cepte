@@ -14,7 +14,7 @@ import { bodyConditionLabels } from '@/shared/constants/labels';
 import { bodySchemas } from '@/features/bodyCondition/schemas';
 import { BodyDiagram, conditionColors } from '@/features/bodyCondition/BodyDiagram';
 import { useDataStore } from '@/store/dataStore';
-import { colors, fontFamilies, radii, spacing, typography } from '@/shared/theme';
+import { colors, radii, spacing, typography } from '@/shared/theme';
 
 export default function BodyConditionScreen() {
   const { vehicles, activeVehicleId, bodyConditions, saveBodyCondition, loading, error } =
@@ -72,12 +72,7 @@ export default function BodyConditionScreen() {
             label: bodyConditionLabels[value],
           }))}
         />
-        <AppInput
-          label="Not (isteğe bağlı)"
-          value={note}
-          onChangeText={setNoteOverride}
-          multiline
-        />
+        <AppInput label="Not" value={note} onChangeText={setNoteOverride} multiline />
         <AppButton
           title="Parça durumunu kaydet"
           loading={loading}
@@ -154,6 +149,6 @@ const styles = StyleSheet.create({
   },
   summaryName: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   summaryDot: { width: 8, height: 8, borderRadius: radii.pill },
-  summaryPart: { color: colors.navy, fontFamily: fontFamilies.medium, fontSize: 13 },
-  summaryStatus: { color: colors.muted, ...typography.caption },
+  summaryPart: { color: colors.navy, ...typography.bodyMedium },
+  summaryStatus: { color: colors.muted, ...typography.status },
 });

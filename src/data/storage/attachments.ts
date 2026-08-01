@@ -8,6 +8,7 @@ import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENT_BYTES,
   getAttachmentErrorMessage,
+  getAttachmentPickerErrorMessage,
   normalizeAttachmentMime,
 } from './attachmentRules';
 
@@ -15,6 +16,7 @@ export interface PickedAttachment {
   uri: string;
   name: string;
   mimeType: string;
+  source: 'image' | 'document';
 }
 
 export async function pickImage(): Promise<PickedAttachment | null> {
@@ -28,12 +30,22 @@ export async function pickImage(): Promise<PickedAttachment | null> {
   const asset = result.assets[0];
   const mimeType = normalizeAttachmentMime(asset.mimeType ?? 'image/jpeg');
   if (!mimeType || mimeType === 'application/pdf') {
-    throw new AppError(getAttachmentErrorMessage('ATTACHMENT_TYPE_NOT_ALLOWED'));
+    throw new AppError(
+      getAttachmentPickerErrorMessage('image', 'ATTACHMENT_TYPE_NOT_ALLOWED'),
+      'ATTACHMENT_TYPE_NOT_ALLOWED',
+    );
+  }
+  if (asset.fileSize && asset.fileSize > MAX_ATTACHMENT_BYTES) {
+    throw new AppError(
+      getAttachmentPickerErrorMessage('image', 'ATTACHMENT_FILE_TOO_LARGE'),
+      'ATTACHMENT_FILE_TOO_LARGE',
+    );
   }
   return {
     uri: asset.uri,
     name: asset.fileName ?? `fotograf-${Date.now()}.jpg`,
     mimeType,
+    source: 'image',
   };
 }
 
@@ -45,14 +57,23 @@ export async function pickDocument(): Promise<PickedAttachment | null> {
   if (result.canceled) return null;
   const asset = result.assets[0];
   const mimeType = normalizeAttachmentMime(asset.mimeType);
-  if (!mimeType) throw new AppError(getAttachmentErrorMessage('ATTACHMENT_TYPE_NOT_ALLOWED'));
+  if (!mimeType) {
+    throw new AppError(
+      getAttachmentPickerErrorMessage('document', 'ATTACHMENT_TYPE_NOT_ALLOWED'),
+      'ATTACHMENT_TYPE_NOT_ALLOWED',
+    );
+  }
   if (asset.size && asset.size > MAX_ATTACHMENT_BYTES) {
-    throw new AppError(getAttachmentErrorMessage('ATTACHMENT_FILE_TOO_LARGE'));
+    throw new AppError(
+      getAttachmentPickerErrorMessage('document', 'ATTACHMENT_FILE_TOO_LARGE'),
+      'ATTACHMENT_FILE_TOO_LARGE',
+    );
   }
   return {
     uri: asset.uri,
     name: asset.name,
     mimeType,
+    source: 'document',
   };
 }
 
@@ -84,7 +105,10 @@ export async function uploadAttachment(
   );
   if (error) {
     const code = await getFunctionErrorCode(error);
-    throw new AppError(getAttachmentErrorMessage(code), code ?? 'ATTACHMENT_UPLOAD_FAILED');
+    throw new AppError(
+      getAttachmentPickerErrorMessage(attachment.source, code),
+      code ?? 'ATTACHMENT_UPLOAD_FAILED',
+    );
   }
   if (!upload?.path) {
     throw new AppError(getAttachmentErrorMessage('ATTACHMENT_UPLOAD_FAILED'));

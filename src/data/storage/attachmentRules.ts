@@ -6,6 +6,7 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
 ] as const;
 
 export type AllowedAttachmentMime = (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number];
+export type AttachmentPickerSource = 'image' | 'document';
 
 export function normalizeAttachmentMime(
   value: string | null | undefined,
@@ -27,11 +28,11 @@ export function getAttachmentErrorMessage(code: string | null): string {
       return 'Dosya boyutu güvenli biçimde doğrulanamadı. Lütfen dosyayı yeniden seçin.';
     case 'ATTACHMENT_TYPE_NOT_ALLOWED':
     case 'ATTACHMENT_CONTENT_MISMATCH':
-      return 'Yalnızca PDF, JPG/JPEG ve PNG dosyaları yüklenebilir.';
+      return 'Yalnızca PDF, JPG, JPEG ve PNG dosyalarını yükleyebilirsiniz.';
     case 'ATTACHMENT_COUNT_QUOTA_EXCEEDED':
-      return 'En fazla 10 belge saklayabilirsiniz.';
+      return 'Ücretsiz planda en fazla 10 belge yükleyebilirsiniz.';
     case 'ATTACHMENT_BYTES_QUOTA_EXCEEDED':
-      return 'Toplam belge kotanız 25 MB ile sınırlıdır.';
+      return 'Ücretsiz belge alanınız 25 MB ile sınırlıdır.';
     case 'ATTACHMENT_VEHICLE_FORBIDDEN':
       return 'Bu araç için dosya yükleme yetkiniz yok.';
     case 'AUTH_REQUIRED':
@@ -39,4 +40,16 @@ export function getAttachmentErrorMessage(code: string | null): string {
     default:
       return 'Dosya yüklenemedi. Lütfen tekrar deneyin.';
   }
+}
+
+export function getAttachmentPickerErrorMessage(
+  source: AttachmentPickerSource,
+  code: string | null,
+): string {
+  if (code === 'ATTACHMENT_TYPE_NOT_ALLOWED' || code === 'ATTACHMENT_CONTENT_MISMATCH') {
+    return source === 'image'
+      ? 'Yalnızca JPG, JPEG ve PNG biçimindeki fotoğrafları yükleyebilirsiniz.'
+      : 'Yalnızca PDF, JPG, JPEG ve PNG dosyalarını yükleyebilirsiniz.';
+  }
+  return getAttachmentErrorMessage(code);
 }

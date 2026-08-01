@@ -27,7 +27,7 @@ export function AttachmentField({
   };
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Ek dosya (isteğe bağlı)</Text>
+      <Text style={styles.label}>Ek dosya</Text>
       {fileName ? (
         <Card style={styles.file}>
           <Ionicons name="document-attach-outline" size={24} color={colors.primary} />

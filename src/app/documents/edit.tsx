@@ -120,7 +120,7 @@ export default function DocumentEditScreen() {
           onChangeText={setTitle}
           error={submitted && !title.trim() ? 'Başlık gereklidir.' : null}
         />
-        <AppInput label="Belge numarası (isteğe bağlı)" value={number} onChangeText={setNumber} />
+        <AppInput label="Belge numarası" value={number} onChangeText={setNumber} />
       </FormSection>
       <FormSection
         title="Geçerlilik ve ek"
@@ -131,7 +131,7 @@ export default function DocumentEditScreen() {
         {submitted && !datesValid ? (
           <ErrorBanner message="Bitiş tarihi düzenlenme tarihinden önce olamaz." />
         ) : null}
-        <AppInput label="Not (isteğe bağlı)" value={note} onChangeText={setNote} multiline />
+        <AppInput label="Not" value={note} onChangeText={setNote} multiline />
         <AttachmentField
           picked={picked}
           existingPath={attachmentPath}

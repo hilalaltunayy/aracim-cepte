@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,9 +19,12 @@ import {
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamilies, radii, shadows, spacing, typography } from '@/shared/theme';
+import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
+import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 import { formatDate, parseDateOnly, todayDateOnly, toDateOnly } from '@/shared/utils/format';
+import { withoutOptionalSuffix } from '@/shared/utils/formLabels';
 
 export function Screen({
   children,
@@ -32,17 +36,32 @@ export function Screen({
   style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
 }>) {
+  const { bottom } = useSafeAreaInsets();
+  const { screenContentPaddingBottom } = getBottomTabLayout(bottom);
   const body = scroll ? (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[styles.screenContent, style]}
+      contentContainerStyle={[
+        styles.screenContent,
+        { paddingBottom: screenContentPaddingBottom },
+        style,
+      ]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.screenContent, styles.flex, style]}>{children}</View>
+    <View
+      style={[
+        styles.screenContent,
+        styles.flex,
+        { paddingBottom: screenContentPaddingBottom },
+        style,
+      ]}
+    >
+      {children}
+    </View>
   );
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor }]} edges={['top', 'left', 'right']}>
@@ -190,13 +209,14 @@ export function AppInput({
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
   const [focused, setFocused] = useState(false);
+  const visibleLabel = withoutOptionalSuffix(label);
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>{visibleLabel}</Text>
       <TextInput
         placeholderTextColor={colors.muted}
         {...props}
-        accessibilityLabel={props.accessibilityLabel ?? label}
+        accessibilityLabel={props.accessibilityLabel ?? visibleLabel}
         onFocus={(event) => {
           setFocused(true);
           props.onFocus?.(event);
@@ -219,6 +239,56 @@ export function AppInput({
   );
 }
 
+export function PasswordInput({
+  label,
+  error,
+  style,
+  onBlur,
+  ...props
+}: TextInputProps & { label: string; error?: string | null }) {
+  const [visible, setVisible] = useState(false);
+  const hide = () => setVisible(isPasswordVisibleAfter('cancel'));
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') setVisible(isPasswordVisibleAfter('background'));
+    });
+    return () => subscription.remove();
+  }, []);
+
+  return (
+    <View style={styles.passwordField}>
+      <AppInput
+        {...props}
+        label={label}
+        error={error}
+        style={[styles.passwordInput, style]}
+        secureTextEntry={!visible}
+        onBlur={(event) => {
+          setVisible(isPasswordVisibleAfter('blur'));
+          onBlur?.(event);
+        }}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Şifreyi görmek için basılı tutun"
+        accessibilityHint="Şifre yalnız basılı tuttuğunuz sürece görünür"
+        hitSlop={8}
+        onPressIn={() => setVisible(isPasswordVisibleAfter('press-in'))}
+        onPressOut={() => setVisible(isPasswordVisibleAfter('press-out'))}
+        onResponderTerminate={hide}
+        style={({ pressed }) => [styles.passwordEye, pressed && styles.pressed]}
+      >
+        <Ionicons
+          name={visible ? 'eye-off-outline' : 'eye-outline'}
+          size={21}
+          color={colors.muted}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
 export interface SelectOption<T extends string> {
   value: T;
   label: string;
@@ -236,13 +306,14 @@ export function SelectField<T extends string>({
   onChange: (value: T) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const visibleLabel = withoutOptionalSuffix(label);
   const selected = options.find((option) => option.value === value);
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>{visibleLabel}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${selected?.label ?? 'Seçin'}`}
+        accessibilityLabel={`${visibleLabel}: ${selected?.label ?? 'Seçin'}`}
         style={({ pressed }) => [styles.select, pressed && styles.selectPressed]}
         onPress={() => setOpen(true)}
       >
@@ -252,7 +323,7 @@ export function SelectField<T extends string>({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{label}</Text>
+            <Text style={styles.modalTitle}>{visibleLabel}</Text>
             <ScrollView style={styles.optionList}>
               {options.map((option) => (
                 <Pressable
@@ -289,6 +360,7 @@ export function DateField({
   optional?: boolean;
 }) {
   const [show, setShow] = useState(false);
+  const visibleLabel = withoutOptionalSuffix(label);
   const selected = value ? parseDateOnly(value) : null;
   const handleChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS === 'android') setShow(false);
@@ -299,14 +371,14 @@ export function DateField({
   if (Platform.OS === 'web') {
     return (
       <View style={styles.field}>
-        <Text style={styles.fieldLabel}>{label}</Text>
+        <Text style={styles.fieldLabel}>{visibleLabel}</Text>
         <View style={styles.dateRow}>
           <View style={[styles.webDateField, styles.flex]}>
             <Ionicons name="calendar-outline" size={20} color={colors.primary} />
             {createElement('input', {
               type: 'date',
               value: value ?? '',
-              'aria-label': label,
+              'aria-label': visibleLabel,
               onInput: (event: { target: { value: string } }) =>
                 onChange(event.target.value || null),
               onChange: (event: { target: { value: string } }) =>
@@ -317,7 +389,7 @@ export function DateField({
           {optional && value ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${label} alanını temizle`}
+              accessibilityLabel={`${visibleLabel} alanını temizle`}
               style={({ pressed }) => [styles.clearButton, pressed && styles.selectPressed]}
               onPress={() => onChange(null)}
             >
@@ -334,11 +406,11 @@ export function DateField({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldLabel}>{visibleLabel}</Text>
       <View style={styles.dateRow}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${label}: ${value ? formatDate(value) : 'Tarih seçin'}`}
+          accessibilityLabel={`${visibleLabel}: ${value ? formatDate(value) : 'Tarih seçin'}`}
           style={({ pressed }) => [styles.select, styles.flex, pressed && styles.selectPressed]}
           onPress={() => setShow(true)}
         >
@@ -348,7 +420,7 @@ export function DateField({
         {optional && value ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${label} alanını temizle`}
+            accessibilityLabel={`${visibleLabel} alanını temizle`}
             style={({ pressed }) => [styles.clearButton, pressed && styles.selectPressed]}
             onPress={() => onChange(null)}
           >
@@ -516,7 +588,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: spacing.lg,
-    paddingBottom: 120,
     gap: 20,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -571,6 +642,9 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 110, paddingTop: spacing.md, textAlignVertical: 'top' },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, ...typography.caption },
+  passwordField: { position: 'relative' },
+  passwordInput: { paddingRight: 52 },
+  passwordEye: { position: 'absolute', right: 16, top: 40 },
   select: {
     minHeight: 54,
     borderWidth: 1,
@@ -683,5 +757,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  badgeText: { ...typography.caption, fontFamily: fontFamilies.semibold },
+  badgeText: { ...typography.status },
 });

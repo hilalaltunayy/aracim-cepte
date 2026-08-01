@@ -109,7 +109,7 @@ export default function ExpertiseEditScreen() {
     <Screen style={styles.form}>
       {error || localError ? <ErrorBanner message={error ?? localError ?? ''} /> : null}
       <FormSection title="Rapor bilgileri">
-        <DateField label="Rapor tarihi (isteğe bağlı)" value={date} onChange={setDate} optional />
+        <DateField label="Rapor tarihi" value={date} onChange={setDate} optional />
         <AppInput label="Firma adı" value={company} onChangeText={setCompany} />
         <AppInput label="Rapor numarası" value={number} onChangeText={setNumber} />
         <AppInput label="Genel not" value={note} onChangeText={setNote} multiline />

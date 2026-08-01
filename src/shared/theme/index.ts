@@ -42,21 +42,22 @@ export const fontFamilies = {
 
 export const typography = {
   screenTitle: {
-    fontFamily: fontFamilies.bold,
-    fontSize: 30,
-    lineHeight: 37,
-    letterSpacing: -0.65,
+    fontFamily: fontFamilies.semibold,
+    fontSize: 31,
+    lineHeight: 39,
+    letterSpacing: -0.45,
   },
   sectionTitle: {
-    fontFamily: fontFamilies.bold,
-    fontSize: 21,
-    lineHeight: 27,
-    letterSpacing: -0.3,
+    fontFamily: fontFamilies.semibold,
+    fontSize: 22,
+    lineHeight: 29,
+    letterSpacing: -0.18,
   },
   cardTitle: {
     fontFamily: fontFamilies.semibold,
     fontSize: 17,
     lineHeight: 23,
+    letterSpacing: -0.08,
   },
   body: {
     fontFamily: fontFamilies.regular,
@@ -82,6 +83,18 @@ export const typography = {
     fontFamily: fontFamilies.semibold,
     fontSize: 15,
     lineHeight: 20,
+  },
+  eyebrow: {
+    fontFamily: fontFamilies.semibold,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 0.75,
+  },
+  status: {
+    fontFamily: fontFamilies.semibold,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.05,
   },
 } as const;
 

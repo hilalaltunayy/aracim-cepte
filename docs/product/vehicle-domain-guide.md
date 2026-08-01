@@ -186,3 +186,11 @@ finansal bilgi veya üçüncü kişi verisi varsa yüksek olan seviye uygulanır
 - Expiry olmayan belgeler "süresiz" değil "bitiş tarihi uygulanamaz" olarak modellenmelidir.
 - Hatırlatıcı, belgenin hukuki geçerliliğini doğruladığı izlenimini vermemelidir.
 - Üçüncü kişilere ait alanlar görüntüleme, dışa aktarma, log ve AI aktarımında ek minimizasyon ister.
+
+## Gelecek gövde tipi template notu
+
+V1'de aynı desteklenen SVG/body template'ini kullanan **SUV / Crossover** tek seçenek olarak kalır.
+Sedan, Hatchback, Station wagon, Coupe, Convertible, SUV/Crossover, Pickup, Van/Minivan ve Light
+commercial ayrımı ancak her tip için ayrı, doğrulanmış ve erişilebilir template bulunduğunda ayrı bir
+ürün ve mimari göreviyle değerlendirilebilir. Bu liste mevcut kullanıcı özelliği veya universal araç
+silüeti desteği taahhüdü değildir; V1'de yeni silüet veya 3D model uygulanmaz.
