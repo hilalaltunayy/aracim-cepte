@@ -43,6 +43,7 @@ interface DataState {
   bootstrapError: string | null;
   loading: boolean;
   error: string | null;
+  lastReminderNotice: string | null;
   setOnboardingSeen: () => void;
   setActiveVehicle: (id: string) => Promise<void>;
   bootstrap: () => Promise<void>;
@@ -53,7 +54,7 @@ interface DataState {
     options?: { allowMileageDecrease?: boolean },
   ) => Promise<boolean>;
   deleteVehicle: (id: string) => Promise<boolean>;
-  saveRecord: (draft: RecordDraft, id?: string) => Promise<boolean>;
+  saveRecord: (draft: RecordDraft, id?: string, requestId?: string) => Promise<boolean>;
   deleteRecord: (id: string) => Promise<boolean>;
   saveReminder: (draft: ReminderDraft, id?: string) => Promise<boolean>;
   toggleReminder: (reminder: Reminder) => Promise<boolean>;
@@ -126,6 +127,7 @@ export const useDataStore = create<DataState>()(
         bootstrapError: null,
         loading: false,
         error: null,
+        lastReminderNotice: null,
 
         setOnboardingSeen: () => set({ onboardingSeen: true }),
 
@@ -190,7 +192,7 @@ export const useDataStore = create<DataState>()(
             set({ activeVehicleId: null, ...emptyVehicleData });
           }),
 
-        saveRecord: (draft, id) => {
+        saveRecord: (draft, id, requestId) => {
           const vehicle = activeVehicle();
           const existing = id ? get().records.find((record) => record.id === id) : null;
           if (
@@ -203,7 +205,7 @@ export const useDataStore = create<DataState>()(
           return mutate(async () => {
             const vehicleId = get().activeVehicleId;
             if (!vehicleId) throw new Error('Aktif araç yok.');
-            await appRepository.saveRecord(vehicleId, draft, id);
+            await appRepository.saveRecord(vehicleId, draft, id, requestId);
           });
         },
 
@@ -213,7 +215,16 @@ export const useDataStore = create<DataState>()(
           mutate(async () => {
             const vehicleId = get().activeVehicleId;
             if (!vehicleId) throw new Error('Aktif araç yok.');
-            await appRepository.saveReminder(vehicleId, draft, id);
+            const saved = await appRepository.saveReminder(vehicleId, draft, id);
+            const notificationFailed =
+              Boolean(saved.dueDate) &&
+              saved.notificationStatus !== 'scheduled' &&
+              saved.notificationStatus !== 'not_required';
+            set({
+              lastReminderNotice: notificationFailed
+                ? 'Hatırlatıcı kaydedildi ancak cihaz bildirimi kurulamadı. Hatırlatıcılar ekranında yeniden denenecek.'
+                : null,
+            });
           }),
 
         toggleReminder: (reminder) =>
@@ -270,6 +281,7 @@ export const useDataStore = create<DataState>()(
             activeVehicleId: null,
             bootstrapped: false,
             bootstrapError: null,
+            lastReminderNotice: null,
             ...emptyVehicleData,
           }),
         clearError: () => set({ error: null }),

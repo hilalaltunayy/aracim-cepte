@@ -23,10 +23,12 @@ import {
 import { AppError } from '@/shared/utils/errors';
 import {
   cancelReminderNotification,
-  scheduleReminderNotification,
+  cancelUnknownReminderNotifications,
+  reconcileReminderNotification,
 } from '@/features/reminders/notifications';
 import { isValidPartKey } from '@/features/bodyCondition/schemas';
-import { nextVehicleMileage } from '@/shared/utils/repositoryRules';
+import { createRequestId } from '@/shared/utils/requestId';
+import { reconcileAttachments } from '@/data/storage/attachments';
 
 async function ownerId(): Promise<string> {
   const { data, error } = await getSupabaseClient().auth.getUser();
@@ -74,31 +76,21 @@ export class SupabaseAppRepository implements AppRepository {
 
   async deleteVehicle(id: string) {
     const client = getSupabaseClient();
-    const [documents, expertise, reminders] = await Promise.all([
-      client.from('vehicle_documents').select('attachment_path').eq('vehicle_id', id),
-      client.from('expertise_reports').select('attachment_path').eq('vehicle_id', id),
-      client.from('reminders').select('notification_id').eq('vehicle_id', id),
-    ]);
-    const lookupError = documents.error ?? expertise.error ?? reminders.error;
-    if (lookupError) throw lookupError;
-    const attachmentPaths = [...(documents.data ?? []), ...(expertise.data ?? [])]
-      .map((item) => item.attachment_path)
-      .filter((path): path is string => Boolean(path));
-    if (attachmentPaths.length) {
-      const { error: storageError } = await client.storage
-        .from('vehicle-attachments')
-        .remove(attachmentPaths);
-      if (storageError) throw storageError;
-    }
+    const reminders = await client.from('reminders').select('notification_id').eq('vehicle_id', id);
+    if (reminders.error) throw reminders.error;
+    const { error } = await client.rpc('delete_vehicle_consistent', { p_vehicle_id: id });
+    if (error) throw error;
     await Promise.all(
       (reminders.data ?? []).map((item) => cancelReminderNotification(item.notification_id)),
     );
-    const { error } = await client.from('vehicles').delete().eq('id', id);
-    if (error) throw error;
+    void reconcileAttachments().catch(() => undefined);
   }
 
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
     const client = getSupabaseClient();
+    const metadataRepair = await client.rpc('reconcile_my_attachment_metadata');
+    if (metadataRepair.error) throw metadataRepair.error;
+    void reconcileAttachments().catch(() => undefined);
     const [records, reminders, body, expertise, notes, documents] = await Promise.all([
       client
         .from('vehicle_records')
@@ -127,9 +119,38 @@ export class SupabaseAppRepository implements AppRepository {
       notes.error ??
       documents.error;
     if (error) throw error;
+    const mappedReminders = (reminders.data ?? []).map(mapReminder);
+    const reconciledReminders = await Promise.all(
+      mappedReminders.map(async (reminder) => {
+        const sync = await reconcileReminderNotification(reminder, { requestPermission: false });
+        if (
+          sync.status === reminder.notificationStatus &&
+          sync.notificationId === reminder.notificationId &&
+          sync.errorCode === reminder.notificationErrorCode
+        ) {
+          return reminder;
+        }
+        const updated = await client
+          .from('reminders')
+          .update({
+            notification_id: sync.notificationId,
+            notification_status: sync.status,
+            notification_last_attempt_at: new Date().toISOString(),
+            notification_error_code: sync.errorCode,
+          })
+          .eq('id', reminder.id)
+          .select('*')
+          .maybeSingle();
+        return updated.data ? mapReminder(updated.data) : reminder;
+      }),
+    );
+    const allReminderIds = await client.from('reminders').select('id');
+    if (!allReminderIds.error) {
+      await cancelUnknownReminderNotifications(new Set((allReminderIds.data ?? []).map((item) => item.id)));
+    }
     return {
       records: (records.data ?? []).map(mapRecord),
-      reminders: (reminders.data ?? []).map(mapReminder),
+      reminders: reconciledReminders,
       bodyConditions: (body.data ?? []).map(mapBodyCondition),
       expertiseReports: (expertise.data ?? []).map(mapExpertise),
       notes: (notes.data ?? []).map(mapNote),
@@ -137,44 +158,22 @@ export class SupabaseAppRepository implements AppRepository {
     };
   }
 
-  async saveRecord(vehicleId: string, draft: RecordDraft, id?: string) {
-    const userId = await ownerId();
-    const payload = {
-      vehicle_id: vehicleId,
-      owner_id: userId,
-      record_type: draft.recordType,
-      category: draft.category.trim(),
-      amount: draft.amount,
-      record_date: draft.recordDate,
-      kilometer: draft.kilometer,
-      liters: draft.recordType === 'fuel' ? draft.liters : null,
-      description: draft.description?.trim() || null,
-    };
+  async saveRecord(vehicleId: string, draft: RecordDraft, id?: string, requestId?: string) {
     const client = getSupabaseClient();
-    const query = id
-      ? client.from('vehicle_records').update(payload).eq('id', id)
-      : client.from('vehicle_records').insert(payload);
-    const { data, error } = await query.select('*').single();
+    const { data, error } = await client.rpc('save_vehicle_record_atomic', {
+      p_request_id: requestId ?? createRequestId(),
+      p_vehicle_id: vehicleId,
+      p_record_id: id ?? null,
+      p_record_type: draft.recordType,
+      p_category: draft.category.trim(),
+      p_amount: draft.amount,
+      p_record_date: draft.recordDate,
+      p_kilometer: draft.kilometer,
+      p_liters: draft.recordType === 'fuel' ? draft.liters : null,
+      p_description: draft.description?.trim() || null,
+    });
     if (error) throw error;
-    const saved = mapRecord(required(data, 'Kayıt kaydedilemedi.'));
-    if (saved.kilometer !== null) {
-      const { data: vehicle } = await client
-        .from('vehicles')
-        .select('current_km')
-        .eq('id', vehicleId)
-        .single();
-      const nextMileage = vehicle
-        ? nextVehicleMileage(vehicle.current_km, saved.kilometer)
-        : saved.kilometer;
-      if (vehicle && nextMileage > vehicle.current_km) {
-        const { error: mileageError } = await client
-          .from('vehicles')
-          .update({ current_km: nextMileage })
-          .eq('id', vehicleId);
-        if (mileageError) throw mileageError;
-      }
-    }
-    return saved;
+    return mapRecord(required(data, 'Kayıt kaydedilemedi.'));
   }
 
   async deleteRecord(id: string) {
@@ -189,9 +188,7 @@ export class SupabaseAppRepository implements AppRepository {
       const result = await client.from('reminders').select('*').eq('id', id).single();
       if (result.error) throw result.error;
       previous = mapReminder(required(result.data, 'Hatırlatıcı bulunamadı.'));
-      await cancelReminderNotification(previous.notificationId);
     }
-    const notificationId = await scheduleReminderNotification(draft.title, draft.dueDate);
     const payload = {
       vehicle_id: vehicleId,
       owner_id: await ownerId(),
@@ -199,7 +196,10 @@ export class SupabaseAppRepository implements AppRepository {
       reminder_type: draft.reminderType,
       due_date: draft.dueDate,
       due_kilometer: draft.dueKilometer,
-      notification_id: notificationId,
+      notification_id: null,
+      notification_status: draft.dueDate ? ('pending' as const) : ('not_required' as const),
+      notification_last_attempt_at: null,
+      notification_error_code: null,
       completed: previous?.completed ?? false,
       completed_at: previous?.completedAt ?? null,
     };
@@ -207,38 +207,83 @@ export class SupabaseAppRepository implements AppRepository {
       ? client.from('reminders').update(payload).eq('id', id)
       : client.from('reminders').insert(payload);
     const { data, error } = await query.select('*').single();
-    if (error) {
-      await cancelReminderNotification(notificationId);
-      throw error;
+    if (error) throw error;
+    const saved = mapReminder(required(data, 'Hatırlatıcı kaydedilemedi.'));
+    const sync = await reconcileReminderNotification(saved, {
+      requestPermission: true,
+      forceReschedule: true,
+      staleIds: previous?.notificationId ? [previous.notificationId] : [],
+    });
+    const synced = await client
+      .from('reminders')
+      .update({
+        notification_id: sync.notificationId,
+        notification_status: sync.status,
+        notification_last_attempt_at: new Date().toISOString(),
+        notification_error_code: sync.errorCode,
+      })
+      .eq('id', saved.id)
+      .select('*')
+      .maybeSingle();
+    if (synced.error) {
+      await cancelReminderNotification(sync.notificationId);
+      return {
+        ...saved,
+        notificationStatus: 'failed' as const,
+        notificationErrorCode: 'NOTIFICATION_STATE_FAILED',
+      };
     }
-    return mapReminder(required(data, 'Hatırlatıcı kaydedilemedi.'));
+    return mapReminder(required(synced.data, 'Hatırlatıcı kaydedilemedi.'));
   }
 
   async setReminderCompleted(reminder: Reminder, completed: boolean) {
-    if (completed) await cancelReminderNotification(reminder.notificationId);
-    const notificationId = completed
-      ? null
-      : await scheduleReminderNotification(reminder.title, reminder.dueDate);
     const { data, error } = await getSupabaseClient()
       .from('reminders')
       .update({
         completed,
         completed_at: completed ? new Date().toISOString() : null,
-        notification_id: notificationId,
+        notification_id: null,
+        notification_status: completed || !reminder.dueDate ? 'not_required' : 'pending',
+        notification_last_attempt_at: null,
+        notification_error_code: null,
       })
       .eq('id', reminder.id)
       .select('*')
       .single();
     if (error) throw error;
-    return mapReminder(required(data, 'Hatırlatıcı güncellenemedi.'));
+    const saved = mapReminder(required(data, 'Hatırlatıcı güncellenemedi.'));
+    const sync = await reconcileReminderNotification(saved, {
+      requestPermission: false,
+      forceReschedule: true,
+      staleIds: reminder.notificationId ? [reminder.notificationId] : [],
+    });
+    const synced = await getSupabaseClient()
+      .from('reminders')
+      .update({
+        notification_id: sync.notificationId,
+        notification_status: sync.status,
+        notification_last_attempt_at: new Date().toISOString(),
+        notification_error_code: sync.errorCode,
+      })
+      .eq('id', saved.id)
+      .select('*')
+      .maybeSingle();
+    if (synced.error) await cancelReminderNotification(sync.notificationId);
+    return synced.data
+      ? mapReminder(synced.data)
+      : {
+          ...saved,
+          notificationStatus: 'failed' as const,
+          notificationErrorCode: 'NOTIFICATION_STATE_FAILED',
+        };
   }
 
   async deleteReminder(id: string) {
     const client = getSupabaseClient();
     const result = await client.from('reminders').select('notification_id').eq('id', id).single();
-    if (result.data) await cancelReminderNotification(result.data.notification_id);
     const { error } = await client.from('reminders').delete().eq('id', id);
     if (error) throw error;
+    if (result.data) await cancelReminderNotification(result.data.notification_id);
   }
 
   async saveBodyCondition(
@@ -269,39 +314,25 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveExpertise(vehicleId: string, draft: ExpertiseDraft, id?: string) {
-    const payload = {
-      vehicle_id: vehicleId,
-      owner_id: await ownerId(),
-      report_date: draft.reportDate,
-      company_name: draft.companyName?.trim() || null,
-      overall_note: draft.overallNote?.trim() || null,
-      report_number: draft.reportNumber?.trim() || null,
-      attachment_path: draft.attachmentPath,
-    };
-    const query = id
-      ? getSupabaseClient().from('expertise_reports').update(payload).eq('id', id)
-      : getSupabaseClient().from('expertise_reports').insert(payload);
-    const { data, error } = await query.select('*').single();
+    const { data, error } = await getSupabaseClient().rpc('save_expertise_report_consistent', {
+      p_id: id ?? null,
+      p_vehicle_id: vehicleId,
+      p_report_date: draft.reportDate,
+      p_company_name: draft.companyName?.trim() || null,
+      p_overall_note: draft.overallNote?.trim() || null,
+      p_report_number: draft.reportNumber?.trim() || null,
+      p_attachment_path: draft.attachmentPath,
+    });
     if (error) throw error;
     return mapExpertise(required(data, 'Ekspertiz raporu kaydedilemedi.'));
   }
 
   async deleteExpertise(id: string) {
-    const client = getSupabaseClient();
-    const { data, error: lookupError } = await client
-      .from('expertise_reports')
-      .select('attachment_path')
-      .eq('id', id)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-    if (data?.attachment_path) {
-      const { error: storageError } = await client.storage
-        .from('vehicle-attachments')
-        .remove([data.attachment_path]);
-      if (storageError) throw storageError;
-    }
-    const { error } = await client.from('expertise_reports').delete().eq('id', id);
+    const { error } = await getSupabaseClient().rpc('delete_expertise_report_consistent', {
+      p_id: id,
+    });
     if (error) throw error;
+    void reconcileAttachments().catch(() => undefined);
   }
 
   async saveNote(vehicleId: string, draft: NoteDraft, id?: string) {
@@ -325,41 +356,27 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveDocument(vehicleId: string, draft: DocumentDraft, id?: string) {
-    const payload = {
-      vehicle_id: vehicleId,
-      owner_id: await ownerId(),
-      document_type: draft.documentType,
-      title: draft.title.trim(),
-      document_number: draft.documentNumber?.trim() || null,
-      issue_date: draft.issueDate,
-      expiry_date: draft.expiryDate,
-      note: draft.note?.trim() || null,
-      attachment_path: draft.attachmentPath,
-    };
-    const query = id
-      ? getSupabaseClient().from('vehicle_documents').update(payload).eq('id', id)
-      : getSupabaseClient().from('vehicle_documents').insert(payload);
-    const { data, error } = await query.select('*').single();
+    const { data, error } = await getSupabaseClient().rpc('save_vehicle_document_consistent', {
+      p_id: id ?? null,
+      p_vehicle_id: vehicleId,
+      p_document_type: draft.documentType,
+      p_title: draft.title.trim(),
+      p_document_number: draft.documentNumber?.trim() || null,
+      p_issue_date: draft.issueDate,
+      p_expiry_date: draft.expiryDate,
+      p_note: draft.note?.trim() || null,
+      p_attachment_path: draft.attachmentPath,
+    });
     if (error) throw error;
     return mapDocument(required(data, 'Belge kaydedilemedi.'));
   }
 
   async deleteDocument(id: string) {
-    const client = getSupabaseClient();
-    const { data, error: lookupError } = await client
-      .from('vehicle_documents')
-      .select('attachment_path')
-      .eq('id', id)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-    if (data?.attachment_path) {
-      const { error: storageError } = await client.storage
-        .from('vehicle-attachments')
-        .remove([data.attachment_path]);
-      if (storageError) throw storageError;
-    }
-    const { error } = await client.from('vehicle_documents').delete().eq('id', id);
+    const { error } = await getSupabaseClient().rpc('delete_vehicle_document_consistent', {
+      p_id: id,
+    });
     if (error) throw error;
+    void reconcileAttachments().catch(() => undefined);
   }
 
   async clearVehicleSection(
@@ -373,31 +390,22 @@ export class SupabaseAppRepository implements AppRepository {
         .select('notification_id')
         .eq('vehicle_id', vehicleId);
       if (listError) throw listError;
-      await Promise.all(
-        (data ?? []).map((item) => cancelReminderNotification(item.notification_id)),
-      );
+      const { error } = await client.from('reminders').delete().eq('vehicle_id', vehicleId);
+      if (error) throw error;
+      await Promise.all((data ?? []).map((item) => cancelReminderNotification(item.notification_id)));
+      return;
     }
     if (section === 'documents') {
-      const { data, error: listError } = await client
-        .from('vehicle_documents')
-        .select('attachment_path')
-        .eq('vehicle_id', vehicleId);
-      if (listError) throw listError;
-      const paths = (data ?? [])
-        .map((item) => item.attachment_path)
-        .filter((path): path is string => Boolean(path));
-      if (paths.length) {
-        const { error: storageError } = await client.storage
-          .from('vehicle-attachments')
-          .remove(paths);
-        if (storageError) throw storageError;
-      }
+      const { error } = await client.rpc('clear_vehicle_documents_consistent', {
+        p_vehicle_id: vehicleId,
+      });
+      if (error) throw error;
+      void reconcileAttachments().catch(() => undefined);
+      return;
     }
     const table = {
       records: 'vehicle_records',
-      reminders: 'reminders',
       body: 'body_part_conditions',
-      documents: 'vehicle_documents',
     } as const;
     const { error } = await client.from(table[section]).delete().eq('vehicle_id', vehicleId);
     if (error) throw error;

@@ -9,6 +9,12 @@ export type ReminderType =
   | 'periodic_maintenance'
   | 'tire_change'
   | 'custom';
+export type ReminderNotificationStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'not_required'
+  | 'permission_denied'
+  | 'failed';
 export type BodyCondition =
   'original' | 'painted' | 'locally_painted' | 'replaced' | 'damaged' | 'unknown';
 export type DocumentType =
@@ -64,6 +70,9 @@ export interface Reminder {
   completed: boolean;
   completedAt: string | null;
   notificationId: string | null;
+  notificationStatus: ReminderNotificationStatus;
+  notificationLastAttemptAt: string | null;
+  notificationErrorCode: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { AttachmentField } from '@/shared/components/AttachmentField';
@@ -26,6 +26,7 @@ import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
+import { createRequestId } from '@/shared/utils/requestId';
 
 export default function ExpertiseEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -51,6 +52,7 @@ export default function ExpertiseEditScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [opening, setOpening] = useState(false);
+  const uploadRequestId = useRef(createRequestId());
   const isDirty = haveFormValuesChanged(
     {
       date: existing?.reportDate ?? null,
@@ -72,7 +74,7 @@ export default function ExpertiseEditScreen() {
     try {
       let path = attachmentPath;
       if (picked) {
-        path = await uploadAttachment(activeVehicleId, picked);
+        path = await uploadAttachment(activeVehicleId, picked, uploadRequestId.current);
         uploadedPath = path;
       }
       const success = await saveExpertise(
@@ -144,7 +146,10 @@ export default function ExpertiseEditScreen() {
         <AttachmentField
           picked={picked}
           existingPath={attachmentPath}
-          onPick={setPicked}
+          onPick={(attachment) => {
+            uploadRequestId.current = createRequestId();
+            setPicked(attachment);
+          }}
           onRemove={() => {
             setPicked(null);
             setAttachmentPath(null);

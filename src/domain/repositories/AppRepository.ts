@@ -28,7 +28,12 @@ export interface AppRepository {
   saveVehicle(draft: VehicleDraft, id?: string): Promise<Vehicle>;
   deleteVehicle(id: string): Promise<void>;
   loadVehicleData(vehicleId: string): Promise<VehicleDataBundle>;
-  saveRecord(vehicleId: string, draft: RecordDraft, id?: string): Promise<VehicleRecord>;
+  saveRecord(
+    vehicleId: string,
+    draft: RecordDraft,
+    id?: string,
+    requestId?: string,
+  ): Promise<VehicleRecord>;
   deleteRecord(id: string): Promise<void>;
   saveReminder(vehicleId: string, draft: ReminderDraft, id?: string): Promise<Reminder>;
   setReminderCompleted(reminder: Reminder, completed: boolean): Promise<Reminder>;

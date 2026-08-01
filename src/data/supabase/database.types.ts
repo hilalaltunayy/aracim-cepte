@@ -10,33 +10,60 @@ export type Database = {
     Tables: {
       attachment_upload_reservations: {
         Row: {
+          completed_at: string | null;
           created_at: string;
           expected_mime: string;
           expected_size: number;
           expires_at: string;
+          failed_at: string | null;
+          failure_code: string | null;
           id: string;
+          linked_entity_id: string | null;
+          linked_entity_type: string | null;
           object_path: string;
           owner_id: string;
+          request_id: string;
+          status: string;
+          updated_at: string;
+          uploaded_at: string | null;
           vehicle_id: string;
         };
         Insert: {
+          completed_at?: string | null;
           created_at?: string;
           expected_mime: string;
           expected_size: number;
           expires_at: string;
+          failed_at?: string | null;
+          failure_code?: string | null;
           id?: string;
+          linked_entity_id?: string | null;
+          linked_entity_type?: string | null;
           object_path: string;
           owner_id: string;
+          request_id: string;
+          status?: string;
+          updated_at?: string;
+          uploaded_at?: string | null;
           vehicle_id: string;
         };
         Update: {
+          completed_at?: string | null;
           created_at?: string;
           expected_mime?: string;
           expected_size?: number;
           expires_at?: string;
+          failed_at?: string | null;
+          failure_code?: string | null;
           id?: string;
+          linked_entity_id?: string | null;
+          linked_entity_type?: string | null;
           object_path?: string;
           owner_id?: string;
+          request_id?: string;
+          status?: string;
+          updated_at?: string;
+          uploaded_at?: string | null;
           vehicle_id?: string;
         };
         Relationships: [
@@ -170,6 +197,9 @@ export type Database = {
           due_kilometer: number | null;
           id: string;
           notification_id: string | null;
+          notification_error_code: string | null;
+          notification_last_attempt_at: string | null;
+          notification_status: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id: string;
           reminder_type: Database['public']['Enums']['reminder_type'];
           title: string;
@@ -184,6 +214,9 @@ export type Database = {
           due_kilometer?: number | null;
           id?: string;
           notification_id?: string | null;
+          notification_error_code?: string | null;
+          notification_last_attempt_at?: string | null;
+          notification_status?: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id: string;
           reminder_type: Database['public']['Enums']['reminder_type'];
           title: string;
@@ -198,6 +231,9 @@ export type Database = {
           due_kilometer?: number | null;
           id?: string;
           notification_id?: string | null;
+          notification_error_code?: string | null;
+          notification_last_attempt_at?: string | null;
+          notification_status?: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id?: string;
           reminder_type?: Database['public']['Enums']['reminder_type'];
           title?: string;
@@ -411,18 +447,74 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      is_valid_attachment_reservation: {
-        Args: { p_metadata: Json; p_object_path: string };
+      clear_vehicle_documents_consistent: {
+        Args: { p_vehicle_id: string };
+        Returns: number;
+      };
+      delete_expertise_report_consistent: {
+        Args: { p_id: string };
         Returns: boolean;
       };
+      delete_vehicle_document_consistent: {
+        Args: { p_id: string };
+        Returns: boolean;
+      };
+      delete_vehicle_consistent: {
+        Args: { p_vehicle_id: string };
+        Returns: boolean;
+      };
+      reconcile_my_attachment_metadata: { Args: Record<PropertyKey, never>; Returns: number };
+      request_attachment_cleanup: { Args: { p_object_path: string }; Returns: boolean };
       reserve_attachment_upload: {
         Args: {
           p_mime_type: string;
           p_owner_id: string;
+          p_request_id: string;
           p_size_bytes: number;
           p_vehicle_id: string;
         };
-        Returns: { object_path: string; reservation_id: string }[];
+        Returns: { object_path: string; reservation_id: string; reservation_status: string }[];
+      };
+      save_expertise_report_consistent: {
+        Args: {
+          p_attachment_path: string | null;
+          p_company_name: string | null;
+          p_id: string | null;
+          p_overall_note: string | null;
+          p_report_date: string | null;
+          p_report_number: string | null;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['expertise_reports']['Row'];
+      };
+      save_vehicle_document_consistent: {
+        Args: {
+          p_attachment_path: string | null;
+          p_document_number: string | null;
+          p_document_type: Database['public']['Enums']['document_type'];
+          p_expiry_date: string | null;
+          p_id: string | null;
+          p_issue_date: string | null;
+          p_note: string | null;
+          p_title: string;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['vehicle_documents']['Row'];
+      };
+      save_vehicle_record_atomic: {
+        Args: {
+          p_amount: number;
+          p_category: string;
+          p_description: string | null;
+          p_kilometer: number | null;
+          p_liters: number | null;
+          p_record_date: string;
+          p_record_id: string | null;
+          p_record_type: Database['public']['Enums']['record_type'];
+          p_request_id: string;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['vehicle_records']['Row'];
       };
     };
     Enums: {

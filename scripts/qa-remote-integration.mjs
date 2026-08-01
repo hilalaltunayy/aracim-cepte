@@ -59,6 +59,7 @@ async function invokeUpload({
   bytes,
   mimeType,
   declaredSize = bytes.byteLength,
+  requestId = randomUUID(),
 }) {
   const response = await fetch(`${url}/functions/v1/upload-attachment`, {
     method: 'POST',
@@ -68,6 +69,7 @@ async function invokeUpload({
       'content-type': mimeType,
       'x-vehicle-id': vehicleId,
       'x-file-size': String(declaredSize),
+      'x-upload-request-id': requestId,
     },
     body: bytes,
   });
@@ -107,6 +109,7 @@ async function diagnoseReservedStorageUpload({
     p_vehicle_id: vehicleId,
     p_size_bytes: bytes.byteLength,
     p_mime_type: mimeType,
+    p_request_id: randomUUID(),
   });
   if (reservation.error || !reservation.data?.[0]) {
     return {

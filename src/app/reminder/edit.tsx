@@ -65,12 +65,13 @@ export default function ReminderEditScreen() {
       existing?.id,
     );
     if (success) {
+      const notificationNotice = useDataStore.getState().lastReminderNotice;
       leaveWithoutPrompt(() => {
         Alert.alert(
           'Hatırlatıcı kaydedildi',
-          date
+          notificationNotice ?? (date
             ? 'Bildirim izni varsa cihazınızda yerel bildirim planlandı.'
-            : 'Kilometreye dayalı plan kaydedildi.',
+            : 'Kilometreye dayalı plan kaydedildi.'),
         );
         goBackOr('/(tabs)/reminders');
       });

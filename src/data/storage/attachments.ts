@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 import { getSupabaseClient } from '@/data/supabase/client';
 import { getFunctionErrorCode } from '@/data/supabase/functionErrors';
 import { AppError } from '@/shared/utils/errors';
+import { createRequestId } from '@/shared/utils/requestId';
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENT_BYTES,
@@ -80,6 +81,7 @@ export async function pickDocument(): Promise<PickedAttachment | null> {
 export async function uploadAttachment(
   vehicleId: string,
   attachment: PickedAttachment,
+  requestId = createRequestId(),
 ): Promise<string> {
   const client = getSupabaseClient();
   const { data } = await client.auth.getUser();
@@ -100,6 +102,7 @@ export async function uploadAttachment(
         'Content-Type': mimeType,
         'x-vehicle-id': vehicleId,
         'x-file-size': String(body.byteLength),
+        'x-upload-request-id': requestId,
       },
     },
   );
@@ -118,8 +121,17 @@ export async function uploadAttachment(
 
 export async function deleteAttachment(path: string | null): Promise<void> {
   if (!path) return;
-  const { error } = await getSupabaseClient().storage.from('vehicle-attachments').remove([path]);
+  const client = getSupabaseClient();
+  const { error } = await client.rpc('request_attachment_cleanup', { p_object_path: path });
   if (error) throw error;
+  await reconcileAttachments();
+}
+
+export async function reconcileAttachments(): Promise<void> {
+  const { error } = await getSupabaseClient().functions.invoke('reconcile-attachments', {
+    body: {},
+  });
+  if (error) throw new AppError('Dosya temizliği daha sonra yeniden denenecek.');
 }
 
 export async function openAttachment(path: string): Promise<void> {

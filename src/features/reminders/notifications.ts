@@ -1,7 +1,11 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { parseDateOnly } from '@/shared/utils/format';
-import { canScheduleReminderNotification } from './notificationRules';
+import { Reminder } from '@/domain/entities';
+import {
+  ReminderNotificationGateway,
+  ReminderNotificationSyncResult,
+  synchronizeReminderNotification,
+} from './notificationRecovery';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -12,50 +16,76 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export async function scheduleReminderNotification(
-  title: string,
-  dueDate: string | null,
-): Promise<string | null> {
-  if (!dueDate) return null;
-  const date = parseDateOnly(dueDate);
-  if (!date) return null;
-  date.setHours(9, 0, 0, 0);
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('reminders', {
-      name: 'Araç hatırlatıcıları',
-      importance: Notifications.AndroidImportance.DEFAULT,
+function permissionState(status: Notifications.PermissionStatus) {
+  if (status === Notifications.PermissionStatus.GRANTED) return 'granted' as const;
+  if (status === Notifications.PermissionStatus.DENIED) return 'denied' as const;
+  return 'undetermined' as const;
+}
+
+const notificationGateway: ReminderNotificationGateway = {
+  async getPermission(requestIfUndetermined) {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status !== Notifications.PermissionStatus.UNDETERMINED || !requestIfUndetermined) {
+      return permissionState(current.status);
+    }
+    return permissionState((await Notifications.requestPermissionsAsync()).status);
+  },
+  async list() {
+    const requests = await Notifications.getAllScheduledNotificationsAsync();
+    return requests.map((request) => ({
+      id: request.identifier,
+      reminderId:
+        typeof request.content.data?.reminderId === 'string'
+          ? request.content.data.reminderId
+          : null,
+    }));
+  },
+  async schedule(reminder, date) {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('reminders', {
+        name: 'Araç hatırlatıcıları',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    }
+    return Notifications.scheduleNotificationAsync({
+      identifier: `reminder-${reminder.id}`,
+      content: {
+        title: 'Aracım Cepte',
+        body: `${reminder.title} için planlanan tarih geldi.`,
+        data: { route: '/(tabs)/reminders', reminderId: reminder.id },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date,
+        ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
+      },
     });
-  }
-  const permission = await Notifications.getPermissionsAsync();
-  let status = permission.status;
-  if (status === 'undetermined') status = (await Notifications.requestPermissionsAsync()).status;
-  if (
-    !canScheduleReminderNotification({
-      permissionStatus: status,
-      dueTime: date.getTime(),
-      now: Date.now(),
-    })
-  )
-    return null;
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Aracım Cepte',
-      body: `${title} için planlanan tarih geldi.`,
-      data: { route: '/(tabs)/reminders' },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date,
-      ...(Platform.OS === 'android' ? { channelId: 'reminders' } : {}),
-    },
-  });
+  },
+  async cancel(id) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // Reconciliation is idempotent; the OS may already have removed the request.
+    }
+  },
+};
+
+export async function reconcileReminderNotification(
+  reminder: Reminder,
+  options: { requestPermission: boolean; forceReschedule?: boolean; staleIds?: string[] },
+): Promise<ReminderNotificationSyncResult> {
+  return synchronizeReminderNotification(reminder, notificationGateway, options);
 }
 
 export async function cancelReminderNotification(id: string | null): Promise<void> {
-  if (!id) return;
-  try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-  } catch {
-    // The operating system may already have delivered or removed this notification.
-  }
+  if (id) await notificationGateway.cancel(id);
+}
+
+export async function cancelUnknownReminderNotifications(validReminderIds: Set<string>) {
+  const scheduled = await notificationGateway.list();
+  await Promise.all(
+    scheduled
+      .filter((item) => item.reminderId && !validReminderIds.has(item.reminderId))
+      .map((item) => notificationGateway.cancel(item.id)),
+  );
 }

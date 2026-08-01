@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -29,6 +29,7 @@ import {
 } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
+import { createRequestId } from '@/shared/utils/requestId';
 
 export default function RecordEditScreen() {
   const params = useLocalSearchParams<{ id?: string; type?: RecordType }>();
@@ -60,6 +61,7 @@ export default function RecordEditScreen() {
   const [date, setDate] = useState(existing?.recordDate ?? todayDateOnly());
   const [description, setDescription] = useState(existing?.description ?? '');
   const [submitted, setSubmitted] = useState(false);
+  const mutationRequestId = useRef(createRequestId());
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const initialValues = {
     type: existing?.recordType ?? params.type ?? 'fuel',
@@ -108,6 +110,7 @@ export default function RecordEditScreen() {
         description: description || null,
       },
       existing?.id,
+      mutationRequestId.current,
     );
     if (success) {
       leaveWithoutPrompt(() => {

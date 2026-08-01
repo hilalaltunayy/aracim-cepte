@@ -5,6 +5,23 @@ import { MAX_ATTACHMENT_BYTES, validateAttachment } from '../_shared/fileValidat
 import { corsHeaders, jsonResponse } from '../_shared/http.ts';
 
 const bucketName = 'vehicle-attachments';
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function objectExists(
+  bucket: {
+    list: (
+      path: string,
+      options: { limit: number; search: string },
+    ) => Promise<{ data: { name: string }[] | null; error: unknown }>;
+  },
+  path: string,
+): Promise<boolean> {
+  const slash = path.lastIndexOf('/');
+  const folder = path.slice(0, slash);
+  const name = path.slice(slash + 1);
+  const { data, error } = await bucket.list(folder, { limit: 2, search: name });
+  return !error && Boolean(data?.some((item) => item.name === name));
+}
 
 function quotaErrorCode(message: string): string {
   const knownCodes = [
@@ -24,6 +41,10 @@ export default {
 
     const vehicleId = request.headers.get('x-vehicle-id')?.trim();
     if (!vehicleId) return jsonResponse(400, { code: 'ATTACHMENT_VEHICLE_REQUIRED' });
+    const requestId = request.headers.get('x-upload-request-id')?.trim();
+    if (!requestId || !uuidPattern.test(requestId)) {
+      return jsonResponse(400, { code: 'ATTACHMENT_REQUEST_ID_REQUIRED' });
+    }
 
     const declaredFileSize = Number(request.headers.get('x-file-size'));
     if (!Number.isSafeInteger(declaredFileSize) || declaredFileSize < 0) {
@@ -63,6 +84,7 @@ export default {
         p_vehicle_id: vehicleId,
         p_size_bytes: bytes.byteLength,
         p_mime_type: validation.mimeType,
+        p_request_id: requestId,
       },
     );
 
@@ -72,7 +94,18 @@ export default {
       });
     }
 
-    const reservation = reservations[0] as { reservation_id: string; object_path: string };
+    const reservation = reservations[0] as {
+      reservation_id: string;
+      object_path: string;
+      reservation_status: 'reserved' | 'uploaded' | 'completed';
+    };
+    const adminBucket = context.supabaseAdmin.storage.from(bucketName);
+    if (
+      reservation.reservation_status !== 'reserved' &&
+      (await objectExists(adminBucket, reservation.object_path))
+    ) {
+      return jsonResponse(200, { path: reservation.object_path, idempotent: true });
+    }
     const { error: uploadError } = await context.supabase.storage
       .from(bucketName)
       .upload(reservation.object_path, bytes, {
@@ -80,13 +113,42 @@ export default {
         upsert: false,
       });
 
-    await context.supabaseAdmin
-      .from('attachment_upload_reservations')
-      .delete()
-      .eq('id', reservation.reservation_id)
-      .eq('owner_id', userData.user.id);
+    if (uploadError && !(await objectExists(adminBucket, reservation.object_path))) {
+      await context.supabaseAdmin
+        .from('attachment_upload_reservations')
+        .update({
+          status: 'failed',
+          failed_at: new Date().toISOString(),
+          failure_code: 'STORAGE_UPLOAD_FAILED',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reservation.reservation_id)
+        .eq('owner_id', userData.user.id);
+      return jsonResponse(400, { code: 'ATTACHMENT_UPLOAD_FAILED' });
+    }
 
-    if (uploadError) return jsonResponse(400, { code: 'ATTACHMENT_UPLOAD_FAILED' });
+    const { data: marked, error: markError } = await context.supabaseAdmin.rpc(
+      'mark_attachment_uploaded',
+      { p_reservation_id: reservation.reservation_id, p_owner_id: userData.user.id },
+    );
+    if (markError || marked !== true) {
+      await context.supabaseAdmin.from('attachment_cleanup_queue').upsert(
+        {
+          owner_id: userData.user.id,
+          object_path: reservation.object_path,
+          status: 'pending',
+          last_error_code: 'UPLOAD_STATE_FAILED',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'owner_id,object_path' },
+      );
+      await context.supabaseAdmin
+        .from('attachment_upload_reservations')
+        .update({ status: 'cleanup_required', failure_code: 'UPLOAD_STATE_FAILED' })
+        .eq('id', reservation.reservation_id)
+        .eq('owner_id', userData.user.id);
+      return jsonResponse(500, { code: 'ATTACHMENT_UPLOAD_FAILED' });
+    }
 
     return jsonResponse(201, { path: reservation.object_path });
   }),

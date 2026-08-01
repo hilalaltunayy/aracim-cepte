@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-08-01
 **Baseline:** `2c5cc0450b558ba94ff0c8e07422db5b4a309cdf`
-**Automated run:** TASK-007 sonrası `npm test` — 26 dosya / 121 test geçti
+**Automated run:** TASK-008 hedefli local testleri ve sentetik remote E2E — 2026-08-01
 
 Bu sonuç uygulama, Android veya release artifact kabulü değildir. Vitest yapılandırması `node`
 environment kullanır ve yalnız `src/**/*.test.ts` dosyalarını alır; React Native ekranlarını light ve
@@ -11,8 +11,8 @@ dark provider ile render eden `.test.tsx` altyapısı yoktur.
 ## TASK-007 düzeltme kanıtı — 2026-08-01
 
 TASK-007, D-01–D-10 ve D-14 için kaynak düzeltmesini uygulamıştır. Bu durum APK veya Android kabulü
-anlamına gelmez. D-11–D-13 bilinçli olarak değiştirilmemiştir ve ayrı güvenlik görevinin açık
-blocker'larıdır.
+anlamına gelmez. D-11–D-13, TASK-008 ile kaynak/remote düzeyde uygulanmış; Android notification ve
+kesintili upload kabulü manuel kapı olarak bırakılmıştır.
 
 | ID   | Sonuç               | Otomatik/repository kanıtı                                                                       | Kalan kapı                           |
 | ---- | ------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------ |
@@ -26,9 +26,9 @@ blocker'larıdır.
 | D-08 | IMPLEMENTED         | Bootstrap failure ayrı state; connection screen/retry route kararı testli                        | Offline cold-start Android testi     |
 | D-09 | IMPLEMENTED         | Record km guard ve vehicle correction confirmation; rule/store savunması testli                  | Form + hesap regresyon Android testi |
 | D-10 | IMPLEMENTED         | Eşit hedef `due`, aşım `overdue`, clamp edilmiş görünür değerler testli                          | Reminder list/detail Android testi   |
-| D-11 | OPEN — OUT OF SCOPE | TASK-007 backend atomikliğini değiştirmedi                                                       | Ayrı güvenlik görevi                 |
-| D-12 | OPEN — OUT OF SCOPE | TASK-007 DB/OS notification atomikliğini değiştirmedi                                            | Ayrı güvenlik görevi                 |
-| D-13 | OPEN — OUT OF SCOPE | TASK-007 Storage/DB atomikliğini değiştirmedi                                                    | Ayrı güvenlik görevi                 |
+| D-11 | IMPLEMENTED + REMOTE | Transaction-safe/idempotent RPC; partial-write, retry ve cross-user sentetik E2E geçti           | Android CRUD/restart regresyonu      |
+| D-12 | IMPLEMENTED + MANUAL | DB-first durum modeli; failure/retry/edit/delete/duplicate/denied testleri geçti                 | Android OS notification lifecycle   |
+| D-13 | IMPLEMENTED + REMOTE | Upload state machine, cleanup queue, missing-object ve orphan reconciliation remote E2E geçti    | Android interruption/picker kabulü  |
 | D-14 | IMPLEMENTED         | Ortak erişilebilirlik yardımcıları ve işaretli pressable role/label/state güncellemeleri         | TalkBack traversal ve state testi    |
 
 Ek kapsam: confirmation resend, dirty-form çıkış guard'ı ve notification tap routing kaynak/test
@@ -50,20 +50,20 @@ kapı olarak kalır.
 | UF-09 | Araç oluşturma              | Repository contract kısmi                             | Yeni hesapla create + restart                     | CRUD gate In progress; **MANUAL REQUIRED**        |
 | UF-10 | Araç düzenleme              | Validation/source var                                 | Bütün alanları edit + restart                     | **MANUAL REQUIRED**                               |
 | UF-11 | Kilometre güncelleme        | Düşük record reddi ve vehicle correction onayı testli | Record ve direct vehicle edit ile düşük/yüksek km | Kaynak uygulandı; **MANUAL REQUIRED**             |
-| UF-12 | Araç silme                  | Normal remote account/storage kanıtı kısmi            | Child data+file+notification olan araç sil        | **POSSIBLE RISK:** cross-system atomicity         |
-| UF-13 | Yakıt CRUD                  | Business/repository tests                             | Create/edit/delete + dashboard/history/restart    | **POSSIBLE RISK:** insert+mileage partial failure |
-| UF-14 | Bakım CRUD                  | Business/repository tests                             | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**            |
-| UF-15 | Diğer masraf CRUD           | Business/repository tests                             | Create/edit/delete + filtre/restart               | Aynı partial risk; **MANUAL REQUIRED**            |
+| UF-12 | Araç silme                  | DB-first cascade + cleanup queue remote E2E            | Child data+file+notification olan araç sil        | Backend recovery geçti; **MANUAL REQUIRED**       |
+| UF-13 | Yakıt CRUD                  | Atomic RPC remote E2E + business tests                | Create/edit/delete + dashboard/history/restart    | Backend atomic; **MANUAL REQUIRED**               |
+| UF-14 | Bakım CRUD                  | Aynı atomic RPC bütün record tiplerini kapsar         | Create/edit/delete + filtre/restart               | Backend atomic; **MANUAL REQUIRED**               |
+| UF-15 | Diğer masraf CRUD           | Aynı atomic RPC bütün record tiplerini kapsar         | Create/edit/delete + filtre/restart               | Backend atomic; **MANUAL REQUIRED**               |
 | UF-16 | Geçmiş/filtre               | Sort/filter + radio role/checked semantics kaynakta   | Dört filtre, TalkBack ve record deep link         | Kaynak uygulandı; **MANUAL REQUIRED**             |
 | UF-17 | Dashboard stats             | Analytics edge tests geçti                            | Fixture değerleriyle görsel karşılaştır           | Hesap source PASS; UI/theme **MANUAL**            |
-| UF-18 | Reminder create/edit        | Urgency/notification rules testli                     | Tarih, km, ikisi; granted/denied; edit            | **POSSIBLE RISK:** DB/notification ayrışması      |
-| UF-19 | Reminder delete             | Source cleanup var                                    | Scheduled notification ile delete                 | **POSSIBLE RISK:** cancel-before-delete           |
-| UF-20 | Reminder complete/reopen    | Source + duplicate mutation guard                     | Offline/rapid toggle + notification list          | **POSSIBLE RISK:** orphan/eksik notification      |
+| UF-18 | Reminder create/edit        | DB-first recovery ve notification fake-gateway testli | Tarih, km, ikisi; granted/denied; edit            | Kaynak/test PASS; **ANDROID MANUAL**              |
+| UF-19 | Reminder delete             | DB-first delete + idempotent local cancellation       | Scheduled notification ile delete                 | Kaynak/test PASS; **ANDROID MANUAL**              |
+| UF-20 | Reminder complete/reopen    | Reconcile/duplicate/permission testleri geçti         | Offline/rapid toggle + notification list          | Kaynak/test PASS; **ANDROID MANUAL**              |
 | UF-21 | Gövde durumu                | Schema/condition source ve tests                      | Her body type/part/status + restart               | **MANUAL THEME/SVG CHECK**                        |
-| UF-22 | Ekspertiz                   | Open loading/safe error/retry kaynakta                | CRUD, attachment replace/open/delete              | Open fix uygulandı; D-13 atomiklik riski açık     |
+| UF-22 | Ekspertiz                   | Consistent metadata RPC + recovery queue kaynakta     | CRUD, attachment replace/open/delete              | Remote recovery PASS; **ANDROID MANUAL**          |
 | UF-23 | Belge upload/create         | Remote private/MIME/quota E2E Passed                  | Android picker pozitif matrisi + restart          | Backend PASS; UI **MANUAL**                       |
 | UF-24 | Belge açma                  | 60 sn URL + safe open error/loading/retry kaynakta    | Online/offline/unsupported viewer                 | Kaynak uygulandı; **MANUAL REQUIRED**             |
-| UF-25 | Belge silme                 | Normal-path remote cleanup Passed                     | DB+Storage + restart                              | **POSSIBLE RISK:** storage-before-DB failure      |
+| UF-25 | Belge silme                 | DB-first idempotent delete + Storage recovery E2E     | DB+Storage + restart                              | Remote PASS; **ANDROID MANUAL**                   |
 | UF-26 | MIME/boyut/kota             | Remote PDF/JPEG/PNG, WebP/spoof/5MB/10/25 Passed      | Picker üzerinden aynı negatif matris              | Backend PASS; UI copy **MANUAL**                  |
 | UF-27 | Ayarlar/izin/veri temizleme | Source flow var                                       | Permission denied/granted, dört clear             | Error visibility/partial cleanup **RISK**         |
 | UF-28 | Sistem/Açık/Koyu            | 8 tema token/preference testi geçti                   | Live switch + restart + system change             | Pure logic PASS; render/native **MANUAL**         |
@@ -92,9 +92,9 @@ durumu bu belgenin başındaki TASK-007 tablosudur.
 | D-08 | Offline       | Bootstrap failure `vehicles=[]` ile “araç yok” kararına dönüşüyor                                                    | Mevcut kullanıcıya yanıltıcı araç oluşturma           | P0      | `dataStore.bootstrap`, `routeDecision`        |
 | D-09 | Mileage       | Vehicle edit current km'yi sessizce düşürüyor                                                                        | Latest-known mileage/reminder doğruluğu               | P0      | `saveVehicle` vs mileage spec                 |
 | D-10 | Reminder      | Tam hedef km (`remaining=0`) `due` yerine `overdue` oluyor; UI modelinde ayrı Due yok                                | Yanlış reminder durumu                                | P0      | `getReminderStatus`, mileage spec             |
-| D-11 | Persistence   | Record insert ve vehicle mileage update ayrı; ikinci hata partial save + retry duplicate yaratabilir                 | Veri tutarlılığı                                      | P1      | `saveRecord`                                  |
-| D-12 | Notification  | Reminder DB mutation ile OS notification cancel/schedule atomik değil                                                | Eksik/orphan bildirim                                 | P1      | reminder repository methods                   |
-| D-13 | Storage       | File remove/replacement ile DB metadata update/delete atomik değil                                                   | Orphan file veya missing object                       | P1      | document/expertise/vehicle repository methods |
+| D-11 | Persistence   | **RESOLVED TASK-008:** record+mileage tek RPC transaction; owner-scoped idempotency                                  | Remote sentetik pozitif/negatif kanıt geçti           | P1      | `save_vehicle_record_atomic`                  |
+| D-12 | Notification  | **IMPLEMENTED TASK-008:** DB source-of-truth + retry/reconcile; OS atomikliği iddia edilmez                          | Android lifecycle kabulü manuel                       | P1      | notification recovery/store                   |
+| D-13 | Storage       | **RESOLVED BACKEND TASK-008:** explicit state, cleanup queue, missing/orphan reconcile                               | Android interrupted picker/upload kabulü manuel       | P1      | attachment RPC/Edge recovery                  |
 | D-14 | Accessibility | Dashboard shortcuts, history filters, note cards ve SectionHeader action'larında role/state/label eksikleri          | TalkBack anlamı ve selected state                     | P1      | İlgili `Pressable` kaynakları                 |
 
 ## Possible risk register
@@ -146,9 +146,9 @@ Bu audit'te **15 possible risk** vardır.
 
 Yeni acceptance APK'sından önce D-01–D-10 ve D-14 için kaynak düzeltmeleri uygulanmıştır; final diff
 audit'i ve otomatik kapılar tamamlandıktan sonra APK alınabilir. Android acceptance yapılmadan bu
-maddeler release açısından Passed sayılamaz. D-11–D-13 veri
-tutarlılığı/security regressions olduğundan production release öncesi blocker'dır ve mümkünse aynı
-APK'dan önce çözülmelidir. TASK-007 bu üç maddeyi değiştirmemiştir.
+maddeler release açısından Passed sayılamaz. D-11 ve D-13 remote sentetik kanıtla kapatılmıştır.
+D-12 kaynak ve hedefli test düzeyinde uygulanmıştır; Android OS notification lifecycle kabulü
+tamamlanmadan release açısından Passed sayılmaz.
 
 ## Yalnız gerçek Android cihazda doğrulanabilecekler
 

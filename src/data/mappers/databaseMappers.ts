@@ -53,6 +53,9 @@ export const mapReminder = (row: Tables['reminders']['Row']): Reminder => ({
   completed: row.completed,
   completedAt: row.completed_at,
   notificationId: row.notification_id,
+  notificationStatus: row.notification_status,
+  notificationLastAttemptAt: row.notification_last_attempt_at,
+  notificationErrorCode: row.notification_error_code,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
