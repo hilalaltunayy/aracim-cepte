@@ -84,13 +84,13 @@ user data, and is not written to logs or object paths.
 
 ## Legal and operational open items
 
-| Control                        | Method                                                                                                           | Expected result                                     | Actual result / evidence                              | Status                      |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------- | --------------------------- |
-| Legal web publication          | Publish stable privacy and account-deletion URLs and link them from app/store                                    | Publicly reachable, versioned pages                 | Subdomain/pages are not yet live                      | LEGAL/OPERATIONAL OPEN ITEM |
-| KVKK and cross-border transfer | Product-owner and counsel assessment of Frankfurt processing, mechanisms, notices, and data flows                | Documented lawful decision and updated notices      | Open; technical isolation does not decide legal basis | LEGAL/OPERATIONAL OPEN ITEM |
-| Processor/subprocessor review  | Review Supabase and Resend roles, terms, DPA, locations, retention, and subprocessors                            | Approved and recorded operational/legal assessment  | Open                                                  | LEGAL/OPERATIONAL OPEN ITEM |
-| Professional legal review      | Qualified review of notices, privacy policy, retention/deletion, incident response, and Play Data Safety answers | Written approval/action list                        | Required before production; not completed             | LEGAL/OPERATIONAL OPEN ITEM |
-| Closed-test acceptance         | Install a new artifact and complete the Android acceptance matrix                                                | Device evidence recorded against the exact artifact | Not performed by this task; no build was started      | MANUAL CHECK REQUIRED       |
+| Control                        | Method                                                                                                           | Expected result                                     | Actual result / evidence                                                                                                     | Status                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Legal web publication          | Publish stable privacy and account-deletion URLs and link them from app/store                                    | Publicly reachable, versioned pages                 | TASK-014 verified all five URLs with HTTP 200 and connected the app live-first; APK/Play listing acceptance remains separate | PASS                        |
+| KVKK and cross-border transfer | Product-owner and counsel assessment of Frankfurt processing, mechanisms, notices, and data flows                | Documented lawful decision and updated notices      | Open; technical isolation does not decide legal basis                                                                        | LEGAL/OPERATIONAL OPEN ITEM |
+| Processor/subprocessor review  | Review Supabase and Resend roles, terms, DPA, locations, retention, and subprocessors                            | Approved and recorded operational/legal assessment  | Open                                                                                                                         | LEGAL/OPERATIONAL OPEN ITEM |
+| Professional legal review      | Qualified review of notices, privacy policy, retention/deletion, incident response, and Play Data Safety answers | Written approval/action list                        | Required before production; not completed                                                                                    | LEGAL/OPERATIONAL OPEN ITEM |
+| Closed-test acceptance         | Install a new artifact and complete the Android acceptance matrix                                                | Device evidence recorded against the exact artifact | Not performed by this task; no build was started                                                                             | MANUAL CHECK REQUIRED       |
 
 ## Commands and evidence
 
@@ -108,6 +108,11 @@ The TASK-013 remote run reported every targeted control `true`, no failed checks
 complete User A/User B/Storage cleanup.
 
 ## Readiness separation
+
+TASK-014 follow-up (2026-08-02): Beş hukuk URL'si artık public olarak HTTP 200 döndürmektedir ve
+uygulamadaki görünür hukuk linkleri live-first/in-app fallback davranışına bağlanmıştır. Bu
+TASK-013 snapshot'ındaki "henüz canlı değil" bulgusunu geçersiz kılar; yeni APK manuel kabulü ve
+profesyonel hukuk incelemesi yine açıktır.
 
 - **Security verification:** passed for the controls and environment recorded here.
 - **Preview/closed-test APK:** still requires a separately built artifact and Android acceptance.

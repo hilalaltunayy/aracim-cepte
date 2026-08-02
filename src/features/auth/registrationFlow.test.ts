@@ -36,6 +36,10 @@ describe('registration completion flow', () => {
       { title: 'KVKK Aydınlatma Metni', href: '/legal/kvkk-notice' },
       { title: 'Gizlilik Politikası', href: '/legal/privacy-policy' },
     ]);
+    expect(REGISTRATION_LEGAL_LINKS.map(({ url }) => url)).toEqual([
+      'https://aracimcepte.hilalaltunay.com/kvkk-aydinlatma',
+      'https://aracimcepte.hilalaltunay.com/gizlilik-politikasi',
+    ]);
     expect(REGISTRATION_LEGAL_NOTICE.toLocaleLowerCase('tr-TR')).not.toContain('rıza');
   });
 });

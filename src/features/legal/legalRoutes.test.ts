@@ -10,5 +10,12 @@ describe('legal route smoke contract', () => {
       '/legal/account-and-data-deletion',
       '/legal/kvkk-application',
     ]);
+    expect(LEGAL_ROUTES.map((item) => item.url)).toEqual([
+      'https://aracimcepte.hilalaltunay.com/kvkk-aydinlatma',
+      'https://aracimcepte.hilalaltunay.com/gizlilik-politikasi',
+      'https://aracimcepte.hilalaltunay.com/saklama-silme',
+      'https://aracimcepte.hilalaltunay.com/hesap-silme',
+      'https://aracimcepte.hilalaltunay.com/veri-basvurusu',
+    ]);
   });
 });

@@ -1,3 +1,5 @@
+import { LEGAL_LINKS } from '@/features/legal/legalLinks';
+
 export const REGISTRATION_SUCCESS = {
   title: 'E-postanızı doğrulayın',
   message:
@@ -8,18 +10,10 @@ export const REGISTRATION_SUCCESS = {
 export const REGISTRATION_LEGAL_NOTICE =
   'Kayıt olmadan önce KVKK Aydınlatma Metni ve Gizlilik Politikası’nı inceleyebilirsiniz.';
 
-export const REGISTRATION_LEGAL_LINKS = [
-  {
-    title: 'KVKK Aydınlatma Metni',
-    accessibilityLabel: 'KVKK Aydınlatma Metni’ni aç',
-    href: '/legal/kvkk-notice',
-  },
-  {
-    title: 'Gizlilik Politikası',
-    accessibilityLabel: 'Gizlilik Politikası’nı aç',
-    href: '/legal/privacy-policy',
-  },
-] as const;
+export const REGISTRATION_LEGAL_LINKS = LEGAL_LINKS.slice(0, 2).map((link) => ({
+  ...link,
+  accessibilityLabel: `${link.title} belgesini aç`,
+}));
 
 export function normalizeRegistrationEmail(email: string): string {
   return email.trim().toLowerCase();

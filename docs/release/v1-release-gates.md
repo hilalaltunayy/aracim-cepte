@@ -19,6 +19,15 @@ kapsamındadır. Yeni APK'nın Android kabulü, provider/admin log örneklemi, h
 KVKK/yurt dışı aktarım kararı ve profesyonel hukuk incelemesi açıktır; Google Play production
 hazırlığı iddiası değildir.
 
+### TASK-014 canlı hukuk bağlantısı kanıtı
+
+2026-08-02 tarihinde beş public hukuk URL'si HTTP 200 ile doğrulandı. TASK-014, kayıt ekranındaki
+KVKK/Gizlilik linkleri ile Ayarlar → Yasal ve gizlilik listesindeki beş linki merkezi HTTPS-only
+allow-list üzerinden canlı siteyi tercih edecek şekilde bağladı; ağ/Linking hatasında mevcut uygulama
+içi belgeler fallback olarak korunur. Yeni APK'da external browser ve offline fallback kabulü henüz
+manuel olduğundan bu kaynak kanıtı tek başına production gate'lerini kapatmaz. Hukuk metinlerinin
+profesyonel incelemesi, Play listing linkleri ve KVKK/yurt dışı aktarım kararı ayrı açık kalır.
+
 ## Preview APK build kapısı — TASK-010 güncellemesi
 
 **Karar:** READY FOR CRASH-REGRESSION PREVIEW APK BUILD — ANDROID KABULÜ BEKLENİYOR
@@ -80,8 +89,8 @@ değerlendirir.
 | Data deletion exists                          | In progress                  | TASK-013 User A all-record, all-reminder ve all-vehicle-data silmelerinin User B'ye dokunmadığını; TASK-008 recovery/cleanup mekanizmalarını remote geçirdi. Android UI ve local notification lifecycle kabulü açıktır.                       |
 | Supabase Frankfurt transfer assessment        | Not started                  | Ürün sahibi region'ın Frankfurt olduğunu belirtti; remote Dashboard kanıtı ve Türkiye dışına veri aktarımı için kapsam/mekanizma hukuk incelemesi yok.                                                                                        |
 | Supabase and Resend subprocessors reviewed    | Not started                  | Her iki sağlayıcının fiili rolü, DPA/privacy belgeleri, güncel alt işleyenleri, işleme ülkeleri, retention/deletion ve değişiklik bildirimi hukuk/ürün sahibi tarafından incelenmeli.                                                         |
-| KVKK aydınlatma metni published               | Not started                  | Gerçek veri akışına uygun, sürümlü, hukuk incelemesinden geçmiş metin ve doğru toplama anlarında sunum kanıtı yok.                                                                                                                            |
-| Privacy policy published                      | Not started                  | Yayın URL'si ve hukuk incelemesi kanıtı repository'de yok. Uygulama ve Play listing'den erişilmeli.                                                                                                                                           |
+| KVKK aydınlatma metni published               | In progress                  | TASK-014 public `/kvkk-aydinlatma` URL'sini HTTP 200 ve uygulama live-first kaynak/testiyle doğruladı. Yeni APK external/offline davranışı, Play listing erişimi ve profesyonel hukuk incelemesi tamamlanmadan `Passed` değildir.             |
+| Privacy policy published                      | In progress                  | TASK-014 public `/gizlilik-politikasi` URL'sini HTTP 200 ve uygulama live-first kaynak/testiyle doğruladı. Yeni APK external/offline davranışı, Play listing erişimi ve profesyonel hukuk incelemesi tamamlanmadan `Passed` değildir.         |
 | Retention and deletion policy approved        | Not started                  | Veri kategorisi bazında süre, silme tetikleyicisi, Storage/provider/log/backup davranışı ve restore sonrası deletion prosedürü onaylanmalı.                                                                                                   |
 | Data breach procedure ready                   | Not started                  | Olay sahibi, containment, key/session revoke, etki analizi, sağlayıcı koordinasyonu, hukukçu onaylı bildirim değerlendirmesi ve table-top kanıtı yok.                                                                                         |
 | Professional legal review completed           | Not started                  | KVKK readiness, yurt dışı aktarım, aydınlatma/policy, alt işleyen, retention/deletion ve incident süreci yetkin hukukçu tarafından incelenmeli; uyumluluk varsayılamaz.                                                                       |

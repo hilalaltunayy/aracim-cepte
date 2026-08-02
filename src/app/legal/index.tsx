@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { LegalNavigationRow } from '@/features/legal/LegalNavigationRow';
 import { LEGAL_ROUTES } from '@/features/legal/legalRoutes';
+import { openLegalLink } from '@/features/legal/legalLinkOpener';
 
 export default function LegalIndexScreen() {
   const styles = useThemedStyles(createStyles);
@@ -15,11 +16,11 @@ export default function LegalIndexScreen() {
       />
       <Card style={styles.card}>
         <View>
-          {LEGAL_ROUTES.map(({ title, href }) => (
+          {LEGAL_ROUTES.map((link) => (
             <LegalNavigationRow
-              key={href}
-              title={title}
-              onPress={() => router.push(href as Href)}
+              key={link.href}
+              title={link.title}
+              onPress={() => void openLegalLink(link, () => router.push(link.href as Href))}
             />
           ))}
         </View>

@@ -27,6 +27,7 @@ import {
   CONFIRMATION_RESEND_SUCCESS_MESSAGE,
   getConfirmationCooldownSeconds,
 } from '@/features/auth/confirmationResend';
+import { openLegalLink } from '@/features/legal/legalLinkOpener';
 
 export default function RegisterScreen() {
   const styles = useThemedStyles(createStyles);
@@ -164,7 +165,7 @@ export default function RegisterScreen() {
                 key={link.href}
                 accessibilityRole="link"
                 accessibilityLabel={link.accessibilityLabel}
-                onPress={() => router.push(link.href as Href)}
+                onPress={() => void openLegalLink(link, () => router.push(link.href as Href))}
               >
                 <Text style={styles.legalLink}>{link.title}</Text>
               </Pressable>
