@@ -115,7 +115,7 @@ APK'da kullanılamıyor. Auth kayıt route'u çalışıyor ve kapsam dışında 
 - `src/app/auth/register.tsx`: yalnız resend ve auth register smoke regression kapsamı.
 - `src/shared/components/ui.tsx`, `selectionModalLayout.ts`: bütün özel seçim yüzeylerinin merkezi
   safe-area/scroll/max-height davranışı.
-- `src/app/criticalRoutes.render.test.tsx`: dokuz route, href, invalid state, dosya hata/retry ve
+- `tests/routes/criticalRoutes.render.test.tsx`: dokuz route, href, invalid state, dosya hata/retry ve
   auth register mount kanıtı.
 
 ## Implementation steps

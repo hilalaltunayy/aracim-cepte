@@ -147,14 +147,14 @@ vi.mock('@/store/dataStore', () => {
 
 vi.mock('@/store/authStore', () => ({ useAuthStore: () => authState }));
 
-import DashboardScreen from './(tabs)/index';
-import HistoryScreen from './(tabs)/history';
-import RegisterScreen from './auth/register';
-import DocumentEditScreen from './documents/edit';
-import DocumentsListScreen from './documents/index';
-import ExpertiseEditScreen from './expertise/edit';
-import ExpertiseListScreen from './expertise/index';
-import RecordEditScreen from './record/edit';
+import DashboardScreen from '@/app/(tabs)/index';
+import HistoryScreen from '@/app/(tabs)/history';
+import RegisterScreen from '@/app/auth/register';
+import DocumentEditScreen from '@/app/documents/edit';
+import DocumentsListScreen from '@/app/documents/index';
+import ExpertiseEditScreen from '@/app/expertise/edit';
+import ExpertiseListScreen from '@/app/expertise/index';
+import RecordEditScreen from '@/app/record/edit';
 
 const ownerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const vehicleId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';

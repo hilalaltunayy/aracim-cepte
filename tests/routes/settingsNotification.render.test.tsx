@@ -102,7 +102,7 @@ vi.mock('@/store/dataStore', () => {
   return { useDataStore };
 });
 
-import SettingsScreen from './(tabs)/settings';
+import SettingsScreen from '@/app/(tabs)/settings';
 
 async function mount(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
