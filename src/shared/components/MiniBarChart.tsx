@@ -35,7 +35,7 @@ export function MiniBarChart({ data }: { data: MonthlyTotal[] }) {
   return (
     <View style={styles.container}>
       <View style={styles.chartHeader}>
-        <View>
+        <View style={styles.summary}>
           <Text style={styles.kicker}>SON 6 AY</Text>
           <Text style={styles.value}>{formatCurrency(trendTotal)}</Text>
         </View>
@@ -59,6 +59,7 @@ const createStyles = ({ colors }: AppTheme) =>
       justifyContent: 'space-between',
       gap: spacing.md,
     },
+    summary: { flex: 1, minWidth: 0 },
     kicker: {
       color: colors.primary,
       fontFamily: fontFamilies.semibold,
@@ -66,7 +67,14 @@ const createStyles = ({ colors }: AppTheme) =>
       letterSpacing: 1.05,
     },
     value: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 22, lineHeight: 28 },
-    caption: { color: colors.muted, ...typography.caption, paddingBottom: 3 },
+    caption: {
+      color: colors.muted,
+      ...typography.caption,
+      flexShrink: 1,
+      maxWidth: '46%',
+      paddingBottom: 3,
+      textAlign: 'right',
+    },
     chart: {
       height: 122,
       flexDirection: 'row',

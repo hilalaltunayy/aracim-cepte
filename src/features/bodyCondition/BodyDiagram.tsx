@@ -31,7 +31,7 @@ export function BodyDiagram({
   return (
     <View style={styles.canvas}>
       <View style={styles.canvasHeader}>
-        <View>
+        <View style={styles.canvasHeading}>
           <Text style={styles.eyebrow}>ÜSTTEN GÖRÜNÜM</Text>
           <Text style={styles.canvasTitle}>{selectedLabel}</Text>
         </View>
@@ -165,18 +165,22 @@ const createStyles = ({ colors }: AppTheme) =>
       justifyContent: 'space-between',
       gap: spacing.md,
     },
+    canvasHeading: { flex: 1, minWidth: 0 },
     eyebrow: {
       color: colors.primary,
       ...typography.eyebrow,
     },
     canvasTitle: { color: colors.navy, ...typography.sectionTitle, marginTop: spacing.xxs },
     tapHint: {
+      alignItems: 'center',
       borderRadius: radii.pill,
       backgroundColor: colors.paleAqua,
-      paddingHorizontal: spacing.md,
-      paddingVertical: 7,
+      flexShrink: 1,
+      maxWidth: '46%',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
     },
-    tapHintText: { color: colors.primaryDark, ...typography.status },
+    tapHintText: { color: colors.primaryDark, ...typography.status, textAlign: 'center' },
     diagram: {
       width: '100%',
       height: 430,

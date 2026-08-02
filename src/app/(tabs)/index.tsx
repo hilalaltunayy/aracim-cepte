@@ -27,7 +27,6 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import {
-  getCostPerKilometer,
   getCurrentMonthRecordTypeTotals,
   getMonthlyTotals,
   getPreviousMonthComparison,
@@ -58,10 +57,10 @@ export default function DashboardScreen() {
       </Screen>
     );
   }
-  const totals = getCurrentMonthRecordTypeTotals(records);
-  const monthly = getMonthlyTotals(records);
-  const comparison = getPreviousMonthComparison(records);
-  const costPerKm = getCostPerKilometer(records);
+  const dashboardAnchor = new Date();
+  const totals = getCurrentMonthRecordTypeTotals(records, dashboardAnchor);
+  const monthly = getMonthlyTotals(records, 6, dashboardAnchor);
+  const comparison = getPreviousMonthComparison(records, dashboardAnchor);
   const fuelLiters = getTotalFuelLiters(records);
   const recent = sortRecords(records).slice(0, 4);
   const activeReminderCount = reminders.filter((reminder) => !reminder.completed).length;
@@ -172,17 +171,6 @@ export default function DashboardScreen() {
           </Text>
           <Text style={styles.metricLabel}>Toplam yakıt</Text>
         </Card>
-        <Card style={styles.detailMetric}>
-          <Text style={styles.detailValue}>
-            {costPerKm === null ? '—' : `${formatCurrency(costPerKm)}/km`}
-          </Text>
-          <Text style={styles.metricLabel}>Yaklaşık maliyet</Text>
-          {costPerKm === null ? (
-            <Text style={styles.metricHelp}>
-              Kilometre başına maliyeti hesaplamak için en az iki farklı kilometre kaydı gerekir.
-            </Text>
-          ) : null}
-        </Card>
       </View>
       <SectionHeader
         title="Son hareketler"
@@ -277,6 +265,5 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     detailMetrics: { flexDirection: 'row', gap: spacing.md },
     detailMetric: { flex: 1, gap: spacing.xs },
     detailValue: { color: colors.navy, ...typography.cardTitle },
-    metricHelp: { color: colors.muted, fontSize: 11, lineHeight: 16 },
     list: { gap: spacing.md },
   });

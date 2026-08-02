@@ -155,6 +155,7 @@ import DocumentsListScreen from '@/app/documents/index';
 import ExpertiseEditScreen from '@/app/expertise/edit';
 import ExpertiseListScreen from '@/app/expertise/index';
 import RecordEditScreen from '@/app/record/edit';
+import { formatCurrency } from '@/shared/utils/format';
 
 const ownerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const vehicleId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -419,6 +420,28 @@ describe('TASK-011 critical route component mounts', () => {
       .join(' ');
     expect(dashboardText).toContain('—');
     expect(dashboardText).not.toContain('500 L');
+  });
+
+  it('renders current-month fuel, maintenance and expense totals without the free premium card', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-02T09:00:00+03:00'));
+    dataState.records = [
+      { ...records[0], amount: 500 },
+      { ...records[1], amount: 2_000 },
+      { ...records[2], amount: 5 },
+    ];
+
+    const renderer = await mount(DashboardScreen);
+    const dashboardText = findHost(renderer.root, 'Text')
+      .flatMap((node) => node.children)
+      .map(String);
+    expect(dashboardText).toContain(formatCurrency(500));
+    expect(dashboardText).toContain(formatCurrency(2_000));
+    expect(dashboardText).toContain(formatCurrency(5));
+    expect(dashboardText).not.toContain('Yaklaşık maliyet');
+
+    const chart = findHost(renderer.root, 'MiniBarChart')[0];
+    expect(chart.props.data.at(-1)).toMatchObject({ key: '2026-08', total: 2_505 });
   });
 
   it('emits exact history edit hrefs for all three record types', async () => {
