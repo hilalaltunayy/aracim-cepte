@@ -167,7 +167,9 @@ export default function DashboardScreen() {
       </Card>
       <View style={styles.detailMetrics}>
         <Card style={styles.detailMetric}>
-          <Text style={styles.detailValue}>{formatNumber(fuelLiters, 1)} L</Text>
+          <Text style={styles.detailValue}>
+            {fuelLiters > 0 ? `${formatNumber(fuelLiters, 1)} L` : '—'}
+          </Text>
           <Text style={styles.metricLabel}>Toplam yakıt</Text>
         </Card>
         <Card style={styles.detailMetric}>

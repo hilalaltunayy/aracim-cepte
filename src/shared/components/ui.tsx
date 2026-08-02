@@ -16,6 +16,7 @@ import {
   TextInputProps,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +39,7 @@ import {
   getButtonAccessibility,
   getSelectionAccessibilityState,
 } from '@/shared/utils/accessibility';
+import { getSelectionModalLayout } from '@/shared/utils/selectionModalLayout';
 
 const useStyles = () => useThemedStyles(createStyles);
 
@@ -350,6 +352,9 @@ export function SelectField<T extends string>({
   const { colors } = useAppTheme();
   const styles = useStyles();
   const [open, setOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const modalLayout = getSelectionModalLayout(windowHeight, insets);
   const visibleLabel = withoutOptionalSuffix(label);
   const selected = options.find((option) => option.value === value);
   return (
@@ -365,10 +370,24 @@ export function SelectField<T extends string>({
         <Ionicons name="chevron-down" size={20} color={colors.muted} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
-          <View style={styles.modalCard}>
+        <Pressable
+          style={[
+            styles.modalBackdrop,
+            { paddingTop: modalLayout.paddingTop, paddingBottom: modalLayout.paddingBottom },
+          ]}
+          onPress={() => setOpen(false)}
+        >
+          <View
+            testID="selection-modal-card"
+            accessibilityViewIsModal
+            style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
+          >
             <Text style={styles.modalTitle}>{visibleLabel}</Text>
-            <ScrollView style={styles.optionList}>
+            <ScrollView
+              testID="selection-modal-options"
+              style={styles.optionList}
+              contentContainerStyle={{ paddingBottom: modalLayout.listPaddingBottom }}
+            >
               {options.map((option) => (
                 <Pressable
                   key={option.value}
@@ -737,17 +756,16 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       flex: 1,
       backgroundColor: colors.modalOverlay,
       justifyContent: 'flex-end',
-      padding: spacing.lg,
+      paddingHorizontal: spacing.lg,
     },
     modalCard: {
-      maxHeight: '75%',
       backgroundColor: colors.elevatedSurface,
       borderRadius: radii.xl,
       padding: spacing.lg,
       gap: spacing.md,
     },
     modalTitle: { color: colors.textPrimary, ...typography.sectionTitle },
-    optionList: { maxHeight: 420 },
+    optionList: { flexShrink: 1 },
     option: {
       minHeight: 52,
       flexDirection: 'row',

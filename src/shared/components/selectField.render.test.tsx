@@ -1,0 +1,87 @@
+/* eslint-disable import/first */
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  Alert: { alert: vi.fn() },
+  Animated: { View: 'AnimatedView', Value: vi.fn(), timing: vi.fn() },
+  AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Modal: 'Modal',
+  Platform: { OS: 'android', select: (value: Record<string, unknown>) => value.android },
+  Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
+  StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
+  Text: 'Text',
+  TextInput: 'TextInput',
+  View: 'View',
+  useWindowDimensions: () => ({ width: 360, height: 640 }),
+}));
+
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 48, left: 0 }),
+}));
+vi.mock('@react-native-community/datetimepicker', () => ({ default: 'DateTimePicker' }));
+vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
+vi.mock('@/shared/theme', () => {
+  const colors = new Proxy({}, { get: (_target, key) => String(key) });
+  const metrics = new Proxy({}, { get: () => 12 });
+  const shadows = new Proxy({}, { get: () => ({}) });
+  const theme = { colors, shadows };
+  return {
+    fontFamilies: new Proxy({}, { get: () => 'Inter' }),
+    getButtonLoadingIndicatorColor: vi.fn(() => 'white'),
+    radii: metrics,
+    shadows,
+    spacing: metrics,
+    typography: new Proxy({}, { get: () => ({}) }),
+    useAppTheme: () => theme,
+    useThemedStyles: (factory: (value: typeof theme) => unknown) => factory(theme),
+  };
+});
+
+import { SelectField } from './ui';
+
+async function mount(): Promise<ReactTestRenderer> {
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      <SelectField<string>
+        label="Yakıt türü"
+        value="gasoline"
+        onChange={vi.fn()}
+        options={Array.from({ length: 12 }, (_, index) => ({
+          value: index === 0 ? 'gasoline' : `option-${index}`,
+          label: index === 0 ? 'Benzin' : `Seçenek ${index}`,
+        }))}
+      />,
+    );
+  });
+  return renderer!;
+}
+
+describe('shared SelectField Android safe area', () => {
+  beforeAll(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+      true;
+  });
+
+  it('opens a scrollable, height-bounded option surface above the system bar', async () => {
+    const renderer = await mount();
+    const trigger = renderer.root.findByProps({ accessibilityLabel: 'Yakıt türü: Benzin' });
+    act(() => trigger.props.onPress());
+
+    expect(renderer.root.find((node) => String(node.type) === 'Modal').props.visible).toBe(true);
+    const card = renderer.root.findByProps({ testID: 'selection-modal-card' });
+    expect(card.props.style).toContainEqual({ maxHeight: 548 });
+    const list = renderer.root.findByProps({ testID: 'selection-modal-options' });
+    expect(list.type).toBe('ScrollView');
+    expect(list.props.contentContainerStyle).toEqual({ paddingBottom: 48 });
+    const backdrop = renderer.root.findAll((node) => String(node.type) === 'Pressable').find((node) =>
+      Array.isArray(node.props.style),
+    );
+    expect(backdrop?.props.style).toContainEqual({ paddingTop: 24, paddingBottom: 48 });
+  });
+});

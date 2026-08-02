@@ -30,9 +30,12 @@ import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
+import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
 
 export default function DocumentEditScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = safeEntityId(params.id);
+  const invalidRouteId = Boolean(firstRouteParam(params.id) && !id);
   const { documents, activeVehicleId, saveDocument, deleteDocument, loading, error, bootstrapped } =
     useDataStore();
   const existing = useMemo(() => documents.find((document) => document.id === id), [documents, id]);
@@ -72,7 +75,7 @@ export default function DocumentEditScreen() {
     },
   );
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
-  const routeState = resolveEntityRoute(id, documents, bootstrapped);
+  const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(id, documents, bootstrapped);
   const datesValid = !issueDate || !expiryDate || expiryDate >= issueDate;
   const submit = async () => {
     setSubmitted(true);

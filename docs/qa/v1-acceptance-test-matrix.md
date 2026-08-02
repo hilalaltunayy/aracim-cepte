@@ -2,11 +2,34 @@
 
 **Audit date:** 2026-08-01
 **Baseline:** `2c5cc0450b558ba94ff0c8e07422db5b4a309cdf`
-**Automated run:** TASK-008 hedefli local testleri ve sentetik remote E2E — 2026-08-01
+**Automated run:** TASK-011 hedefli React component/route render testleri — 2026-08-02
 
-Bu sonuç uygulama, Android veya release artifact kabulü değildir. Vitest yapılandırması `node`
-environment kullanır ve yalnız `src/**/*.test.ts` dosyalarını alır; React Native ekranlarını light ve
-dark provider ile render eden `.test.tsx` altyapısı yoktur.
+Bu sonuç uygulama, Android veya release artifact kabulü değildir. TASK-011, Vitest `node` ortamına
+minimum `react-test-renderer` tabanlı `.test.tsx` component/route mount katmanı eklemiştir; native
+Android module, gerçek navigation container, viewer, safe-area pikseli ve e-posta teslimi yine APK
+üzerinde insan kabulü gerektirir.
+
+## TASK-011 kritik route APK doğrulama matrisi — 2026-08-02
+
+TASK-011 kaynak ve test ortamında ortak runtime throw'u kapatmıştır. Aşağıdaki satırlar yeni APK
+olmadan `Passed` değildir.
+
+| ID | Yeni APK adımları | Beklenen sonuç | Durum |
+| --- | --- | --- | --- |
+| A11-01 | Dashboard → Yakıt | Yakıt create formu açılır; Error Boundary/crash yok | MANUAL ANDROID CHECK REQUIRED |
+| A11-02 | Dashboard → Bakım | Bakım create formu açılır; Error Boundary/crash yok | MANUAL ANDROID CHECK REQUIRED |
+| A11-03 | Dashboard → Masraf | Diğer gider create formu açılır; Error Boundary/crash yok | MANUAL ANDROID CHECK REQUIRED |
+| A11-04 | Geçmiş → Yakıt kaydı | Doğru yakıt edit/detail formu açılır | MANUAL ANDROID CHECK REQUIRED |
+| A11-05 | Geçmiş → Bakım kaydı | Doğru bakım edit/detail formu açılır | MANUAL ANDROID CHECK REQUIRED |
+| A11-06 | Geçmiş → Diğer gider kaydı | Doğru diğer gider edit/detail formu açılır | MANUAL ANDROID CHECK REQUIRED |
+| A11-07 | Ekspertiz → Yeni ekspertiz raporu | Create formu ve picker açılır; picker iptali crash üretmez | MANUAL ANDROID CHECK REQUIRED |
+| A11-08 | Ekspertiz → Mevcut rapor → Aç | Geçerli ek açılır; expired/missing/unsupported viewer güvenli hata ve retry gösterir | MANUAL ANDROID CHECK REQUIRED |
+| A11-09 | Belgeler → Yeni belge | Belge create formu ve fotoğraf/belge picker'ları açılır; iptal güvenlidir | MANUAL ANDROID CHECK REQUIRED |
+| A11-10 | 500 TL, litre alanı boş yakıtla dashboard'u aç | `500 L` görünmez; litre değeri `—`, ₺500 yalnız gider toplamındadır | MANUAL ANDROID CHECK REQUIRED |
+| A11-11 | Bildirim iznini reddet → satıra dokun → sistemden izin ver → geri dön | App settings açılır, chevron/satır tıklanır, dönüşte izin metni yenilenir | MANUAL ANDROID CHECK REQUIRED |
+| A11-12 | Reminder, özel gün, kategori, araç/yakıt ve belge seçim panellerini aç | Son seçenek üç tuşlu/gesture navigation bar üstünde; uzun liste scroll edilir | MANUAL ANDROID CHECK REQUIRED |
+| A11-13 | Kayıt sonrası 60 sn bekle ve sentetik doğrulanmamış QA adresinde resend yap | API başarıdan sonra güvenli başarı; gerçek ikinci e-posta ulaşır; rate-limit başarı sayılmaz | MANUAL QA MAILBOX REQUIRED |
+| A11-14 | Yapay route hatasında Tekrar dene ve Ana sayfaya dön | Retry child tree'yi yeniden mount eder; ana sayfa navigation'ı çalışır; teknik/PII detay yok | MANUAL ANDROID CHECK REQUIRED |
 
 ## TASK-010 Android crash-regression matrisi — 2026-08-02
 
@@ -41,10 +64,10 @@ bile aşağıdaki satırlar yeni APK olmadan `Passed` değildir. Ekran görünt�
 | A10-24 | Dirty formda geri → Vazgeç; sonra geri → Çık; ayrıca save sonrası geri | Vazgeç form değerini korur; Çık kaydetmez; save sonrası yanlış uyarı yok | MANUAL ANDROID CHECK REQUIRED |
 | A10-25 | Yapay route/render hatasında root fallback'i doğrula | PII/detail/log olmadan “Bir sorun oluştu” ve ana sayfa/tekrar dene aksiyonları | MANUAL ANDROID CHECK REQUIRED |
 
-Otomatik test boşluğu: mevcut Vitest `node` ortamı React Native route/component tree'sini native
-modüllerle render etmez. Bu görev yeni bir renderer/dependency eklemek yerine route-param, araçsız state,
-dosya açma sınırı, reminder, notification ve dashboard mantığını saf testlerle kapsar; gerçek route/render
-ve native module sonucu yukarıdaki APK kapısında kalır.
+TASK-011 otomatik test kapsamı: kayıt/belge/ekspertiz route component'leri mock edilmiş geçerli
+kullanıcı/araçla gerçek React mount'tan geçer; dashboard/history/list aksiyonlarının exact pathname ve
+string parametreleri doğrulanır. Mock edilmiş native hostlar gerçek Expo Router navigation container,
+Android viewer, picker ve system bar davranışının yerine geçmez; bunlar yukarıdaki APK kapısında kalır.
 
 ## TASK-007 düzeltme kanıtı — 2026-08-01
 

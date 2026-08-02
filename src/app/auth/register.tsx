@@ -22,6 +22,8 @@ import {
 } from '@/features/auth/registrationFlow';
 import {
   CONFIRMATION_RESEND_COOLDOWN_MS,
+  CONFIRMATION_RESEND_LIMIT_MESSAGE,
+  CONFIRMATION_RESEND_MAX_ATTEMPTS,
   CONFIRMATION_RESEND_SUCCESS_MESSAGE,
   getConfirmationCooldownSeconds,
 } from '@/features/auth/confirmationResend';
@@ -36,6 +38,7 @@ export default function RegisterScreen() {
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [resendAttempts, setResendAttempts] = useState(0);
   const { signUp, resendConfirmation, busy, error, clearError } = useAuthStore();
   useFocusEffect(
     useCallback(() => {
@@ -64,9 +67,17 @@ export default function RegisterScreen() {
   }, [cooldownUntil, registeredEmail]);
 
   const resend = async () => {
-    if (!registeredEmail || cooldownSeconds > 0) return;
+    if (
+      !registeredEmail ||
+      cooldownSeconds > 0 ||
+      resendAttempts >= CONFIRMATION_RESEND_MAX_ATTEMPTS
+    )
+      return;
     setResendMessage(null);
-    if (await resendConfirmation(registeredEmail)) {
+    const nextAttemptCount = resendAttempts + 1;
+    const sent = await resendConfirmation(registeredEmail);
+    setResendAttempts(nextAttemptCount);
+    if (sent) {
       setResendMessage(CONFIRMATION_RESEND_SUCCESS_MESSAGE);
       const nextAllowedAt = Date.now() + CONFIRMATION_RESEND_COOLDOWN_MS;
       setCooldownUntil(nextAllowedAt);
@@ -81,15 +92,22 @@ export default function RegisterScreen() {
           <Text style={styles.successMessage}>{REGISTRATION_SUCCESS.message}</Text>
           {error ? <ErrorBanner message={error} /> : null}
           {resendMessage ? <Text style={styles.resendSuccess}>{resendMessage}</Text> : null}
+          {resendAttempts >= CONFIRMATION_RESEND_MAX_ATTEMPTS ? (
+            <ErrorBanner message={CONFIRMATION_RESEND_LIMIT_MESSAGE} />
+          ) : null}
           <AppButton
             title={
               cooldownSeconds > 0
                 ? `${cooldownSeconds} sn sonra tekrar gönderebilirsiniz`
-                : 'Doğrulama e-postasını tekrar gönder'
+                : resendAttempts >= CONFIRMATION_RESEND_MAX_ATTEMPTS
+                  ? 'Tekrar gönderme sınırına ulaşıldı'
+                  : 'Doğrulama e-postasını tekrar gönder'
             }
             variant="secondary"
             loading={busy}
-            disabled={cooldownSeconds > 0}
+            disabled={
+              cooldownSeconds > 0 || resendAttempts >= CONFIRMATION_RESEND_MAX_ATTEMPTS
+            }
             onPress={() => void resend()}
           />
           <AppButton

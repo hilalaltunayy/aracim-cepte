@@ -28,11 +28,12 @@ import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
-import { safeEntityId } from '@/shared/utils/routeParams';
+import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
 
 export default function ExpertiseEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = safeEntityId(params.id);
+  const invalidRouteId = Boolean(firstRouteParam(params.id) && !id);
   const {
     expertiseReports,
     activeVehicleId,
@@ -68,7 +69,9 @@ export default function ExpertiseEditScreen() {
     { date, company, number, note, attachmentPath, pickedUri: picked?.uri ?? null },
   );
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
-  const routeState = resolveEntityRoute(id, expertiseReports, bootstrapped);
+  const routeState = invalidRouteId
+    ? 'missing'
+    : resolveEntityRoute(id, expertiseReports, bootstrapped);
   const submit = async () => {
     if (!activeVehicleId) return;
     setLocalError(null);

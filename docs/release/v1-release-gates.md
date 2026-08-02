@@ -1,6 +1,6 @@
 # V1 release kapıları
 
-**Snapshot date:** 2026-08-01  
+**Snapshot date:** 2026-08-02
 **Release target:** İlk Google Play production Android yayını
 
 ## Preview APK build kapısı — TASK-010 güncellemesi
@@ -13,6 +13,16 @@ ve toplu silme sonrası ekran durumlarında production-blocking kusurlar göster
 test, TypeScript, lint, Expo Doctor, diff ve güvenlik taraması kapılarından geçmiştir. Bu güncel karar
 yalnız ayrı aşamada yeni crash-regression preview APK'sı alınmasına izin verir; o APK gerçek cihazda
 kabul edilmeden Android blocker'ları `Passed` değildir ve production Play Store yayını hazır değildir.
+
+### TASK-011 kritik route düzeltme kanıtı
+
+TASK-010 sonrası APK'da dokuz kayıt/belge/ekspertiz route'u root Error Boundary'ye düşmüştür.
+TASK-011, ilk throw'u `requestId.ts` içindeki Android'de bulunmayan Web Crypto bağımlılığı olarak
+component stack ile yeniden üretmiş; SDK 57 `expo-crypto.randomUUID()` ile değiştirmiştir. Dokuz route
+gerçek React component mount testleriyle, üç kayıt türünün exact href/parametreleriyle ve güvenli
+invalid/missing state'lerle doğrulanmıştır. Tam paket 45 dosya/184 test, TypeScript, lint, Expo Doctor
+20/20 ve diff kontrolünden geçmiştir. Yeni APK oluşturulmadığı için gerçek Android ve APK gate'leri
+`Failed`/manuel durumunda kalır; bu kaynak kanıtı tek başına production veya artifact kabulü değildir.
 
 ### Tarihsel TASK-009 kararı
 

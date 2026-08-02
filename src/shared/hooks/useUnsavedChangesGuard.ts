@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
-import { usePreventRemove } from 'expo-router/build/react-navigation/native';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { UNSAVED_CHANGES_COPY } from '@/shared/utils/unsavedChanges';
 
 type DeferredNavigation = () => void;

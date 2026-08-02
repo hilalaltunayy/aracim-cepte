@@ -31,11 +31,12 @@ import {
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
-import { safeEntityId, safeRecordType } from '@/shared/utils/routeParams';
+import { firstRouteParam, safeEntityId, safeRecordType } from '@/shared/utils/routeParams';
 
 export default function RecordEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>();
   const routeId = safeEntityId(params.id);
+  const invalidRouteId = Boolean(firstRouteParam(params.id) && !routeId);
   const routeType = safeRecordType(params.type);
   const {
     records,
@@ -86,7 +87,7 @@ export default function RecordEditScreen() {
     description,
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
-  const routeState = resolveEntityRoute(routeId, records, bootstrapped);
+  const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(routeId, records, bootstrapped);
   const parsedAmount = parseDecimal(amount);
   const parsedLiters = parseDecimal(liters);
   const parsedKm = km ? parseDecimal(km) : null;
