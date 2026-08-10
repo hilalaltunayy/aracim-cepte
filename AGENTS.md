@@ -13,24 +13,34 @@ belgelerini tek bir mobil uygulamada güvenli biçimde yönetmesini amaçlayan T
 
 ## Mevcut ürün durumu
 
-- Expo Router tabanlı Android öncelikli bir mobil uygulama ve Supabase-backed repository katmanı
-  mevcuttur.
+- Expo Router tabanlı Android öncelikli bir mobil uygulama ve bağlı Supabase-backed repository
+  katmanı mevcuttur.
 - E-posta/şifre kimlik doğrulama, araç ve kayıt CRUD'u, hatırlatıcılar, dashboard hesapları ve özel
   belge depolama için uygulama kodu bulunmaktadır.
+- Güncel uygulama sürümü `1.0.0`'dır. Google Play Closed Testing'de kullanılan production Android
+  AAB `versionCode: 2` ile başarıyla üretilmiştir; Closed Testing devam etmektedir.
+- Build 2, production e-posta doğrulama ve parola sıfırlama deep-link düzeltmelerini içerir.
+  Production callback'leri `aracimcepte://auth/confirm-email` ve
+  `aracimcepte://auth/reset-password`; Supabase production Site URL değeri
+  `https://aracimcepte.hilalaltunay.com` adresidir.
+- Public hukuk sitesi yayındadır. Bu, hukukçu incelemesini, KVKK/yurt dışı aktarım kararlarını veya
+  Google Play production kabulünü tek başına tamamlamaz.
+- Kapalı test kaynak snapshot'ı `release/1.0.0-closed-test-b2` branch'i ve
+  `v1.0.0-closed-test-b2` annotated tag'i ile korunur. `develop`, V1.1 ve sonrası için entegrasyon
+  branch'idir.
 - Yerel/otomatik test ve geçmiş QA kanıtları vardır; bunlar production kabulünün veya güncel gerçek
   cihaz testinin yerine geçmez.
-- Fiziksel Android kabulü, üretim AAB'si, Play Console yüklemesi, privacy policy ve eksik hesap
-  silme akışı tamamlanmadan V1 yayınlanmış sayılmaz.
 - Güncel kanıt ve bilinen sınırlamalar için [proje durumu](docs/project-status.md),
   [release-readiness raporu](docs/release-readiness.md) ve
   [V1 release kapıları](docs/release/v1-release-gates.md) birlikte okunmalıdır.
 
 ## Güncel release hedefi
 
-Hedef, [V1 kapsamındaki](docs/product/v1-scope.md) kritik akışları gerçek Android cihazda doğrulanmış,
-kalıcı Supabase verisi kullanan, güvenli belge saklayan ve Google Play gereklilikleri hazırlanmış
-bir production Android yayınıdır. V1 dışı özellikler mimaride genişleme noktası bırakabilir ancak
-uygulanamaz.
+Güncel aşama Google Play Closed Testing'dir. Hedef, [V1 kapsamındaki](docs/product/v1-scope.md)
+kritik akışları build 2 üzerinde gerçek Android cihazlarda doğrulayıp açık hukuk/operasyon
+kapılarını kapatarak kontrollü production Android yayınına ilerlemektir. AAB üretimi veya Closed
+Testing'in başlaması tam production ya da hukuki hazırlık iddiası değildir. V1.1 ve sonrası sıra
+[development roadmap](docs/product/development-roadmap.md) tarafından yönetilir.
 
 ## Mimari özeti ve teknoloji yığını
 
@@ -62,6 +72,30 @@ okuyun; farklı veya `latest` sürüm belgelerini kaynak kabul etmeyin.
 Doküman ile uygulama çelişirse bunu gizlemeyin. Görev kapsamı izin veriyorsa ikisini uyumlu hale
 getirin; izin vermiyorsa farkı completion report'ta insan kararı olarak kaydedin.
 
+## Git workflow ve release güvenliği
+
+- `main`: stabil/released çizgidir; doğrudan feature geliştirmesi yapılmaz.
+- `develop`: sıradaki release için entegrasyon branch'idir.
+- `feature/*`: `develop` üzerinden açılan tek ve izole ürün özelliğidir; PR ile `develop`'a döner.
+- `chore/*`: dokümantasyon, tooling ve repository yönetişimi işidir; uygun base branch'e PR açılır.
+- `hotfix/*`: güncel released/tested çizgi için kritik düzeltmedir; çözüm daha sonra `develop`'a da
+  taşınır.
+- `release/*`: immutable veya near-immutable release snapshot'ıdır.
+- `v*`: doğrulanmış release commit'lerini işaretleyen version tag desenidir.
+
+Zorunlu Git güvenlik kuralları:
+
+- Feature geliştirmesi hiçbir zaman doğrudan `main` üzerinde yapılmaz.
+- `main`, `develop`, `release/*` veya version tag'lerine force-push yapılmaz; yayınlanmış release
+  geçmişi yeniden yazılmaz.
+- Release tag'leri gelişigüzel silinmez veya başka commit'e taşınmaz.
+- Stabil release yalnız açık ve review edilmiş release adımıyla `main`'e ulaşır.
+- Her non-trivial görevden önce güncel branch ve worktree doğrulanır. Branch yanlışsa edit öncesi
+  durulur.
+- Kullanıcı işi ve dirty-worktree dosyaları korunur; ilgisiz değişiklikler stage edilmez.
+- Her release artifact'ının geri getirilebilir source commit'i ve tercihen annotated tag'i olur.
+- Riskli iş başlamadan rollback yolu bilinmeli ve execution plan'da kaydedilmelidir.
+
 ## Zorunlu çalışma akışı
 
 Her non-trivial görevde sırayla:
@@ -81,6 +115,30 @@ Her non-trivial görevde sırayla:
 Uzun veya riskli işlerde plan uygulama boyunca aktif tutulur. Kapsam değişikliği görev dosyasına ve
 plana işlenmeden uygulanamaz. Tamamlanan görev bağımsız inceleme gerekiyorsa önce `tasks/review/`
 altında review göreviyle doğrulanır, sonra `tasks/active/` içinden `tasks/completed/` içine taşınır.
+
+## V1.1+ geliştirme mimarisi ilkeleri
+
+Yeni geliştirmeler modüler, yapılandırılabilir, genişletilebilir, geriye uyumlu, rollback-friendly ve
+minimum coupling ile tasarlanır. Büyük veya riskli işlevler feature flag arkasında ilerletilir.
+External API ve servis entegrasyonları uygun olduğunda provider-independent abstraction kullanır;
+örneğin `AiProvider`, `OcrProvider`, `FuelPriceProvider`, `RoutingProvider` ve
+`ConnectedVehicleProvider`.
+
+Ürün limitleri ve kataloglar dağınık hard-coded değerler olarak eklenmez. `maxVehicles`, AI/OCR
+kotaları, premium entitlement availability, maintenance catalog, vehicle body types, fuel types ve
+reminder thresholds gibi değerler tek, izlenebilir ve uygun güvenlik sınırında yapılandırılır.
+
+## Veritabanı ve migration kuralları
+
+- Additive ve forward-compatible migration tercih edilir; feature geliştirmesi V1 verisini yok
+  edemez.
+- Uygun kayıtlarda olay tarihi (`occurredAt`/event date) ile record creation timestamp ayrı tutulur.
+- Replacement alanı eklendiğinde eski alan hemen kaldırılmaz; geçiş süresince geriye uyumluluk ve
+  okuma/yazma stratejisi belgelenir.
+- Her yeni kullanıcı-verisi tablosunda RLS, sahiplik, silme, retention ve cross-user negatif test
+  etkisi değerlendirilir.
+- Riskli migration için rollback yerine gerekirse ileri düzeltme/forward recovery dahil açık bir
+  kurtarma stratejisi yazılır.
 
 ## Güvenlik kuralları
 
@@ -120,8 +178,13 @@ sunulan hukuk metinlerinin kanonik kaynakları ve üretim akışı için
 
 ## Test kuralları
 
-Göreve uyan en dar güvenilir setten başlayın, ardından regression kapsamını genişletin. Normal kod
-değişikliği için en az aşağıdakiler değerlendirilir:
+Feature geliştirmesinde varsayılan yaklaşım, değişen davranışı güvenilir biçimde kanıtlayan en dar
+hedefli testleri önce çalıştırmaktır. Her küçük görevde geniş test paketini otomatik çalıştırmayın.
+TypeScript, lint ve test kapsamı değişen dosya, ortak bağımlılık zinciri ve riskle orantılı seçilir.
+
+Release candidate hazırlığı, shared infrastructure, security-critical veya database/RLS değişikliği,
+native/platform değişikliği, broad refactor ya da kullanıcının açık talimatı daha geniş regression
+gerektirir. Bu durumlarda uygun kombinasyon ayrıca değerlendirilir:
 
 ```powershell
 npm run typecheck
@@ -148,6 +211,8 @@ npm run qa:remote
   negatif güvenlik, kalıcılık, hata durumu, navigasyon ve manuel cihaz kontrolleri ayrıca ele alınır.
 - Çalıştırılmayan her kontrol nedeni ile birlikte "Atlandı" veya "Manuel doğrulama gerekli"
   olarak raporlanır; geçmiş bir sonuç yeni çalıştırılmış gibi sunulamaz.
+- Her completion report `Completed`, `Skipped`, `Failed` ve `Manual verification required`
+  bölümlerini birbirinden ayırır.
 
 ## Dokümantasyon kuralları
 

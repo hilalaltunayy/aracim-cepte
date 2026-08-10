@@ -9,6 +9,12 @@ Proje: `eiqxvvnqkbzbhzpthcwo`
 > ile [V1 release kapılarını](release/v1-release-gates.md) kullanın. Bu tarihsel `Passed` durumları yeni
 > Storage migration'ını kabul edilmiş göstermez.
 
+> **Güncel durum için kullanmayın:** Bu belge 28 Temmuz 2026 tarihli kanıtı olduğu biçimiyle korur.
+> Güncel release aşaması, artifact, Git snapshot ve açık manuel/hukuki kapılar için
+> [proje durumunu](project-status.md) ve [V1 release kapılarını](release/v1-release-gates.md) birlikte
+> okuyun. Buradaki eski blocker listesi bugün yeniden çalıştırılmış veya hâlâ değişmeden geçerli
+> kabul edilmemelidir.
+
 Bu rapor “production-ready” beyanı değildir. Kod, web ve veritabanı kontrolleriyle
 kanıtlanan durumlar ile fiziksel cihaz/mağaza öncesi kalan işleri ayırır.
 
