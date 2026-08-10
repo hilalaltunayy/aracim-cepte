@@ -7,7 +7,11 @@ export const CONFIRMATION_RESEND_LIMIT_MESSAGE =
   'Çok fazla doğrulama e-postası istediniz. Lütfen daha sonra tekrar deneyin.';
 
 export interface ConfirmationResendClient {
-  resend: (credentials: { type: 'signup'; email: string }) => Promise<{ error: Error | null }>;
+  resend: (credentials: {
+    type: 'signup';
+    email: string;
+    options: { emailRedirectTo: string };
+  }) => Promise<{ error: Error | null }>;
 }
 
 export function getConfirmationCooldownSeconds(until: number, now = Date.now()): number {
@@ -28,10 +32,12 @@ export function getConfirmationResendError(error: unknown): string {
 export async function resendSignupConfirmation(
   client: ConfirmationResendClient,
   email: string,
+  emailRedirectTo: string,
 ): Promise<void> {
   const { error } = await client.resend({
     type: 'signup',
     email: email.trim().toLowerCase(),
+    options: { emailRedirectTo },
   });
   if (error) throw error;
 }

@@ -3,6 +3,7 @@ import {
   REGISTRATION_LEGAL_LINKS,
   REGISTRATION_LEGAL_NOTICE,
   REGISTRATION_SUCCESS,
+  createRegistrationAuthOptions,
   createLoginPrefillHref,
   getLoginPrefillEmail,
 } from './registrationFlow';
@@ -26,6 +27,15 @@ describe('registration completion flow', () => {
       'user@example.com',
     );
     expect(createLoginPrefillHref('user@example.com').params).not.toHaveProperty('password');
+  });
+
+  it('keeps the confirmation redirect in the signup auth options', () => {
+    expect(
+      createRegistrationAuthOptions(' Hilal ', 'aracimcepte://auth/confirm-email'),
+    ).toEqual({
+      emailRedirectTo: 'aracimcepte://auth/confirm-email',
+      data: { display_name: 'Hilal' },
+    });
   });
 
   it('keeps legal copy informational and links to canonical app routes', () => {

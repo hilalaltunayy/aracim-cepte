@@ -6,7 +6,10 @@ import {
   getFunctionErrorCode,
 } from '@/data/supabase/functionErrors';
 import { establishPasswordRecoverySession } from '@/features/auth/passwordRecovery';
-import { getPasswordRecoveryRedirectUrl } from '@/features/auth/recoveryRedirect';
+import {
+  getEmailConfirmationRedirectUrl,
+  getPasswordRecoveryRedirectUrl,
+} from '@/features/auth/recoveryRedirect';
 import {
   getPasswordResetFriendlyError,
   logPasswordResetErrorInDevelopment,
@@ -18,6 +21,7 @@ import {
 import { SESSION_EXPIRED_MESSAGE } from '@/features/auth/sessionRouting';
 import { AppError, getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { markHasSignedInBefore, readHasSignedInBefore } from '@/features/auth/returningUser';
+import { createRegistrationAuthOptions } from '@/features/auth/registrationFlow';
 
 interface AuthState {
   session: Session | null;
@@ -114,7 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { error } = await getSupabaseClient().auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { data: { display_name: displayName.trim() || undefined } },
+        options: createRegistrationAuthOptions(displayName, getEmailConfirmationRedirectUrl()),
       });
       if (error) throw error;
       set({ busy: false });
@@ -128,7 +132,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   resendConfirmation: async (email) => {
     set({ busy: true, error: null });
     try {
-      await resendSignupConfirmation(getSupabaseClient().auth, email);
+      await resendSignupConfirmation(
+        getSupabaseClient().auth,
+        email,
+        getEmailConfirmationRedirectUrl(),
+      );
       set({ busy: false });
       return true;
     } catch (error) {

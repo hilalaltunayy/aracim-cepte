@@ -195,6 +195,13 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
+          name="auth/confirm-email"
+          options={{
+            ...detailOptions('E-posta doğrulama'),
+            headerLeft: () => <BackButton fallback="/auth/login" />,
+          }}
+        />
+        <Stack.Screen
           name="legal/index"
           options={{
             ...detailOptions('Yasal ve gizlilik'),

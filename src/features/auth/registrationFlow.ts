@@ -19,6 +19,13 @@ export function normalizeRegistrationEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+export function createRegistrationAuthOptions(displayName: string, emailRedirectTo: string) {
+  return {
+    emailRedirectTo,
+    data: { display_name: displayName.trim() || undefined },
+  };
+}
+
 export function createLoginPrefillHref(email: string) {
   return {
     pathname: '/auth/login' as const,

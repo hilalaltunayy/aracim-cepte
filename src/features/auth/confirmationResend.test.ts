@@ -12,8 +12,16 @@ import {
 describe('confirmation resend', () => {
   it('normalizes the email and calls only the signup resend API', async () => {
     const resend = vi.fn(async () => ({ error: null }));
-    await resendSignupConfirmation({ resend }, '  User@Example.Invalid ');
-    expect(resend).toHaveBeenCalledWith({ type: 'signup', email: 'user@example.invalid' });
+    await resendSignupConfirmation(
+      { resend },
+      '  User@Example.Invalid ',
+      'aracimcepte://auth/confirm-email',
+    );
+    expect(resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'user@example.invalid',
+      options: { emailRedirectTo: 'aracimcepte://auth/confirm-email' },
+    });
   });
 
   it('calculates a non-negative cooldown', () => {

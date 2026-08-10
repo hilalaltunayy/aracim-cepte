@@ -1,6 +1,6 @@
 # V1 release kapıları
 
-**Snapshot date:** 2026-08-02
+**Snapshot date:** 2026-08-08
 **Release target:** İlk Google Play production Android yayını
 
 ## TASK-013 hedefli güvenlik doğrulaması
@@ -104,7 +104,7 @@ değerlendirir.
 | No sensitive data in logs                     | In progress                  | TASK-013 source taraması public URL ve token/password/signed URL log kullanımı bulmadı; development auth/error diagnostics redacted. Release cihazı ve Supabase/Resend provider log örneklemi eksik olduğu için gate kapanmaz.                |
 | Real Android device critical flow test passed | Failed                       | 1–2 Ağustos 2026 kabulünde hızlı kayıt/ekspertiz crash'i ve toplu silme sonrası beyaz ekran bulundu. TASK-010 kaynak düzeltmesi sonrası yeni artifact üzerinde ayrıntılı crash-regression kabulü zorunlu.                                     |
 | APK acceptance test passed                    | Failed                       | Mevcut APK production-blocking cihaz kusurları göstermiştir. TASK-010 otomatik kapıları ve yeni Android kabulü tamamlanmadan Passed yapılamaz.                                                                                                |
-| Production AAB succeeds                       | Not started                  | Güncel production AAB artifact, signing/build logu ve smoke testi kanıtı yok. AAB build bu dokümantasyon görevinde çalıştırılmadı.                                                                                                            |
+| Production AAB succeeds                       | Passed                       | 2026-08-08 EAS production build `24d9eab7-d987-4ce0-80c7-ea109b7e6c89` tamamlandı: Android package `com.hilalaltunay.aracimcepte`, app version `1.0.0`, versionCode `1`, profil `production`, imzalı `.aab` artifact üretildi. Bu yalnız build gate'ini kapatır; Android kabulü ve diğer production blocker'ları açık kalır. |
 | Store screenshots completed                   | Not started                  | Onaylı telefon ekran görüntüleri, privacy redaction, locale/cihaz ölçüleri ve listing seti yok.                                                                                                                                               |
 | No known blocker or critical bug              | Failed                       | TASK-010'a kaynak olan Android crash/beyaz ekranlar mevcut APK'da doğrulandı; yeni artifact kabulü bekleniyor. Leaked-password protection, hukuk/KVKK, provider-log ve production artifact gate'leri de açık.                                 |
 

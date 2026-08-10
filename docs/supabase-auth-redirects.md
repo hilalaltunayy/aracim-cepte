@@ -1,83 +1,112 @@
-# Supabase Auth yönlendirme yapılandırması
+# Supabase Auth production yönlendirme yapılandırması
 
-Bu belge, Supabase Dashboard → Authentication → URL Configuration ekranına
-eklenmesi gereken parola kurtarma yönlendirmelerini listeler.
+Bu belge, Aracım Cepte production Android auth e-postalarının localhost'a düşmemesi için kod ile
+Supabase Dashboard arasında korunması gereken source-of-truth değerleri tanımlar.
 
-## Site URL
+## Uygulama kimliği ve rotalar
 
-Yerel geliştirme sırasında:
+- Android package: `com.hilalaltunay.aracimcepte`
+- Expo scheme: `aracimcepte`
+- E-posta doğrulama rotası: `/auth/confirm-email`
+- Parola kurtarma rotası: `/auth/reset-password`
 
-```text
-http://localhost:8083
-```
-
-Üretimde bu değer gerçek HTTPS alan adıyla değiştirilmelidir:
-
-```text
-https://YOUR_PRODUCTION_DOMAIN
-```
-
-## Redirect URLs
-
-Yerel web:
+Production Android callback URI'ları tam olarak şunlardır:
 
 ```text
-http://localhost:8083/auth/reset-password
-http://127.0.0.1:8083/auth/reset-password
-```
-
-Expo Go geliştirme bağlantıları:
-
-```text
-exp://**/--/auth/reset-password
-```
-
-Development build ve gelecekteki Android/iOS standalone uygulamalar:
-
-```text
+aracimcepte://auth/confirm-email
 aracimcepte://auth/reset-password
-aracimcepte://**
 ```
 
-Üretim web:
+Scheme `app.json` içindeki mevcut değerdir; bu çalışma yeni bir scheme oluşturmaz.
+
+## Supabase Dashboard — kopyalanacak production değerleri
+
+Authentication → URL Configuration → **Site URL**:
 
 ```text
-https://YOUR_PRODUCTION_DOMAIN/auth/reset-password
+https://aracimcepte.hilalaltunay.com
 ```
 
-Preview ortamı kullanılacaksa yalnızca ilgili sağlayıcının gerçek alan adı eklenmelidir:
+Authentication → URL Configuration → **Redirect URLs** alanına ayrı satırlar halinde:
 
 ```text
-https://YOUR_PREVIEW_DOMAIN/**/auth/reset-password
+aracimcepte://auth/confirm-email
+aracimcepte://auth/reset-password
 ```
 
-Üretimde wildcard yerine mümkün olduğunca tam HTTPS yolu kullanılmalıdır.
+Production allow-list'inde bu iki exact URI tercih edilir. `aracimcepte://**` wildcard'ı production
+için gerekli değildir. Localhost production Site URL olarak bırakılmaz. Geliştirme web rotaları
+gerekiyorsa yalnız geliştirme süresince ayrıca allow-list'e alınır; production varsayılanı olarak
+kullanılmaz.
 
-## Kod tarafındaki eşleşme
+Public domain şu anda hukuk sayfalarını barındırır. Bu repository'de doğrulanmış web auth callback
+sayfaları bulunmadığı için `/auth/confirm-email` ve `/auth/reset-password` HTTPS adresleri production
+Redirect URLs listesine eklenmez. Mobil e-posta akışlarının hedefi yukarıdaki custom-scheme
+URI'larıdır.
 
-- Expo URL şeması: `aracimcepte`
-- Expo Router rotası: `/auth/reset-password`
-- Web geliştirme dönüşü: `http://localhost:8083/auth/reset-password`
-- Native dönüş: çalışma ortamına göre `Linking.createURL('/auth/reset-password')`
-- Desteklenen callback biçimleri:
-  - PKCE `?code=...`
-  - `?token_hash=...&type=recovery`
-  - `#access_token=...&refresh_token=...&type=recovery`
+## Kod tarafındaki davranış
 
-Tokenlar ekranda gösterilmez ve loglanmaz. Kurtarma dışındaki callback türleri yeni
-şifre ekranını etkinleştirmez.
+- İlk kayıt `signUp(..., { options: { emailRedirectTo } })` ile confirmation URI'ını gönderir.
+- Manuel confirmation resend aynı `emailRedirectTo` değerini gönderir.
+- Password reset `resetPasswordForEmail(email, { redirectTo })` ile recovery URI'ını gönderir.
+- Confirmation callback başarı ekranını açar, fakat kullanıcıyı otomatik giriş yaptırmaz ve parolayı
+  saklamaz.
+- Recovery callback PKCE, token hash ve implicit recovery session biçimlerini işler.
+- Yeni parola `supabase.auth.updateUser({ password })` ile kaydedilir; ardından kurtarma oturumu
+  kapatılır.
+- `PASSWORD_RECOVERY` olayı recovery mode'u etkinleştirir.
+- Callback tokenları ekranda veya loglarda gösterilmez.
 
-## E-posta şablonu kontrolü
+## Neden localhost'a gidiyordu?
 
-Recovery şablonunda Supabase tarafından üretilen `{{ .ConfirmationURL }}` kullanılmalıdır.
-Özel bir link kuruluyorsa hedefin `{{ .RedirectTo }}` değerini koruduğu doğrulanmalıdır.
+İlk signup ve confirmation resend çağrıları `emailRedirectTo` göndermiyordu. Supabase bu durumda
+Dashboard Site URL değerini varsayılan dönüş adresi olarak kullanır. Site URL localhost olduğundan,
+server tarafındaki doğrulama tamamlandıktan sonra tarayıcı localhost'a yönleniyordu.
 
-## Üretim öncesi zorunlu manuel test
+Password reset kodu native `redirectTo` üretiyor ve uygulamadaki yeni parola ekranı hazırdı. Ancak
+exact URI Dashboard Redirect URLs allow-list'inde değilse veya özel recovery şablonu Supabase'in
+ürettiği confirmation URL'sini kullanmıyorsa bu yönlendirme uygulanmaz; Site URL fallback'i sonucu
+localhost veya yanlış hedef görülür.
 
-1. Dashboard’a yukarıdaki geliştirme URL’lerini ekleyin.
-2. Ayrılmış QA hesabından parola sıfırlama e-postası isteyin.
-3. Aynı tarayıcıda web linkini açın ve `/auth/reset-password` rotasını doğrulayın.
-4. Aynı cihazda Expo Go linkini açın.
-5. Development build içinde `aracimcepte://auth/reset-password` bağlantısını açın.
-6. Şifreyi değiştirin, kurtarma oturumunun kapandığını ve eski şifrenin reddedildiğini doğrulayın.
-7. Aynı linkin ikinci kullanımında Türkçe “süresi dolmuş veya kullanılmış” mesajını doğrulayın.
+## Email Templates kontrolü
+
+Authentication → Email Templates içinde standart Supabase şablonları ve aşağıdaki değişken
+kullanılıyorsa manuel içerik değişikliği gerekmez:
+
+Confirmation signup düğmesi/linki:
+
+```html
+<a href="{{ .ConfirmationURL }}">E-posta adresimi doğrula</a>
+```
+
+Reset password düğmesi/linki:
+
+```html
+<a href="{{ .ConfirmationURL }}">Şifremi yenile</a>
+```
+
+`{{ .ConfirmationURL }}` Supabase doğrulama endpoint'ini ve kodun gönderdiği `redirect_to` hedefini
+birlikte taşır. Şablonda hard-coded localhost, `{{ .SiteURL }}` ile elle kurulmuş auth linki veya
+`redirect_to` bilgisini kaybeden özel bir URL varsa bu link yukarıdaki biçime çevrilmelidir.
+`{{ .RedirectTo }}` tek başına confirmation linki olarak kullanılmamalıdır; Supabase doğrulama
+endpoint'ini atlar.
+
+## Production Android manuel kabulü
+
+Dashboard değerleri kaydedildikten ve yeni Android artifact yüklendikten sonra sentetik bir e-posta
+ile:
+
+1. Temiz bir test hesabı oluşturun ve confirmation e-postasındaki linke dokunun.
+2. Android'in Aracım Cepte'yi açtığını ve “E-posta adresiniz doğrulandı” ekranını gösterdiğini
+   doğrulayın.
+3. “Giriş ekranına dön” ile login'e gidin; otomatik giriş olmadığını doğrulayın ve manuel giriş yapın.
+4. Ayrı bir testte “Şifremi unuttum” üzerinden reset e-postası isteyin.
+5. Reset linkinin Aracım Cepte → “Yeni şifrenizi belirleyin” ekranını açtığını doğrulayın.
+6. Sekiz veya daha fazla karakterli eşleşen parolayı kaydedin; başarıdan sonra login'e dönüldüğünü
+   doğrulayın.
+7. Eski parolanın reddedildiğini, yeni parolanın çalıştığını ve aynı reset linkinin ikinci kullanımda
+   güvenli “süresi dolmuş veya kullanılmış” hatası verdiğini doğrulayın.
+8. Bozuk/expired confirmation linkinde ham provider hatası veya token görünmediğini doğrulayın.
+
+Bu kontroller gerçek e-posta teslimi, Supabase Dashboard durumu, Android intent çözümleme ve release
+artifact gerektirdiğinden otomatik testlerle Passed sayılamaz.
