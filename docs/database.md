@@ -5,6 +5,8 @@
 - `profiles`: `auth.users` ile bire bir kullanıcı profili.
 - `vehicles`: sahibi, araç kimliği, kilometre, yakıt ve gövde tipi.
 - `vehicle_records`: yakıt, bakım ve diğer masraf kayıtları.
+- `maintenance_items`: bakım event'ine bağlı sıfır veya daha çok yapılandırılmış operasyon.
+- `maintenance_templates`: kullanıcıya ait, tekrar kullanılabilir bakım operasyonu preset'leri.
 - `reminders`: tarih ve/veya kilometre hedefleri ile yerel bildirim kimliği.
 - `body_part_conditions`: araç, gövde şeması ve parça için tekil durum.
 - `expertise_reports`: rapor meta verisi ve isteğe bağlı özel ek yolu.
@@ -36,9 +38,10 @@ veritabanı parolası istemciye girmez.
 `vehicle_records.record_date` event tarihidir. Boş kilometre “Kilometreyi bilmiyorum” anlamına gelir
 ve `0` gibi sahte bir sentinel değer kullanılmaz.
 
-Yakıt, bakım ve diğer gider create/update işlemleri mobil repository'de yalnız
-`save_vehicle_record_atomic` RPC'sinden geçer. RPC aynı transaction içinde kaydı yazar ve bilinen
-event kilometresi mevcut `current_km` değerinden yüksekse aracı ilerletir:
+Yakıt ve diğer gider create/update işlemleri mobil repository'de `save_vehicle_record_atomic`,
+bakım event + final operasyon seti ise `save_maintenance_record_atomic` RPC'sinden geçer. Her iki
+RPC aynı transaction içinde kaydı yazar ve bilinen event kilometresi mevcut `current_km` değerinden
+yüksekse aracı ilerletir:
 
 ```text
 event_km null       => current_km değişmez
@@ -52,10 +55,30 @@ bir sırası olmadığı için çelişkili bilinen kilometreler uygulamada advis
 block oluşturmaz. Form, en yakın önceki/sonraki bilinen kilometreyle çelişki gördüğünde kullanıcıdan
 “Yine de kaydet” onayı ister.
 
-RLS ve tablo grant'leri bu değişiklikte değiştirilmez. Normal mobil write yolu RPC ile sınırlıdır;
-ancak özel bir authenticated Data API istemcisinin kendi owner-scoped satırına doğrudan yazması
-atomik high-water güncellemesini atlayabilir. Bu kalan bypass riski, ileride tablo write grant'leri
-daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayrıca ele alınmalıdır.
+## Bakım event ve paket modeli
+
+`vehicle_records` içindeki `record_type='maintenance'` satırı bakım event source-of-truth'udur;
+mevcut ID, tarih, nullable event kilometresi, toplam maliyet ve not alanları korunur.
+`maintenance_items.maintenance_record_id` bu event'e bağlanır ve parent kayıt silinince cascade
+olur. Legacy V1 bakım kayıtlarına sahte operasyon üretilmez; sıfır item geçerli ve mevcut
+`category` UI fallback başlığıdır.
+
+Uygulama bakım create/edit işleminde event ve seçilen item setini
+`save_maintenance_record_atomic` içinde birlikte kaydeder. Edit sırasında önceki item seti aynı
+transaction'da final seçimle değiştirilir. `maintenance_templates` yalnız kullanıcı preset'idir;
+event kaydına seçimler kopyalanır ve event düzenlemesi template'i değiştirmez. Varsayılan paketler
+lokal merkezi config'tedir, database'de global kullanıcı satırı olarak çoğaltılmaz.
+
+Yeni tablolar RLS ile owner-scoped'dur. Item okuması parent bakım event/vehicle sahipliğini de
+doğrular; item write normal client grant'ine açık değildir ve owner-scoped atomic RPC üzerinden
+yapılır. Kullanıcı template CRUD'u doğrudan RLS ile yalnız `owner_id = auth.uid()` satırlarına
+izin verir.
+
+Mevcut `vehicle_records` RLS ve tablo grant'leri değiştirilmez. Normal mobil write yolu RPC ile
+sınırlıdır; ancak özel bir authenticated Data API istemcisinin kendi owner-scoped yakıt/gider
+satırına doğrudan yazması atomik high-water güncellemesini atlayabilir. Yeni bakım item write grant'i
+bu nedenle yalnız atomic RPC'ye bırakılmıştır. Kalan legacy bypass riski, ileride record tablo write
+grant'leri daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayrıca ele alınmalıdır.
 
 ## Storage
 
@@ -81,6 +104,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 2. `20260728092414_storage_policies.sql`
 3. `20260801111349_enforce_attachment_quotas_and_private_uploads.sql`
 4. `20260810212244_historical_odometer_support.sql`
+5. `20260810221647_maintenance_packages_foundation.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

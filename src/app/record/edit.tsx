@@ -30,6 +30,11 @@ import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId, safeRecordType } from '@/shared/utils/routeParams';
+import {
+  MaintenanceOperationsField,
+  type MaintenancePackageKey,
+} from '@/features/maintenance/components/MaintenanceOperationsField';
+import { createMaintenanceTitle } from '@/features/maintenance/domain/maintenancePackages';
 
 export default function RecordEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>();
@@ -45,6 +50,9 @@ export default function RecordEditScreen() {
     loading,
     error,
     bootstrapped,
+    maintenanceTemplates,
+    saveMaintenanceTemplate,
+    deleteMaintenanceTemplate,
   } = useDataStore();
   const existing = useMemo(
     () => records.find((record) => record.id === routeId),
@@ -63,6 +71,12 @@ export default function RecordEditScreen() {
   const [km, setKm] = useState(existing?.kilometer?.toString() ?? '');
   const [date, setDate] = useState(existing?.recordDate ?? todayDateOnly());
   const [description, setDescription] = useState(existing?.description ?? '');
+  const [maintenanceItemTypes, setMaintenanceItemTypes] = useState(
+    () => existing?.maintenanceItems?.map((item) => item.itemType) ?? [],
+  );
+  const [maintenancePackageKey, setMaintenancePackageKey] =
+    useState<MaintenancePackageKey>('manual');
+  const [maintenancePackageTitle, setMaintenancePackageTitle] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const mutationRequestId = useRef(createRequestId());
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -74,6 +88,7 @@ export default function RecordEditScreen() {
     km: existing?.kilometer?.toString() ?? '',
     date: existing?.recordDate ?? todayDateOnly(),
     description: existing?.description ?? '',
+    maintenanceItems: existing?.maintenanceItems?.map((item) => item.itemType).join('|') ?? '',
   };
   const isDirty = haveFormValuesChanged(initialValues, {
     type,
@@ -83,6 +98,7 @@ export default function RecordEditScreen() {
     km,
     date,
     description,
+    maintenanceItems: maintenanceItemTypes.join('|'),
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(routeId, records, bootstrapped);
@@ -106,15 +122,21 @@ export default function RecordEditScreen() {
     mileageEvaluation.level !== 'blockingError';
   const persistRecord = async () => {
     if (parsedAmount === null) return;
+    const maintenanceTitle =
+      type === 'maintenance'
+        ? createMaintenanceTitle(maintenanceItemTypes, maintenancePackageTitle, category)
+        : category;
     const success = await saveRecord(
       {
         recordType: type,
-        category,
+        category: maintenanceTitle,
         amount: parsedAmount,
         liters: type === 'fuel' ? parsedLiters : null,
         kilometer: eventMileage === null ? null : Math.round(eventMileage),
         recordDate: date,
         description: description || null,
+        maintenanceItemTypes: type === 'maintenance' ? [...maintenanceItemTypes] : undefined,
+        source: 'manual',
       },
       existing?.id,
       mutationRequestId.current,
@@ -172,6 +194,9 @@ export default function RecordEditScreen() {
           value={type}
           onChange={(value) => {
             setType(value);
+            setMaintenanceItemTypes([]);
+            setMaintenancePackageKey('manual');
+            setMaintenancePackageTitle(null);
             setCategory(
               value === 'maintenance'
                 ? maintenanceCategories[0]
@@ -185,9 +210,41 @@ export default function RecordEditScreen() {
             label: recordTypeLabels[value],
           }))}
         />
-        {type !== 'fuel' ? (
+        {type === 'maintenance' ? (
+          <MaintenanceOperationsField
+            selectedItemIds={maintenanceItemTypes}
+            selectedPackageKey={maintenancePackageKey}
+            templates={maintenanceTemplates ?? []}
+            loading={loading}
+            onSelectionChange={(itemIds) => {
+              setMaintenanceItemTypes(itemIds);
+              if (maintenancePackageKey === 'manual') {
+                setCategory(createMaintenanceTitle(itemIds, null, category));
+              }
+            }}
+            onPackageChange={(key, title, itemIds) => {
+              setMaintenancePackageKey(key);
+              setMaintenancePackageTitle(title);
+              setMaintenanceItemTypes([...itemIds]);
+              if (title || itemIds.length) {
+                setCategory(createMaintenanceTitle(itemIds, title, category));
+              }
+            }}
+            onCreateTemplate={(title, itemIds) =>
+              saveMaintenanceTemplate({ title, itemDefinitions: [...itemIds] })
+            }
+            onDeleteTemplate={async (id) => {
+              const success = await deleteMaintenanceTemplate(id);
+              if (success) {
+                setMaintenancePackageKey('manual');
+                setMaintenancePackageTitle(null);
+              }
+              return success;
+            }}
+          />
+        ) : type === 'expense' ? (
           <SelectField
-            label={type === 'maintenance' ? 'Bakım kategorisi' : 'Masraf kategorisi'}
+            label="Masraf kategorisi"
             value={category}
             onChange={setCategory}
             options={categories.map((value) => ({ value, label: value }))}

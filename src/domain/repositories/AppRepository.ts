@@ -3,6 +3,8 @@ import {
   DocumentDraft,
   ExpertiseDraft,
   ExpertiseReport,
+  MaintenanceTemplate,
+  MaintenanceTemplateDraft,
   NoteDraft,
   RecordDraft,
   Reminder,
@@ -21,6 +23,7 @@ export interface VehicleDataBundle {
   expertiseReports: ExpertiseReport[];
   notes: VehicleNote[];
   documents: VehicleDocument[];
+  maintenanceTemplates: MaintenanceTemplate[];
 }
 
 export interface AppRepository {
@@ -39,6 +42,11 @@ export interface AppRepository {
     requestId?: string,
   ): Promise<VehicleRecord>;
   deleteRecord(id: string): Promise<void>;
+  saveMaintenanceTemplate(
+    draft: MaintenanceTemplateDraft,
+    id?: string,
+  ): Promise<MaintenanceTemplate>;
+  deleteMaintenanceTemplate(id: string): Promise<void>;
   saveReminder(vehicleId: string, draft: ReminderDraft, id?: string): Promise<Reminder>;
   setReminderCompleted(reminder: Reminder, completed: boolean): Promise<Reminder>;
   deleteReminder(id: string): Promise<void>;

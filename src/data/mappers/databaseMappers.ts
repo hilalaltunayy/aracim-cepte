@@ -1,6 +1,8 @@
 import {
   BodyPartCondition,
   ExpertiseReport,
+  MaintenanceItem,
+  MaintenanceTemplate,
   Reminder,
   Vehicle,
   VehicleDocument,
@@ -27,7 +29,10 @@ export const mapVehicle = (row: Tables['vehicles']['Row']): Vehicle => ({
   archivedAt: row.archived_at,
 });
 
-export const mapRecord = (row: Tables['vehicle_records']['Row']): VehicleRecord => ({
+export const mapRecord = (
+  row: Tables['vehicle_records']['Row'],
+  maintenanceItems: MaintenanceItem[] = [],
+): VehicleRecord => ({
   id: row.id,
   vehicleId: row.vehicle_id,
   ownerId: row.owner_id,
@@ -38,6 +43,31 @@ export const mapRecord = (row: Tables['vehicle_records']['Row']): VehicleRecord 
   kilometer: row.kilometer,
   liters: row.liters === null ? null : Number(row.liters),
   description: row.description,
+  source: row.source,
+  maintenanceItems,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const mapMaintenanceItem = (row: Tables['maintenance_items']['Row']): MaintenanceItem => ({
+  id: row.id,
+  maintenanceRecordId: row.maintenance_record_id,
+  vehicleId: row.vehicle_id,
+  ownerId: row.owner_id,
+  itemType: row.item_type,
+  cost: row.cost === null ? null : Number(row.cost),
+  note: row.note,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const mapMaintenanceTemplate = (
+  row: Tables['maintenance_templates']['Row'],
+): MaintenanceTemplate => ({
+  id: row.id,
+  ownerId: row.owner_id,
+  title: row.title,
+  itemDefinitions: [...row.item_definitions],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

@@ -353,6 +353,7 @@ export type Database = {
           owner_id: string;
           record_date: string;
           record_type: Database['public']['Enums']['record_type'];
+          source: 'manual' | 'receipt_ocr' | 'service' | 'obd' | 'connected_vehicle' | 'import';
           updated_at: string;
           vehicle_id: string;
         };
@@ -367,6 +368,7 @@ export type Database = {
           owner_id: string;
           record_date: string;
           record_type: Database['public']['Enums']['record_type'];
+          source?: 'manual' | 'receipt_ocr' | 'service' | 'obd' | 'connected_vehicle' | 'import';
           updated_at?: string;
           vehicle_id: string;
         };
@@ -381,6 +383,7 @@ export type Database = {
           owner_id?: string;
           record_date?: string;
           record_type?: Database['public']['Enums']['record_type'];
+          source?: 'manual' | 'receipt_ocr' | 'service' | 'obd' | 'connected_vehicle' | 'import';
           updated_at?: string;
           vehicle_id?: string;
         };
@@ -393,6 +396,69 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      maintenance_items: {
+        Row: {
+          cost: number | null;
+          created_at: string;
+          id: string;
+          item_type: string;
+          maintenance_record_id: string;
+          note: string | null;
+          owner_id: string;
+          updated_at: string;
+          vehicle_id: string;
+        };
+        Insert: {
+          cost?: number | null;
+          created_at?: string;
+          id?: string;
+          item_type: string;
+          maintenance_record_id: string;
+          note?: string | null;
+          owner_id: string;
+          updated_at?: string;
+          vehicle_id: string;
+        };
+        Update: {
+          cost?: number | null;
+          created_at?: string;
+          id?: string;
+          item_type?: string;
+          maintenance_record_id?: string;
+          note?: string | null;
+          owner_id?: string;
+          updated_at?: string;
+          vehicle_id?: string;
+        };
+        Relationships: [];
+      };
+      maintenance_templates: {
+        Row: {
+          created_at: string;
+          id: string;
+          item_definitions: string[];
+          owner_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          item_definitions: string[];
+          owner_id: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          item_definitions?: string[];
+          owner_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       vehicles: {
         Row: {
@@ -511,6 +577,20 @@ export type Database = {
           p_record_date: string;
           p_record_id: string | null;
           p_record_type: Database['public']['Enums']['record_type'];
+          p_request_id: string;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['vehicle_records']['Row'];
+      };
+      save_maintenance_record_atomic: {
+        Args: {
+          p_amount: number;
+          p_category: string;
+          p_description: string | null;
+          p_item_types: string[];
+          p_kilometer: number | null;
+          p_record_date: string;
+          p_record_id: string | null;
           p_request_id: string;
           p_vehicle_id: string;
         };
