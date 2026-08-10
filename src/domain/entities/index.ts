@@ -1,6 +1,13 @@
 export type FuelType = 'gasoline' | 'diesel' | 'lpg' | 'electric' | 'hybrid';
 export type BodyType = 'sedan_hatchback' | 'suv_crossover' | 'pickup_light_commercial';
 export type RecordType = 'fuel' | 'maintenance' | 'expense';
+export type MaintenanceSource =
+  | 'manual'
+  | 'receipt_ocr'
+  | 'service'
+  | 'obd'
+  | 'connected_vehicle'
+  | 'import';
 export type ReminderType =
   | 'inspection'
   | 'traffic_insurance'
@@ -55,6 +62,29 @@ export interface VehicleRecord {
   kilometer: number | null;
   liters: number | null;
   description: string | null;
+  source?: MaintenanceSource;
+  maintenanceItems?: MaintenanceItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceItem {
+  id: string;
+  maintenanceRecordId: string;
+  vehicleId: string;
+  ownerId: string;
+  itemType: string;
+  cost: number | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceTemplate {
+  id: string;
+  ownerId: string;
+  title: string;
+  itemDefinitions: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -134,7 +164,8 @@ export type VehicleDraft = Pick<
 export type RecordDraft = Pick<
   VehicleRecord,
   'recordType' | 'category' | 'amount' | 'recordDate' | 'kilometer' | 'liters' | 'description'
->;
+> & { maintenanceItemTypes?: string[]; source?: MaintenanceSource };
+export type MaintenanceTemplateDraft = Pick<MaintenanceTemplate, 'title' | 'itemDefinitions'>;
 export type ReminderDraft = Pick<
   Reminder,
   'title' | 'reminderType' | 'dueDate' | 'dueKilometer'

@@ -2,6 +2,7 @@ import {
   BodyPartCondition,
   DocumentDraft,
   ExpertiseDraft,
+  MaintenanceTemplateDraft,
   NoteDraft,
   RecordDraft,
   Reminder,
@@ -15,6 +16,8 @@ import {
   mapBodyCondition,
   mapDocument,
   mapExpertise,
+  mapMaintenanceItem,
+  mapMaintenanceTemplate,
   mapNote,
   mapRecord,
   mapReminder,
@@ -96,12 +99,14 @@ export class SupabaseAppRepository implements AppRepository {
 
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
     const client = getSupabaseClient();
-    const [records, reminders, body, expertise, notes, documents] = await Promise.all([
+    const [records, maintenanceItems, maintenanceTemplates, reminders, body, expertise, notes, documents] = await Promise.all([
       client
         .from('vehicle_records')
         .select('*')
         .eq('vehicle_id', vehicleId)
         .order('record_date', { ascending: false }),
+      client.from('maintenance_items').select('*').eq('vehicle_id', vehicleId),
+      client.from('maintenance_templates').select('*').order('updated_at', { ascending: false }),
       client.from('reminders').select('*').eq('vehicle_id', vehicleId).order('due_date'),
       client.from('body_part_conditions').select('*').eq('vehicle_id', vehicleId),
       client
@@ -118,6 +123,8 @@ export class SupabaseAppRepository implements AppRepository {
     ]);
     const error =
       records.error ??
+      maintenanceItems.error ??
+      maintenanceTemplates.error ??
       reminders.error ??
       body.error ??
       expertise.error ??
@@ -125,13 +132,21 @@ export class SupabaseAppRepository implements AppRepository {
       documents.error;
     if (error) throw error;
     const mappedReminders = (reminders.data ?? []).map(mapReminder);
+    const mappedItems = (maintenanceItems.data ?? []).map(mapMaintenanceItem);
+    const itemsByRecord = new Map<string, typeof mappedItems>();
+    for (const item of mappedItems) {
+      const current = itemsByRecord.get(item.maintenanceRecordId) ?? [];
+      current.push(item);
+      itemsByRecord.set(item.maintenanceRecordId, current);
+    }
     return {
-      records: (records.data ?? []).map(mapRecord),
+      records: (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [])),
       reminders: mappedReminders,
       bodyConditions: (body.data ?? []).map(mapBodyCondition),
       expertiseReports: (expertise.data ?? []).map(mapExpertise),
       notes: (notes.data ?? []).map(mapNote),
       documents: (documents.data ?? []).map(mapDocument),
+      maintenanceTemplates: (maintenanceTemplates.data ?? []).map(mapMaintenanceTemplate),
     };
   }
 
@@ -187,6 +202,21 @@ export class SupabaseAppRepository implements AppRepository {
 
   async saveRecord(vehicleId: string, draft: RecordDraft, id?: string, requestId?: string) {
     const client = getSupabaseClient();
+    if (draft.recordType === 'maintenance') {
+      const { data, error } = await client.rpc('save_maintenance_record_atomic', {
+        p_request_id: requestId ?? createRequestId(),
+        p_vehicle_id: vehicleId,
+        p_record_id: id ?? null,
+        p_category: draft.category.trim(),
+        p_amount: draft.amount,
+        p_record_date: draft.recordDate,
+        p_kilometer: draft.kilometer,
+        p_description: draft.description?.trim() || null,
+        p_item_types: [...(draft.maintenanceItemTypes ?? [])],
+      });
+      if (error) throw error;
+      return mapRecord(required(data, 'Bakım kaydı kaydedilemedi.'));
+    }
     const { data, error } = await client.rpc('save_vehicle_record_atomic', {
       p_request_id: requestId ?? createRequestId(),
       p_vehicle_id: vehicleId,
@@ -205,6 +235,28 @@ export class SupabaseAppRepository implements AppRepository {
 
   async deleteRecord(id: string) {
     const { error } = await getSupabaseClient().from('vehicle_records').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async saveMaintenanceTemplate(draft: MaintenanceTemplateDraft, id?: string) {
+    const payload = {
+      owner_id: await ownerId(),
+      title: draft.title.trim(),
+      item_definitions: [...new Set(draft.itemDefinitions)],
+    };
+    const query = id
+      ? getSupabaseClient().from('maintenance_templates').update(payload).eq('id', id)
+      : getSupabaseClient().from('maintenance_templates').insert(payload);
+    const { data, error } = await query.select('*').single();
+    if (error) throw error;
+    return mapMaintenanceTemplate(required(data, 'Bakım paketi kaydedilemedi.'));
+  }
+
+  async deleteMaintenanceTemplate(id: string) {
+    const { error } = await getSupabaseClient()
+      .from('maintenance_templates')
+      .delete()
+      .eq('id', id);
     if (error) throw error;
   }
 

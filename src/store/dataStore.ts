@@ -7,6 +7,8 @@ import {
   DocumentDraft,
   ExpertiseDraft,
   ExpertiseReport,
+  MaintenanceTemplate,
+  MaintenanceTemplateDraft,
   NoteDraft,
   RecordDraft,
   Reminder,
@@ -37,6 +39,7 @@ interface DataState {
   expertiseReports: ExpertiseReport[];
   notes: VehicleNote[];
   documents: VehicleDocument[];
+  maintenanceTemplates: MaintenanceTemplate[];
   onboardingSeen: boolean;
   hydrated: boolean;
   bootstrapped: boolean;
@@ -57,6 +60,8 @@ interface DataState {
   deleteVehicle: (id: string) => Promise<boolean>;
   saveRecord: (draft: RecordDraft, id?: string, requestId?: string) => Promise<boolean>;
   deleteRecord: (id: string) => Promise<boolean>;
+  saveMaintenanceTemplate: (draft: MaintenanceTemplateDraft, id?: string) => Promise<boolean>;
+  deleteMaintenanceTemplate: (id: string) => Promise<boolean>;
   saveReminder: (draft: ReminderDraft, id?: string) => Promise<boolean>;
   toggleReminder: (reminder: Reminder) => Promise<boolean>;
   deleteReminder: (id: string) => Promise<boolean>;
@@ -84,6 +89,7 @@ const emptyVehicleData = {
   expertiseReports: [],
   notes: [],
   documents: [],
+  maintenanceTemplates: [],
 };
 
 export const useDataStore = create<DataState>()(
@@ -234,6 +240,16 @@ export const useDataStore = create<DataState>()(
         },
 
         deleteRecord: (id) => mutate(() => appRepository.deleteRecord(id)),
+
+        saveMaintenanceTemplate: (draft, id) =>
+          mutate(async () => {
+            await appRepository.saveMaintenanceTemplate(draft, id);
+          }),
+
+        deleteMaintenanceTemplate: (id) =>
+          mutate(async () => {
+            await appRepository.deleteMaintenanceTemplate(id);
+          }),
 
         saveReminder: (draft, id) =>
           mutate(async () => {

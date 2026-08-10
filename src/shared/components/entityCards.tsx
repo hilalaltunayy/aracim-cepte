@@ -51,10 +51,14 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
           </View>
           <Text style={styles.meta}>
             {presentation.typeLabel} · {formatDate(record.recordDate)}
+            {record.recordType === 'maintenance' && record.kilometer !== null
+              ? ` · ${formatNumber(record.kilometer)} km`
+              : ''}
           </Text>
-          {record.kilometer !== null ? (
+          {record.recordType !== 'maintenance' && record.kilometer !== null ? (
             <Text style={styles.meta}>{formatNumber(record.kilometer)} km</Text>
           ) : null}
+          {presentation.summary ? <Text style={styles.meta}>{presentation.summary}</Text> : null}
           {record.description ? (
             <Text style={styles.description} numberOfLines={2}>
               {record.description}

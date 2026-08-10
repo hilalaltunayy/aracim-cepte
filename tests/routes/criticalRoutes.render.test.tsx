@@ -290,6 +290,9 @@ describe('TASK-011 critical route component mounts', () => {
       deleteDocument: vi.fn(async () => true),
       saveExpertise: vi.fn(async () => true),
       deleteExpertise: vi.fn(async () => true),
+      maintenanceTemplates: [],
+      saveMaintenanceTemplate: vi.fn(async () => true),
+      deleteMaintenanceTemplate: vi.fn(async () => true),
       refresh: vi.fn(async () => undefined),
       loading: false,
       error: null,
@@ -303,7 +306,7 @@ describe('TASK-011 critical route component mounts', () => {
 
   it.each([
     ['fuel', 'Litre'],
-    ['maintenance', 'Bakım kategorisi'],
+    ['maintenance', 'Bakım paketi'],
     ['expense', 'Masraf kategorisi'],
   ] as const)('mounts the %s create route with its form', async (type, expectedField) => {
     routeParams.type = type;
@@ -317,6 +320,34 @@ describe('TASK-011 critical route component mounts', () => {
     const renderer = await mount(RecordEditScreen);
     expect(serialized(renderer)).toContain('Kaydı sil');
     expect(serialized(renderer)).toContain('Kayıt ayrıntıları');
+  });
+
+  it('loads saved maintenance operations in the edit/detail route', async () => {
+    routeParams.id = recordIds.maintenance;
+    dataState.records = records.map((record) =>
+      record.id === recordIds.maintenance
+        ? {
+            ...record,
+            maintenanceItems: [
+              {
+                id: 'item-engine-oil',
+                maintenanceRecordId: record.id,
+                vehicleId,
+                ownerId,
+                itemType: 'engine_oil',
+                cost: null,
+                note: null,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+              },
+            ],
+          }
+        : record,
+    );
+    const renderer = await mount(RecordEditScreen);
+    expect(
+      renderer.root.findByProps({ testID: 'maintenance-item-engine_oil' }).props.accessibilityState,
+    ).toEqual({ checked: true });
   });
 
   it('asks before saving a timeline-inconsistent mileage and accepts explicit continuation', async () => {
