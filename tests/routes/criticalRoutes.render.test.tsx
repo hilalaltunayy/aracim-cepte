@@ -3,8 +3,17 @@ import type { ReactNode } from 'react';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.hoisted(() => {
+  Object.assign(globalThis, {
+    __DEV__: false,
+    requestAnimationFrame: vi.fn(() => 1),
+    cancelAnimationFrame: vi.fn(),
+  });
+});
+
 const {
   authState,
+  confirmChoiceMock,
   dataState,
   openAttachmentMock,
   routeParams,
@@ -19,6 +28,7 @@ const {
     canGoBack: vi.fn(() => true),
   },
   openAttachmentMock: vi.fn(async () => undefined),
+  confirmChoiceMock: vi.fn(),
   authState: {
     signUp: vi.fn(async () => true),
     resendConfirmation: vi.fn(async () => true),
@@ -31,6 +41,11 @@ const {
 
 vi.mock('expo-crypto', () => ({
   randomUUID: vi.fn(() => '99999999-9999-4999-8999-999999999999'),
+}));
+vi.mock('expo-linking', () => ({
+  canOpenURL: vi.fn(async () => true),
+  createURL: vi.fn((path: string) => `aracimcepte://${path}`),
+  openURL: vi.fn(async () => undefined),
 }));
 
 vi.mock('expo-router', async () => {
@@ -116,6 +131,7 @@ vi.mock('@/shared/components/ui', async () => {
     SelectField: host('SelectField'),
     StatusBadge: host('StatusBadge'),
     confirmAction: vi.fn(),
+    confirmChoice: confirmChoiceMock,
   };
 });
 
@@ -258,6 +274,7 @@ describe('TASK-011 critical route component mounts', () => {
     routerMock.push.mockClear();
     routerMock.replace.mockClear();
     openAttachmentMock.mockClear();
+    confirmChoiceMock.mockClear();
     authState.signUp.mockClear().mockResolvedValue(true);
     authState.resendConfirmation.mockClear().mockResolvedValue(true);
     Object.assign(dataState, {
@@ -300,6 +317,60 @@ describe('TASK-011 critical route component mounts', () => {
     const renderer = await mount(RecordEditScreen);
     expect(serialized(renderer)).toContain('Kaydı sil');
     expect(serialized(renderer)).toContain('Kayıt ayrıntıları');
+  });
+
+  it('asks before saving a timeline-inconsistent mileage and accepts explicit continuation', async () => {
+    routeParams.type = 'maintenance';
+    dataState.vehicles = [{ ...vehicle, currentKm: 150_000 }];
+    dataState.records = [
+      { ...records[0], id: recordIds.fuel, recordDate: '2026-04-01', kilometer: 145_000 },
+      {
+        ...records[1],
+        id: recordIds.maintenance,
+        recordDate: '2026-06-01',
+        kilometer: 149_000,
+      },
+    ];
+    const renderer = await mount(RecordEditScreen);
+    const amountField = findHost(
+      renderer.root,
+      'AppInput',
+      (node) => node.props.label === 'Tutar',
+    )[0];
+    const kilometerField = findHost(
+      renderer.root,
+      'AppInput',
+      (node) => node.props.label === 'Kilometre',
+    )[0];
+    const dateField = findHost(
+      renderer.root,
+      'DateField',
+      (node) => node.props.label === 'Tarih',
+    )[0];
+    act(() => {
+      amountField.props.onChangeText('100');
+      kilometerField.props.onChangeText('170000');
+      dateField.props.onChange('2026-05-01');
+    });
+
+    await act(async () => renderer.root.findByProps({ title: 'Kaydet' }).props.onPress());
+
+    expect(confirmChoiceMock).toHaveBeenCalledWith(
+      'Kilometre sıralaması',
+      'Bu kilometre, diğer kayıtlarınızın tarih ve kilometre sıralamasıyla uyuşmuyor.',
+      'Yine de kaydet',
+      expect.any(Function),
+      false,
+      'Düzenle',
+    );
+    expect(dataState.saveRecord).not.toHaveBeenCalled();
+
+    await act(async () => confirmChoiceMock.mock.calls[0][3]());
+    expect(dataState.saveRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ kilometer: 170_000, recordDate: '2026-05-01' }),
+      undefined,
+      expect.any(String),
+    );
   });
 
   it('mounts attachment and expertise create routes', async () => {

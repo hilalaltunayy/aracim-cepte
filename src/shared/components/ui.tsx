@@ -636,13 +636,14 @@ export function confirmChoice(
   confirmLabel: string,
   onConfirm: () => void,
   destructive = false,
+  cancelLabel = 'Vazgeç',
 ) {
   if (Platform.OS === 'web') {
     if (globalThis.confirm(`${title}\n\n${message}`)) onConfirm();
     return;
   }
   Alert.alert(title, message, [
-    { text: 'Vazgeç', style: 'cancel' },
+    { text: cancelLabel, style: 'cancel' },
     { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: onConfirm },
   ]);
 }

@@ -105,7 +105,30 @@ describe('repository CRUD contract', () => {
     expect(repository.vehicles[0].currentKm).toBe(11_000);
     expect(getAllTimeTotal(repository.listRecords(vehicle.id))).toBe(175.5);
     repository.deleteRecord(saved.id);
+    expect(repository.vehicles[0].currentKm).toBe(11_000);
     expect(getAllTimeTotal(repository.listRecords(vehicle.id))).toBe(0);
+  });
+
+  it('keeps current mileage as a monotonic high-water mark for historical and unknown events', () => {
+    const repository = new InMemoryVehicleRepository();
+    const vehicle = repository.saveVehicle({ ...vehicleDraft('Kia'), currentKm: 150_000 });
+
+    const historical = repository.saveRecord(vehicle.id, recordDraft(100, 148_000));
+    expect(repository.vehicles[0].currentKm).toBe(150_000);
+
+    repository.saveRecord(vehicle.id, recordDraft(50, null));
+    expect(repository.vehicles[0].currentKm).toBe(150_000);
+
+    const newest = repository.saveRecord(vehicle.id, recordDraft(200, 151_000));
+    expect(repository.vehicles[0].currentKm).toBe(151_000);
+
+    repository.saveRecord(vehicle.id, recordDraft(125, 147_000), historical.id);
+    expect(repository.vehicles[0].currentKm).toBe(151_000);
+
+    repository.deleteRecord(historical.id);
+    expect(repository.vehicles[0].currentKm).toBe(151_000);
+    repository.deleteRecord(newest.id);
+    expect(repository.vehicles[0].currentKm).toBe(151_000);
   });
 
   it('keeps records isolated between two vehicles', () => {

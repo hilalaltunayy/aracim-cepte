@@ -223,7 +223,12 @@ try {
     p_kilometer: 900,
   });
   const countAfterLower = await clientA.from('vehicle_records').select('id', { count: 'exact' }).eq('vehicle_id', vehicleId);
-  assert(results, 'd11OlderMileageRejectedWithoutPartialWrite', Boolean(lower.error) && countAfterLower.count === 1);
+  const vehicleAfterLower = await clientA.from('vehicles').select('current_km').eq('id', vehicleId).single();
+  assert(
+    results,
+    'd11HistoricalMileageAcceptedWithoutCurrentRegression',
+    !lower.error && countAfterLower.count === 2 && vehicleAfterLower.data?.current_km === 1100,
+  );
 
   const crossUser = await clientB.rpc('save_vehicle_record_atomic', {
     ...recordArgs,
