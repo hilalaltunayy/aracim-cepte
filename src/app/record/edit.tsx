@@ -12,6 +12,7 @@ import {
   Screen,
   SelectField,
   confirmAction,
+  confirmChoice,
 } from '@/shared/components/ui';
 import { RecordType } from '@/domain/entities';
 import {
@@ -23,11 +24,8 @@ import { parseDecimal, todayDateOnly } from '@/shared/utils/format';
 import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
-import {
-  RECORD_MILEAGE_TOO_LOW_MESSAGE,
-  isRecordMileageAllowed,
-  resolveEntityRoute,
-} from '@/shared/utils/repositoryRules';
+import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
+import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
@@ -90,27 +88,31 @@ export default function RecordEditScreen() {
   const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(routeId, records, bootstrapped);
   const parsedAmount = parseDecimal(amount);
   const parsedLiters = parseDecimal(liters);
-  const parsedKm = km ? parseDecimal(km) : null;
-  const mileageAllowed = vehicle
-    ? isRecordMileageAllowed(vehicle.currentKm, parsedKm, existing?.kilometer ?? null)
-    : true;
+  const hasEnteredMileage = km.trim().length > 0;
+  const parsedKm = hasEnteredMileage ? parseDecimal(km) : null;
+  const eventMileage = hasEnteredMileage ? (parsedKm ?? Number.NaN) : null;
+  const mileageEvaluation = evaluateMileageTimeline({
+    currentMileage: vehicle?.currentKm ?? 0,
+    targetRecordId: existing?.id,
+    targetRecordDate: date,
+    targetMileage: eventMileage,
+    records,
+  });
   const valid =
     parsedAmount !== null &&
     parsedAmount > 0 &&
     Boolean(date) &&
     (type !== 'fuel' || parsedLiters === null || parsedLiters > 0) &&
-    (parsedKm === null || parsedKm >= 0) &&
-    mileageAllowed;
-  const submit = async () => {
-    setSubmitted(true);
-    if (!valid || parsedAmount === null) return;
+    mileageEvaluation.level !== 'blockingError';
+  const persistRecord = async () => {
+    if (parsedAmount === null) return;
     const success = await saveRecord(
       {
         recordType: type,
         category,
         amount: parsedAmount,
         liters: type === 'fuel' ? parsedLiters : null,
-        kilometer: parsedKm === null ? null : Math.round(parsedKm),
+        kilometer: eventMileage === null ? null : Math.round(eventMileage),
         recordDate: date,
         description: description || null,
       },
@@ -123,6 +125,22 @@ export default function RecordEditScreen() {
         goBackOr();
       });
     }
+  };
+  const submit = async () => {
+    setSubmitted(true);
+    if (!valid || parsedAmount === null) return;
+    if (mileageEvaluation.level === 'warning') {
+      confirmChoice(
+        'Kilometre sıralaması',
+        'Bu kilometre, diğer kayıtlarınızın tarih ve kilometre sıralamasıyla uyuşmuyor.',
+        'Yine de kaydet',
+        () => void persistRecord(),
+        false,
+        'Düzenle',
+      );
+      return;
+    }
+    await persistRecord();
   };
   const remove = () =>
     existing &&
@@ -206,11 +224,12 @@ export default function RecordEditScreen() {
           value={km}
           onChangeText={setKm}
           keyboardType="number-pad"
+          placeholder="Kilometreyi bilmiyorum"
           error={
-            submitted && parsedKm !== null && parsedKm < 0
+            submitted && mileageEvaluation.blockingCode === 'negative_mileage'
               ? 'Kilometre negatif olamaz.'
-              : submitted && !mileageAllowed
-                ? RECORD_MILEAGE_TOO_LOW_MESSAGE
+              : submitted && mileageEvaluation.blockingCode === 'invalid_mileage'
+                ? 'Geçerli bir kilometre girin.'
                 : null
           }
         />

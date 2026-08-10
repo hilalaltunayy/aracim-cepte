@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   canStartMutation,
-  isRecordMileageAllowed,
   nextVehicleMileage,
   requiresVehicleMileageCorrection,
   resolveEntityRoute,
@@ -14,13 +13,6 @@ describe('vehicle record mileage update rule', () => {
     expect(nextVehicleMileage(50_000, null)).toBe(50_000);
     expect(nextVehicleMileage(50_000, -1)).toBe(50_000);
     expect(nextVehicleMileage(50_000, Number.NaN)).toBe(50_000);
-  });
-
-  it('rejects a new lower record mileage but preserves an unchanged historical record', () => {
-    expect(isRecordMileageAllowed(50_000, 49_000)).toBe(false);
-    expect(isRecordMileageAllowed(50_000, 49_000, 49_000)).toBe(true);
-    expect(isRecordMileageAllowed(50_000, 50_000)).toBe(true);
-    expect(isRecordMileageAllowed(50_000, null)).toBe(true);
   });
 
   it('requires explicit correction approval before lowering vehicle mileage', () => {

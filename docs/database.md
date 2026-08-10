@@ -29,6 +29,34 @@ anon ve authenticated execute yetkileri kaldırılmıştır.
 Mobil uygulama yalnızca yayınlanabilir/anon key kullanır. `service_role`, secret key veya
 veritabanı parolası istemciye girmez.
 
+## Kilometre modeli
+
+`vehicles.current_km`, aracın ayrı saklanan ve gerilemeyen güncel kilometre high-water mark'ıdır.
+`vehicle_records.kilometer` ise kayıt tarihindeki event kilometresi olup nullable'dır;
+`vehicle_records.record_date` event tarihidir. Boş kilometre “Kilometreyi bilmiyorum” anlamına gelir
+ve `0` gibi sahte bir sentinel değer kullanılmaz.
+
+Yakıt, bakım ve diğer gider create/update işlemleri mobil repository'de yalnız
+`save_vehicle_record_atomic` RPC'sinden geçer. RPC aynı transaction içinde kaydı yazar ve bilinen
+event kilometresi mevcut `current_km` değerinden yüksekse aracı ilerletir:
+
+```text
+event_km null       => current_km değişmez
+event_km <= current => current_km değişmez
+event_km > current  => current_km = event_km
+```
+
+Tarihsel bir kaydın düzenlenmesi veya silinmesi `current_km` değerini düşürmez; değer record
+tablosundaki `MAX(kilometer)` üzerinden yeniden türetilmez. Aynı gün içindeki event'lerin güvenilir
+bir sırası olmadığı için çelişkili bilinen kilometreler uygulamada advisory warning üretir, hard
+block oluşturmaz. Form, en yakın önceki/sonraki bilinen kilometreyle çelişki gördüğünde kullanıcıdan
+“Yine de kaydet” onayı ister.
+
+RLS ve tablo grant'leri bu değişiklikte değiştirilmez. Normal mobil write yolu RPC ile sınırlıdır;
+ancak özel bir authenticated Data API istemcisinin kendi owner-scoped satırına doğrudan yazması
+atomik high-water güncellemesini atlayabilir. Bu kalan bypass riski, ileride tablo write grant'leri
+daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayrıca ele alınmalıdır.
+
 ## Storage
 
 `vehicle-attachments` bucket’ı özeldir, dosya başına 5 MB sınırı vardır ve yalnız JPEG, PNG ve PDF
@@ -52,6 +80,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 1. `20260728092412_initial_schema.sql`
 2. `20260728092414_storage_policies.sql`
 3. `20260801111349_enforce_attachment_quotas_and_private_uploads.sql`
+4. `20260810212244_historical_odometer_support.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

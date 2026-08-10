@@ -21,11 +21,10 @@ import { appRepository } from '@/data/repositories/SupabaseAppRepository';
 import { getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { createSafeStringStorage } from '@/data/storage/safeStorage';
 import {
-  RECORD_MILEAGE_TOO_LOW_MESSAGE,
   canStartMutation,
-  isRecordMileageAllowed,
   requiresVehicleMileageCorrection,
 } from '@/shared/utils/repositoryRules';
+import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useAuthStore } from '@/store/authStore';
 import { resolveActiveVehicleId } from '@/shared/utils/vehicleState';
 
@@ -211,12 +210,20 @@ export const useDataStore = create<DataState>()(
 
         saveRecord: (draft, id, requestId) => {
           const vehicle = activeVehicle();
-          const existing = id ? get().records.find((record) => record.id === id) : null;
-          if (
-            vehicle &&
-            !isRecordMileageAllowed(vehicle.currentKm, draft.kilometer, existing?.kilometer ?? null)
-          ) {
-            set({ error: RECORD_MILEAGE_TOO_LOW_MESSAGE });
+          const mileageEvaluation = evaluateMileageTimeline({
+            currentMileage: vehicle?.currentKm ?? 0,
+            targetRecordId: id,
+            targetRecordDate: draft.recordDate,
+            targetMileage: draft.kilometer,
+            records: get().records,
+          });
+          if (mileageEvaluation.level === 'blockingError') {
+            set({
+              error:
+                mileageEvaluation.blockingCode === 'negative_mileage'
+                  ? 'Kilometre negatif olamaz.'
+                  : 'Geçerli bir kilometre girin.',
+            });
             return Promise.resolve(false);
           }
           return mutate(async () => {
