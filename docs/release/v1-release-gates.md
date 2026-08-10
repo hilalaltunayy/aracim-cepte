@@ -1,7 +1,21 @@
 # V1 release kapıları
 
-**Snapshot date:** 2026-08-08
+**Snapshot date:** 2026-08-10
 **Release target:** İlk Google Play production Android yayını
+
+## Güncel build 2 ve Closed Testing kaynak kanıtı
+
+- App version: `1.0.0`
+- Android versionCode: `2`
+- EAS production build: `087c86a7-c7dd-46af-bda4-a113339dc652` (`FINISHED`)
+- Recoverable source commit: `ad3ed50b025db693186e38ebf9a109512cc319bf`
+- Release branch: `release/1.0.0-closed-test-b2`
+- Annotated tag: `v1.0.0-closed-test-b2`
+- Güncel dağıtım aşaması: Google Play Closed Testing devam ediyor.
+
+Build 2 production auth confirmation/reset deep-link düzeltmelerini içerir. Build'in başarıyla
+üretilmesi ve Closed Testing'e alınması, aşağıdaki Android manuel kabul, hukuk/KVKK, listing veya
+production rollout kapılarını otomatik olarak `Passed` yapmaz.
 
 ## TASK-013 hedefli güvenlik doğrulaması
 
@@ -102,11 +116,11 @@ değerlendirir.
 | No public bucket                              | Passed                       | TASK-004 sonrası linked SQL bucket `public = false` gösterdi; remote probe unsigned private object ve public bucket URL erişimini reddetti. Kanıt: TASK-004, 2026-08-01, `eiqxvvnqkbzbhzpthcwo`.                                              |
 | No service-role key in client                 | Passed                       | TASK-013 tracked client/runtime taraması privileged key/secret bulmadı; yalnız placeholder `.env.example` tracked. Service-only helper grant'leri client rollerine kapalı. Her artifact'ta bundle scan yine zorunludur.                       |
 | No sensitive data in logs                     | In progress                  | TASK-013 source taraması public URL ve token/password/signed URL log kullanımı bulmadı; development auth/error diagnostics redacted. Release cihazı ve Supabase/Resend provider log örneklemi eksik olduğu için gate kapanmaz.                |
-| Real Android device critical flow test passed | Failed                       | 1–2 Ağustos 2026 kabulünde hızlı kayıt/ekspertiz crash'i ve toplu silme sonrası beyaz ekran bulundu. TASK-010 kaynak düzeltmesi sonrası yeni artifact üzerinde ayrıntılı crash-regression kabulü zorunlu.                                     |
-| APK acceptance test passed                    | Failed                       | Mevcut APK production-blocking cihaz kusurları göstermiştir. TASK-010 otomatik kapıları ve yeni Android kabulü tamamlanmadan Passed yapılamaz.                                                                                                |
-| Production AAB succeeds                       | Passed                       | 2026-08-08 EAS production build `24d9eab7-d987-4ce0-80c7-ea109b7e6c89` tamamlandı: Android package `com.hilalaltunay.aracimcepte`, app version `1.0.0`, versionCode `1`, profil `production`, imzalı `.aab` artifact üretildi. Bu yalnız build gate'ini kapatır; Android kabulü ve diğer production blocker'ları açık kalır. |
+| Real Android device critical flow test passed | Manual verification required | 1–2 Ağustos 2026 tarihli önceki artifact kabulünde crash/state kusurları bulundu; kaynak düzeltmeleri uygulandı. Build 2 Closed Testing'de olsa da aynı kritik matrisin build 2 üzerinde kaydedilmiş final kabulü yoktur.                         |
+| APK acceptance test passed                    | In progress                  | Production AAB build 2 Closed Testing aşamasındadır. Tester süresi veya eksiksiz acceptance sonucu henüz kaydedilmediği için `Passed` değildir.                                                                                              |
+| Production AAB succeeds                       | Passed                       | EAS production build `087c86a7-c7dd-46af-bda4-a113339dc652` tamamlandı: Android package `com.hilalaltunay.aracimcepte`, app version `1.0.0`, versionCode `2`, profil `production`, imzalı `.aab` artifact üretildi. Source snapshot `ad3ed50b025db693186e38ebf9a109512cc319bf`, release branch ve annotated tag ile korunur. Bu yalnız build gate'ini kapatır. |
 | Store screenshots completed                   | Not started                  | Onaylı telefon ekran görüntüleri, privacy redaction, locale/cihaz ölçüleri ve listing seti yok.                                                                                                                                               |
-| No known blocker or critical bug              | Failed                       | TASK-010'a kaynak olan Android crash/beyaz ekranlar mevcut APK'da doğrulandı; yeni artifact kabulü bekleniyor. Leaked-password protection, hukuk/KVKK, provider-log ve production artifact gate'leri de açık.                                 |
+| No known blocker or critical bug              | In progress                  | Önceki artifact'ta bulunan crash/state blocker'ları kaynakta düzeltildi; build 2 final Android kabulü henüz kaydedilmedi. Hukuk/KVKK, provider-log ve diğer açık gate'ler ayrıca production rollout'u engeller.                               |
 
 ## Release kararı kuralı
 

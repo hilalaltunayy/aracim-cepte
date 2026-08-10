@@ -1,5 +1,9 @@
 # Ürün yol haritası
 
+> Bu belge V1 hazırlanırken yazılmış üst seviye ürün ufkunu korur. V1 sonrası güncel geliştirme
+> sırası ve branch'lenebilir fazlar için source-of-truth
+> [development roadmap](development-roadmap.md) belgesidir.
+
 Bu yol haritası yön bildirir; tarih, fiyat, belirli araç/üretici desteği veya yayın garantisi değildir.
 Her aşama ayrı araştırma, güvenlik/gizlilik değerlendirmesi, maliyet analizi ve onaylı görev ister.
 

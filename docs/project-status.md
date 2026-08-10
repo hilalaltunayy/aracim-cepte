@@ -1,45 +1,88 @@
 # Proje durumu
 
-## Tamamlananlar
+**Güncellik tarihi:** 2026-08-10
 
-- Expo Router tabanlı beş sekmeli Türkçe mobil uygulama.
-- Supabase e-posta/şifre Auth, oturum restorasyonu ve şifre yenileme başlangıcı.
-- Çok araç uyumlu domain, aktif araç seçimi ve repository mimarisi.
-- Araç oluşturma/düzenleme ve kilometre yükseltme kuralı.
-- Yakıt, bakım ve masraf CRUD; filtreli geçmiş.
-- Tarih/kilometre hatırlatıcıları, tamamlama/geri alma ve yerel bildirim yönetimi.
-- Dashboard özetleri, altı aylık bar grafik, güvenli maliyet/km hesabı ve boş durumlar.
-- Üç gövde tipi için etkileşimli SVG şeması ve parça durum özeti.
-- Ekspertiz, düz metin notlar, belgeler, bitiş planı ve özel ek dosyaları.
-- Kullanıcı kapsamlı RLS, özel Storage bucket ve imzalı URL.
-- Ayarlarda hesap, bildirim durumu ve onaylı veri silme işlemleri.
-- Saf iş mantığı için Vitest testleri.
+**Güncel release aşaması:** Google Play Closed Testing
 
-## Doğrulama
+**Uygulama:** `1.0.0` / Android `versionCode: 2`
 
-- TypeScript: geçti.
-- ESLint: geçti.
-- Vitest: 9 test geçti.
-- Expo Doctor: 20/20 kontrol geçti.
-- Expo Router/web export: 26 statik rota ve web bundle başarıyla üretildi.
-- Android bundle: Metro ile başarıyla üretildi.
-- Expo başlangıç: `packager-status:running`, LAN portu 8081.
-- Yerel Supabase: `db reset` geçti; iki migrasyon uygulandı, RLS/bucket SQL sorgularıyla
-  doğrulandı; security ve performance advisors sorun bulmadı.
+Bu belge mevcut durumu özetler. Ayrıntılı gate statüleri için
+[V1 release kapıları](release/v1-release-gates.md), tarihsel test snapshot'ı için
+[release-readiness raporu](release-readiness.md) kullanılır. AAB üretimi veya Closed Testing'in
+başlaması production ya da hukuki hazırlığın tamamlandığı anlamına gelmez.
 
-## Bilinen sınırlamalar
+## Güncel doğrulanmış gerçekler
 
-- Uzak Supabase projesi henüz bağlı değildir; `.env` değerleri kullanıcı hesabından alınmalıdır.
-- Karmaşık çevrimdışı mutation kuyruğu yoktur.
-- PDF ve belge önizlemesi işletim sisteminin desteklediği uygulamaya yönlendirilir.
-- Web, cihaz bildirimleri ve dosya izinleri için yalnızca yardımcı görsel önizlemedir.
-- Güvenli hesap silme sunucu tarafı yönetici işlemi gerektirdiği için UI’da sunulmaz.
-- Store release/EAS build yapılandırması bu MVP’nin kapsamı dışındadır.
-- npm audit, Expo’nun Xcode/config-plugin araç zincirindeki `uuid` için 12 orta seviye geçişli
-  uyarı raporluyor. Önerilen otomatik çözüm Expo SDK’sını kırıcı biçimde düşürdüğü için
-  uygulanmadı; uygulama runtime kodunda doğrudan `uuid` kullanımı yoktur.
+- Android-first Expo/React Native uygulaması Expo Router, React Native 0.86, React 19 ve Expo SDK 57
+  üzerinde çalışır.
+- Supabase projesi uygulamaya bağlıdır; Auth, Postgres, RLS, private Storage ve Edge Function
+  akışları repository ile birlikte kullanılmaktadır.
+- Araç, yakıt, bakım, diğer gider, hatırlatıcı, gövde durumu, ekspertiz, belge ve veri yönetimi
+  akışlarının uygulama kodu mevcuttur.
+- Private document Storage; owner-scoped random path, private bucket, kısa ömürlü signed URL,
+  MIME/magic-byte, 5 MB dosya, 10 belge ve toplam 25 MB kontrollerine göre tasarlanmış ve sentetik
+  remote QA ile hedefli olarak doğrulanmıştır.
+- RLS, cross-user isolation, owner-scoped RPC, quota/recovery ve Auth/DB/Storage hesap silme
+  kontrolleri iki sentetik kullanıcıyla gerçekleştirilmiştir. Kanıt kapsamı ve açık manuel kontroller
+  [güvenlik doğrulama matrisindedir](qa/v1-security-authorization-verification.md).
+- Public hukuk sitesi `https://aracimcepte.hilalaltunay.com` adresinde yayındadır; uygulama canlı
+  hukuk linklerini tercih eder ve uygulama içi içeriği fallback olarak korur.
+- Production e-posta doğrulama ve parola kurtarma callback'leri
+  `aracimcepte://auth/confirm-email` ve `aracimcepte://auth/reset-password` olarak uygulanmıştır.
+  Production Supabase Site URL değeri `https://aracimcepte.hilalaltunay.com` adresidir.
+- Production Android AAB `1.0.0` / `versionCode: 2` ile başarıyla oluşturulmuştur. Bu artifact auth
+  production deep-link düzeltmelerini içerir ve Google Play Closed Testing aşamasındadır.
+- Release source snapshot'ı `ad3ed50b025db693186e38ebf9a109512cc319bf` commit'idir;
+  `release/1.0.0-closed-test-b2` branch'i ve `v1.0.0-closed-test-b2` annotated tag'i aynı commit'i
+  korur.
+- `main` stabil çizgidir. `develop`, V1.1+ entegrasyon branch'idir; feature ve chore çalışmaları
+  `develop` tabanlı izole branch ve PR ile ilerler.
+- GitHub Repository Rulesets; `main` ve `develop` için PR zorunluluğu ile deletion/force-push
+  engelini, `release/*` ve `v*` için deletion/force-update engelini uygular. Repository'de henüz
+  workflow olmadığı için required status check yapılandırılmamıştır.
 
-## Sonraki önerilen iş
+## Tarihsel repository ve QA kanıtı
 
-Gerçek Supabase projesini bağlayıp migrasyonları staging ortama uyguladıktan sonra fiziksel
-Android cihazda uçtan uca kabul testi ve görsel inceleme yapmak.
+- TypeScript, ESLint, Vitest, Expo Doctor, Metro/export, route/render ve hedefli Android crash
+  regression testleri farklı task'larda çalıştırılmıştır.
+- Remote Supabase migration, RLS/Storage negatif testleri, D-11/D-12/D-13 consistency/recovery ve
+  TASK-013 security authorization doğrulamaları kaydedilmiştir.
+- 1–2 Ağustos Android testinde bulunan route crash, toplu silme state ve UX sorunları için kaynak
+  düzeltmeleri ve regression testleri uygulanmıştır.
+
+Bu maddeler tarihsel kanıttır; bugün yeniden çalıştırılmış testler veya build 2'nin eksiksiz cihaz
+kabulü gibi yorumlanamaz. Exact tarihler ve durumlar [V1 release kapılarında](release/v1-release-gates.md)
+ve ilgili task dosyalarındadır.
+
+## Manuel doğrulama gerekli
+
+- Build 2 üzerinde signup → gerçek confirmation e-postası → uygulama callback'i → login akışı.
+- Build 2 üzerinde password reset e-postası → recovery session → yeni parola → eski link reddi.
+- Closed Testing katılımcılarıyla kritik Android route, belge açma, notification, safe-area,
+  background/killed lifecycle, account/data deletion ve yeniden başlatma matrisi.
+- External hukuk linkleri ve offline uygulama içi fallback davranışı.
+- Provider/admin loglarının PII, token ve signed URL sızıntısı açısından operasyonel örneklemi.
+- Google Play listing, Data Safety, screenshot/asset ve kapalı test gereksinimlerinin Play Console
+  tarafındaki nihai kontrolü.
+
+Manuel sonuç kaydı olmadan bu kontroller `Passed` sayılamaz.
+
+## Hukuki ve operasyonel açık maddeler
+
+- KVKK aydınlatma, gizlilik, saklama/silme ve başvuru metinleri için profesyonel hukuk incelemesi.
+- Supabase Frankfurt kullanımı nedeniyle yurt dışına veri aktarımı değerlendirmesi ve uygun hukuki
+  mekanizma/iletişim kararı.
+- Supabase, Resend ve ilgili processor/subprocessor değerlendirmesi.
+- Veri ihlali prosedürü, retention/deletion operasyonu ve veri-subject request sürecinin sahipleri.
+- Google Play production rollout kararı ve Closed Testing kabul kanıtının insan tarafından
+  onaylanması.
+
+Supabase kullanımı, public hukuk sitesi veya teknik güvenlik testleri tek başına KVKK uyumluluğu
+oluşturmaz. Hazırlık durumu profesyonel hukuk incelemesi gerektirir.
+
+## Sonraki kontrollü adım
+
+Closed Testing build 2 için Android acceptance kanıtını tamamla; auth callback ve kritik V1
+akışlarının sonucunu release gate'lerine işle. V1.1 geliştirmesi
+[development roadmap](product/development-roadmap.md) ve `develop` tabanlı feature branch'lerle,
+release snapshot'ına dokunmadan ilerlemelidir.
