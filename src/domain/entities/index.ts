@@ -89,6 +89,13 @@ export interface VehicleRecord {
   description: string | null;
   source?: MaintenanceSource;
   maintenanceItems?: MaintenanceItem[];
+  serviceType?:
+    import('@/features/maintenance/config/maintenanceServiceTypes').MaintenanceServiceType | null;
+  serviceName?: string | null;
+  partsCost?: number | null;
+  laborCost?: number | null;
+  invoiceNumber?: string | null;
+  attachments?: import('@/features/attachments/domain/types').PersistedAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -205,7 +212,16 @@ export type RecordDraft = Pick<
   | 'pricePerLiter'
   | 'stationBrand'
   | 'description'
-> & { maintenanceItemTypes?: string[]; source?: MaintenanceSource };
+  | 'serviceType'
+  | 'serviceName'
+  | 'partsCost'
+  | 'laborCost'
+  | 'invoiceNumber'
+> & {
+  maintenanceItemTypes?: string[];
+  source?: MaintenanceSource;
+  attachmentPaths?: string[];
+};
 export type MaintenanceTemplateDraft = Pick<MaintenanceTemplate, 'title' | 'itemDefinitions'>;
 export type ReminderDraft = Pick<
   Reminder,

@@ -41,10 +41,21 @@ import {
   updateFuelEntry,
   validateFuelEntry,
 } from '@/features/fuel/domain/fuelEntry';
+import { FUEL_STATIONS, type FuelStationId } from '@/features/fuel/config/fuelStations';
+import { MaintenanceDetailsSection } from '@/features/maintenance/components/MaintenanceDetailsSection';
 import {
-  FUEL_STATIONS,
-  type FuelStationId,
-} from '@/features/fuel/config/fuelStations';
+  hasMaintenanceDetails,
+  resolveMaintenanceTotal,
+  validateMaintenanceDetails,
+  type MaintenanceDetailsFormValues,
+} from '@/features/maintenance/domain/maintenanceDetails';
+import { isPendingAttachment, type AttachmentListItem } from '@/features/attachments/domain/types';
+import {
+  deleteAttachment,
+  openAttachment,
+  uploadParentAttachment,
+} from '@/data/storage/attachments';
+import { getFriendlyError } from '@/shared/utils/errors';
 
 export default function RecordEditScreen() {
   const { colors } = useAppTheme();
@@ -91,6 +102,15 @@ export default function RecordEditScreen() {
   const [km, setKm] = useState(existing?.kilometer?.toString() ?? '');
   const [date, setDate] = useState(existing?.recordDate ?? todayDateOnly());
   const [description, setDescription] = useState(existing?.description ?? '');
+  const [maintenanceDetails, setMaintenanceDetails] = useState<MaintenanceDetailsFormValues>({
+    serviceType: existing?.serviceType ?? '',
+    serviceName: existing?.serviceName ?? '',
+    partsCost: existing?.partsCost?.toString() ?? '',
+    laborCost: existing?.laborCost?.toString() ?? '',
+    invoiceNumber: existing?.invoiceNumber ?? '',
+    notes: existing?.description ?? '',
+  });
+  const [attachments, setAttachments] = useState<AttachmentListItem[]>(existing?.attachments ?? []);
   const [maintenanceItemTypes, setMaintenanceItemTypes] = useState(
     () => existing?.maintenanceItems?.map((item) => item.itemType) ?? [],
   );
@@ -98,8 +118,16 @@ export default function RecordEditScreen() {
     useState<MaintenancePackageKey>('manual');
   const [maintenancePackageTitle, setMaintenancePackageTitle] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const mutationRequestId = useRef(createRequestId());
+  const generatedRecordId = useRef(createRequestId()).current;
+  const recordId = existing?.id ?? routeId ?? generatedRecordId;
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
+  const maintenanceValidation = validateMaintenanceDetails(maintenanceDetails);
+  const [detailsExpanded, setDetailsExpanded] = useState(() =>
+    hasMaintenanceDetails(maintenanceValidation.values, attachments.length),
+  );
   const initialValues = {
     type: existing?.recordType ?? routeType,
     category: existing?.category ?? categories[0],
@@ -111,6 +139,12 @@ export default function RecordEditScreen() {
     date: existing?.recordDate ?? todayDateOnly(),
     description: existing?.description ?? '',
     maintenanceItems: existing?.maintenanceItems?.map((item) => item.itemType).join('|') ?? '',
+    maintenanceServiceType: existing?.serviceType ?? '',
+    maintenanceServiceName: existing?.serviceName ?? '',
+    maintenancePartsCost: existing?.partsCost?.toString() ?? '',
+    maintenanceLaborCost: existing?.laborCost?.toString() ?? '',
+    maintenanceInvoiceNumber: existing?.invoiceNumber ?? '',
+    maintenanceAttachments: (existing?.attachments ?? []).map((item) => item.storagePath).join('|'),
   };
   const isDirty = haveFormValuesChanged(initialValues, {
     type,
@@ -121,14 +155,33 @@ export default function RecordEditScreen() {
     stationBrand: type === 'fuel' ? stationBrand : '',
     km,
     date,
-    description,
+    description: type === 'maintenance' ? maintenanceDetails.notes : description,
     maintenanceItems: maintenanceItemTypes.join('|'),
+    maintenanceServiceType: type === 'maintenance' ? maintenanceDetails.serviceType : '',
+    maintenanceServiceName: type === 'maintenance' ? maintenanceDetails.serviceName : '',
+    maintenancePartsCost: type === 'maintenance' ? maintenanceDetails.partsCost : '',
+    maintenanceLaborCost: type === 'maintenance' ? maintenanceDetails.laborCost : '',
+    maintenanceInvoiceNumber: type === 'maintenance' ? maintenanceDetails.invoiceNumber : '',
+    maintenanceAttachments:
+      type === 'maintenance'
+        ? attachments
+            .map((item) => (isPendingAttachment(item) ? item.uri : item.storagePath))
+            .join('|')
+        : '',
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
-  const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(routeId, records, bootstrapped);
+  const routeState = invalidRouteId
+    ? 'missing'
+    : resolveEntityRoute(routeId, records, bootstrapped);
   const fuelValues = getFuelEntryValues(fuelEntry);
   const fuelValidation = validateFuelEntry(fuelEntry);
-  const parsedAmount = type === 'fuel' ? fuelValues.total : parseDecimal(amount);
+  const maintenanceTotal = resolveMaintenanceTotal(amount, maintenanceValidation.values);
+  const parsedAmount =
+    type === 'fuel'
+      ? fuelValues.total
+      : type === 'maintenance'
+        ? maintenanceTotal.value
+        : parseDecimal(amount);
   const parsedLiters = type === 'fuel' ? fuelValues.liters : null;
   const hasEnteredMileage = km.trim().length > 0;
   const parsedKm = hasEnteredMileage ? parseDecimal(km) : null;
@@ -145,40 +198,96 @@ export default function RecordEditScreen() {
     parsedAmount > 0 &&
     Boolean(date) &&
     (type !== 'fuel' || fuelValidation.valid) &&
+    (type !== 'maintenance' || maintenanceValidation.valid) &&
     mileageEvaluation.level !== 'blockingError';
   const persistRecord = async () => {
-    if (parsedAmount === null) return;
+    if (parsedAmount === null || !vehicle) return;
+    setLocalError(null);
+    setSubmitting(true);
+    const uploadedPaths: string[] = [];
     const maintenanceTitle =
       type === 'maintenance'
         ? createMaintenanceTitle(maintenanceItemTypes, maintenancePackageTitle, category)
         : category;
-    const success = await saveRecord(
-      {
-        recordType: type,
-        category: maintenanceTitle,
-        amount: parsedAmount,
-        liters: type === 'fuel' ? parsedLiters : null,
-        pricePerLiter: type === 'fuel' ? fuelValues.pricePerLiter : null,
-        stationBrand: type === 'fuel' && stationBrand ? stationBrand : null,
-        kilometer: eventMileage === null ? null : Math.round(eventMileage),
-        recordDate: date,
-        description: description || null,
-        maintenanceItemTypes: type === 'maintenance' ? [...maintenanceItemTypes] : undefined,
-        source: 'manual',
-      },
-      existing?.id,
-      mutationRequestId.current,
-    );
-    if (success) {
+    try {
+      const attachmentPaths: string[] = [];
+      if (type === 'maintenance') {
+        for (const attachment of attachments) {
+          if (!isPendingAttachment(attachment)) {
+            attachmentPaths.push(attachment.storagePath);
+            continue;
+          }
+          const uploaded = await uploadParentAttachment(
+            vehicle.id,
+            'maintenance_record',
+            recordId,
+            attachment,
+          );
+          uploadedPaths.push(uploaded.path);
+          attachmentPaths.push(uploaded.path);
+        }
+      }
+      const success = await saveRecord(
+        {
+          recordType: type,
+          category: maintenanceTitle,
+          amount: parsedAmount,
+          liters: type === 'fuel' ? parsedLiters : null,
+          pricePerLiter: type === 'fuel' ? fuelValues.pricePerLiter : null,
+          stationBrand: type === 'fuel' && stationBrand ? stationBrand : null,
+          kilometer: eventMileage === null ? null : Math.round(eventMileage),
+          recordDate: date,
+          description:
+            type === 'maintenance' ? maintenanceValidation.values.notes : description || null,
+          maintenanceItemTypes: type === 'maintenance' ? [...maintenanceItemTypes] : undefined,
+          serviceType:
+            type === 'maintenance' ? maintenanceValidation.values.serviceType : undefined,
+          serviceName:
+            type === 'maintenance' ? maintenanceValidation.values.serviceName : undefined,
+          partsCost: type === 'maintenance' ? maintenanceValidation.values.partsCost : undefined,
+          laborCost: type === 'maintenance' ? maintenanceValidation.values.laborCost : undefined,
+          invoiceNumber:
+            type === 'maintenance' ? maintenanceValidation.values.invoiceNumber : undefined,
+          attachmentPaths: type === 'maintenance' ? attachmentPaths : undefined,
+          source: 'manual',
+        },
+        type === 'maintenance' ? recordId : existing?.id,
+        mutationRequestId.current,
+      );
+      if (!success) {
+        for (const path of uploadedPaths) {
+          try {
+            await deleteAttachment(path);
+          } catch {
+            // Reconciliation safely retries cleanup without exposing provider details.
+          }
+        }
+        return;
+      }
+      uploadedPaths.length = 0;
       leaveWithoutPrompt(() => {
         Alert.alert('Kaydedildi', 'Araç kaydınız başarıyla kaydedildi.');
         goBackOr();
       });
+    } catch (caught) {
+      for (const path of uploadedPaths) {
+        try {
+          await deleteAttachment(path);
+        } catch {
+          // Preserve the original safe error; cleanup reconciliation remains available.
+        }
+      }
+      setLocalError(getFriendlyError(caught));
+    } finally {
+      setSubmitting(false);
     }
   };
   const submit = async () => {
     setSubmitted(true);
-    if (!valid || parsedAmount === null) return;
+    if (!valid || parsedAmount === null) {
+      if (type === 'maintenance' && !maintenanceValidation.valid) setDetailsExpanded(true);
+      return;
+    }
     if (mileageEvaluation.level === 'warning') {
       confirmChoice(
         'Kilometre sıralaması',
@@ -215,7 +324,7 @@ export default function RecordEditScreen() {
   }
   return (
     <Screen style={styles.form}>
-      {error ? <ErrorBanner message={error} /> : null}
+      {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Kayıt ayrıntıları">
         <SelectField
           label="Kayıt türü"
@@ -230,6 +339,9 @@ export default function RecordEditScreen() {
             setMaintenanceItemTypes([]);
             setMaintenancePackageKey('manual');
             setMaintenancePackageTitle(null);
+            if (value === 'maintenance') {
+              setMaintenanceDetails((current) => ({ ...current, notes: description }));
+            }
             setCategory(
               value === 'maintenance'
                 ? maintenanceCategories[0]
@@ -284,7 +396,7 @@ export default function RecordEditScreen() {
           />
         ) : null}
         <AppInput
-          label={type === 'fuel' ? 'Toplam tutar' : 'Tutar'}
+          label={type === 'fuel' || type === 'maintenance' ? 'Toplam tutar' : 'Tutar'}
           value={type === 'fuel' ? fuelEntry.total : amount}
           onChangeText={(value) =>
             type === 'fuel'
@@ -302,6 +414,9 @@ export default function RecordEditScreen() {
         {type === 'fuel' && fuelEntry.calculatedField === 'total' ? (
           <Text style={[styles.calculated, { color: colors.muted }]}>Otomatik hesaplandı</Text>
         ) : null}
+        {type === 'maintenance' && maintenanceTotal.source === 'breakdown' ? (
+          <Text style={[styles.calculated, { color: colors.muted }]}>Parça ve işçilik toplamı</Text>
+        ) : null}
         {type === 'fuel' ? (
           <>
             <AppInput
@@ -313,9 +428,7 @@ export default function RecordEditScreen() {
               keyboardType="decimal-pad"
               placeholder="Bilinmiyor"
               error={
-                submitted && fuelValidation.errors.liters
-                  ? 'Litre sıfırdan büyük olmalı.'
-                  : null
+                submitted && fuelValidation.errors.liters ? 'Litre sıfırdan büyük olmalı.' : null
               }
             />
             {fuelEntry.calculatedField === 'liters' ? (
@@ -364,9 +477,27 @@ export default function RecordEditScreen() {
           }
         />
         <DateField label="Tarih" value={date} onChange={(value) => value && setDate(value)} />
-        <AppInput label="Açıklama" value={description} onChangeText={setDescription} multiline />
+        {type !== 'maintenance' ? (
+          <AppInput label="Açıklama" value={description} onChangeText={setDescription} multiline />
+        ) : null}
       </FormSection>
-      <AppButton title="Kaydet" loading={loading} onPress={submit} />
+      {type === 'maintenance' ? (
+        <MaintenanceDetailsSection
+          expanded={detailsExpanded}
+          values={maintenanceDetails}
+          errors={submitted ? maintenanceValidation.errors : {}}
+          attachments={attachments}
+          disabled={loading || submitting}
+          onToggle={() => setDetailsExpanded((current) => !current)}
+          onChange={(key, value) => {
+            setMaintenanceDetails((current) => ({ ...current, [key]: value }));
+            if (key === 'notes') setDescription(value);
+          }}
+          onAttachmentsChange={setAttachments}
+          onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+        />
+      ) : null}
+      <AppButton title="Kaydet" loading={loading || submitting} onPress={submit} />
       {existing ? <AppButton title="Kaydı sil" variant="danger" onPress={remove} /> : null}
     </Screen>
   );

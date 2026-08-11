@@ -11,6 +11,7 @@ test('stores only generic PII-free attachment display names', () => {
 test('allows only implemented unified attachment parent types', () => {
   assert.equal(isSupportedAttachmentParent('expertise_report'), true);
   assert.equal(isSupportedAttachmentParent('vehicle_document'), true);
-  assert.equal(isSupportedAttachmentParent('maintenance_record'), false);
+  assert.equal(isSupportedAttachmentParent('maintenance_record'), true);
+  assert.equal(isSupportedAttachmentParent('vehicle_photo'), false);
   assert.equal(isSupportedAttachmentParent(null), false);
 });

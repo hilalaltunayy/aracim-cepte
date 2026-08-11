@@ -153,11 +153,24 @@ mevcut ID, tarih, nullable event kilometresi, toplam maliyet ve not alanları ko
 olur. Legacy V1 bakım kayıtlarına sahte operasyon üretilmez; sıfır item geçerli ve mevcut
 `category` UI fallback başlığıdır.
 
+TASK-024 aynı event satırına nullable `service_type`, `service_name`, `parts_cost`, `labor_cost` ve
+`invoice_number` alanlarını ekler; not için mevcut `description`, kanonik toplam için mevcut `amount`
+kullanılır. Boş maliyet sahte `0` değerine çevrilmez. Kullanıcı toplam girdiyse parça/işçilik
+kırılımı bu değeri değiştirmez; toplam yalnız boşken ve iki kırılım da biliniyorsa istemcide
+deterministik olarak türetilir. Servis türü merkezi katalogdaki `authorized_service`,
+`independent_service`, `self_service` veya `other` kimliğidir.
+
 Uygulama bakım create/edit işleminde event ve seçilen item setini
 `save_maintenance_record_atomic` içinde birlikte kaydeder. Edit sırasında önceki item seti aynı
 transaction'da final seçimle değiştirilir. `maintenance_templates` yalnız kullanıcı preset'idir;
 event kaydına seçimler kopyalanır ve event düzenlemesi template'i değiştirmez. Varsayılan paketler
 lokal merkezi config'tedir, database'de global kullanıcı satırı olarak çoğaltılmaz.
+
+Yeni istemci, servis detayı ve final attachment yol setini
+`save_maintenance_record_with_details` RPC'sine verir. Bu sürümlü RPC mevcut atomik maintenance
+RPC'sini aynı transaction içinde çağırarak item/idempotency ve gerilemeyen kilometre kurallarını
+korur; sonra nullable detayları ve yalnız owner-scoped, yüklenmiş `maintenance_record` eklerini
+bağlar. Eski istemci ve eski RPC korunur; eski RPC yeni nullable alanları silmez.
 
 Yeni tablolar RLS ile owner-scoped'dur. Item okuması parent bakım event/vehicle sahipliğini de
 doğrular; item write normal client grant'ine açık değildir ve owner-scoped atomic RPC üzerinden
@@ -175,7 +188,8 @@ grant'leri daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayr
 `vehicle-attachments` bucket’ı özeldir, dosya başına 5 MB sınırı vardır ve yalnız JPEG, PNG ve PDF
 kabul eder. Yeni upload için servis tarafında kullanıcı başına en fazla 10 nesne ve toplam 25 MB
 kotası atomik rezervasyonla uygulanır. TASK-022 ekspertiz entegrasyonu ayrıca parent başına ortak
-5 ek ve 15 MB sınırı uygular; TASK-023 aynı parent havuzunu `vehicle_document` için de kullanır.
+5 ek ve 15 MB sınırı uygular; TASK-023 aynı parent havuzunu `vehicle_document`, TASK-024 ise
+`maintenance_record` için kullanır.
 Kamera, galeri ve dosya kaynakları ayrı kota değildir. Merkezi mobil
 varsayılanlar `src/features/attachments/config/attachmentConfig.ts` içindedir.
 
@@ -202,10 +216,11 @@ adı object path'e veya kalıcı metadata'ya taşınmaz; Edge Function kaynak/MI
 
 `attachments` doğrudan authenticated write grant'i vermez. Metadata seçimi owner + vehicle RLS ile
 sınırlıdır; parent-scoped reservation yalnız service role Edge Function tarafından çağrılır.
-`save_expertise_report_with_attachments` ve `save_vehicle_document_with_attachments` authenticated
+`save_expertise_report_with_attachments`, `save_vehicle_document_with_attachments` ve
+`save_maintenance_record_with_details` authenticated
 kullanıcının `auth.uid()` sahipliğini doğrular, parent ve final ek listesini tek transaction içinde
-bağlar. Ekspertiz/belge silme trigger'ları metadata'yı kaldırıp Storage nesnelerini idempotent cleanup
-queue'ya alır. Eski
+bağlar. Ekspertiz/belge/bakım silme trigger'ları metadata'yı kaldırıp Storage nesnelerini idempotent
+cleanup queue'ya alır. Eski
 `expertise_reports.attachment_path` satırları read-time mapper fallback'iyle açılabilir kalır; sahte
 metadata migration'ı yapılmaz. Aynı fallback `vehicle_documents.attachment_path` için de geçerlidir.
 
@@ -224,6 +239,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 9. `20260811140844_body_condition_multiselect.sql`
 10. `20260811144343_unified_attachment_foundation.sql`
 11. `20260811153131_document_type_details.sql`
+12. `20260811161233_maintenance_service_details.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.
