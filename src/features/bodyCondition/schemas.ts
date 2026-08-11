@@ -1,4 +1,5 @@
-import { BodyType } from '@/domain/entities';
+import { BodySchemaType, BodyType } from '@/domain/entities';
+import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 
 export interface PartHitArea {
   x: number;
@@ -158,7 +159,7 @@ const pickupParts: BodyPartSchema[] = [
   },
 ];
 
-export const bodySchemas: Record<BodyType, VehicleBodySchema> = {
+export const bodySchemas: Record<BodySchemaType, VehicleBodySchema> = {
   sedan_hatchback: {
     type: 'sedan_hatchback',
     silhouettePath:
@@ -186,5 +187,5 @@ export const bodySchemas: Record<BodyType, VehicleBodySchema> = {
 };
 
 export function isValidPartKey(bodyType: BodyType, partKey: string): boolean {
-  return bodySchemas[bodyType].parts.some((part) => part.key === partKey);
+  return bodySchemas[getBodySchemaType(bodyType)].parts.some((part) => part.key === partKey);
 }

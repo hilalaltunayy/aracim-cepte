@@ -10,6 +10,8 @@ import {
   VehicleRecord,
 } from '@/domain/entities';
 import { Database } from '@/data/supabase/database.types';
+import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
+import { resolveLegacyVehicleColor } from '@/features/vehicles/config/vehicleColors';
 
 type Tables = Database['public']['Tables'];
 
@@ -23,6 +25,7 @@ export const mapVehicle = (row: Tables['vehicles']['Row']): Vehicle => ({
   currentKm: row.current_km,
   fuelType: row.fuel_type,
   bodyType: row.body_type,
+  colorId: row.color_id ?? resolveLegacyVehicleColor(row.color),
   color: row.color,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -96,7 +99,7 @@ export const mapBodyCondition = (
   id: row.id,
   vehicleId: row.vehicle_id,
   ownerId: row.owner_id,
-  schemaType: row.schema_type,
+  schemaType: getBodySchemaType(row.schema_type),
   partKey: row.part_key,
   condition: row.condition,
   note: row.note,

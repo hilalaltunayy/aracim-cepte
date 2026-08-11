@@ -171,6 +171,7 @@ import DocumentsListScreen from '@/app/documents/index';
 import ExpertiseEditScreen from '@/app/expertise/edit';
 import ExpertiseListScreen from '@/app/expertise/index';
 import RecordEditScreen from '@/app/record/edit';
+import VehicleEditScreen from '@/app/vehicle/edit';
 import { formatCurrency } from '@/shared/utils/format';
 
 const ownerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -193,6 +194,7 @@ const vehicle = {
   currentKm: 10_000,
   fuelType: 'gasoline',
   bodyType: 'sedan_hatchback',
+  colorId: null,
   color: null,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
@@ -285,6 +287,7 @@ describe('TASK-011 critical route component mounts', () => {
       documents: [...documents],
       expertiseReports: [...expertiseReports],
       saveRecord: vi.fn(async () => true),
+      saveVehicle: vi.fn(async () => true),
       deleteRecord: vi.fn(async () => true),
       saveDocument: vi.fn(async () => true),
       deleteDocument: vi.fn(async () => true),
@@ -302,6 +305,25 @@ describe('TASK-011 critical route component mounts', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('mounts vehicle create with no fake body/color default and catalog options', async () => {
+    const renderer = await mount(VehicleEditScreen);
+    const bodyField = renderer.root.findByProps({ label: 'Gövde tipi' });
+    const colorField = renderer.root.findByProps({ label: 'Araç rengi' });
+    expect(bodyField.props.value).toBe('');
+    expect(bodyField.props.options).toHaveLength(14);
+    expect(colorField.props.value).toBe('');
+    expect(colorField.props.options).toHaveLength(12);
+    expect(colorField.props.options[0]).toMatchObject({ label: 'Beyaz', swatchColor: '#F7F7F2' });
+  });
+
+  it('restores normalized body and color selections when vehicle edit mounts', async () => {
+    routeParams.id = vehicleId;
+    dataState.vehicles = [{ ...vehicle, bodyType: 'suv', colorId: 'blue', color: 'Mavi' }];
+    const renderer = await mount(VehicleEditScreen);
+    expect(renderer.root.findByProps({ label: 'Gövde tipi' }).props.value).toBe('suv');
+    expect(renderer.root.findByProps({ label: 'Araç rengi' }).props.value).toBe('blue');
   });
 
   it.each([

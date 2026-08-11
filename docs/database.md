@@ -31,6 +31,21 @@ anon ve authenticated execute yetkileri kaldırılmıştır.
 Mobil uygulama yalnızca yayınlanabilir/anon key kullanır. `service_role`, secret key veya
 veritabanı parolası istemciye girmez.
 
+## Araç taksonomisi ve renk sözleşmesi
+
+`vehicles.body_type`, eski üçlü gövde şeması değerlerini silmeden 14 normalize ürün kimliğini de
+destekler. Yeni/normal kaydedilen araçlar `sedan`, `suv`, `roadster`, `mpv_minivan` gibi kararlı
+kimlikler kullanır; mevcut `sedan_hatchback`, `suv_crossover` ve `pickup_light_commercial` satırları
+geriye uyumluluk için yerinde kalır ve kullanıcı normal edit/save yapmadan yapay bir tipe çevrilmez.
+Mevcut gövde durumu SVG'leri ayrı bir merkezi uyumluluk eşlemesiyle üç eski şemadan birini kullanır;
+bu eşleme yeni bir silüet veya 3D desteği iddiası değildir.
+
+`vehicles.color` bilinmeyen legacy serbest metni kayıpsız tutar. Nullable `vehicles.color_id`, yalnız
+merkezi katalogdaki 12 kararlı renk tokenından birini saklar ve DB check constraint ile doğrulanır.
+Yeni render sözleşmesi `color_id` üzerinden label/HEX fallback alır; `color_id` null ise eski metin
+gösterilebilir, render ise nötr güvenli fallback kullanır. Yeni alan aynı `vehicles` satırında olduğu
+için mevcut owner-scoped RLS politikaları ek bir erişim yüzeyi açmadan alanı da korur.
+
 ## Kilometre modeli
 
 `vehicles.current_km`, aracın ayrı saklanan ve gerilemeyen güncel kilometre high-water mark'ıdır.
@@ -105,6 +120,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 3. `20260801111349_enforce_attachment_quotas_and_private_uploads.sql`
 4. `20260810212244_historical_odometer_support.sql`
 5. `20260810221647_maintenance_packages_foundation.sql`
+6. `20260811102853_vehicle_taxonomy_normalized_colors.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

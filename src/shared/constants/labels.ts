@@ -1,6 +1,5 @@
 import {
   BodyCondition,
-  BodyType,
   DocumentType,
   FuelType,
   RecordType,
@@ -13,12 +12,6 @@ export const fuelTypeLabels: Record<FuelType, string> = {
   lpg: 'LPG',
   electric: 'Elektrik',
   hybrid: 'Hibrit',
-};
-
-export const bodyTypeLabels: Record<BodyType, string> = {
-  sedan_hatchback: 'Sedan / Hatchback',
-  suv_crossover: 'SUV / Crossover',
-  pickup_light_commercial: 'Pickup / Hafif Ticari',
 };
 
 export const recordTypeLabels: Record<RecordType, string> = {

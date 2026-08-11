@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { BodyPartCondition, BodyType } from '@/domain/entities';
 import { bodySchemas } from './schemas';
+import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import {
   radii,
   spacing,
@@ -25,7 +26,7 @@ export function BodyDiagram({
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const conditionColors = colors.bodyCondition;
-  const schema = bodySchemas[bodyType];
+  const schema = bodySchemas[getBodySchemaType(bodyType)];
   const selectedLabel = schema.parts.find((part) => part.key === selectedPart)?.label ?? 'Parça';
 
   return (

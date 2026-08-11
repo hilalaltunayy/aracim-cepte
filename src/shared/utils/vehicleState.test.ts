@@ -12,6 +12,7 @@ const vehicle = (id: string): Vehicle => ({
   currentKm: 0,
   fuelType: 'gasoline',
   bodyType: 'sedan_hatchback',
+  colorId: null,
   color: null,
   createdAt: '',
   updatedAt: '',
