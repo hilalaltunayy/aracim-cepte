@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { AttachmentField } from '@/shared/components/AttachmentField';
+import { UnifiedAttachmentField } from '@/features/attachments/components/UnifiedAttachmentField';
 import {
   AppButton,
   AppInput,
@@ -16,19 +16,21 @@ import {
 import {
   deleteAttachment,
   openAttachment,
-  PickedAttachment,
-  uploadAttachment,
+  uploadParentAttachment,
 } from '@/data/storage/attachments';
 import { useDataStore } from '@/store/dataStore';
 import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
-import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
+import {
+  isPendingAttachment,
+  type AttachmentListItem,
+} from '@/features/attachments/domain/types';
 
 export default function ExpertiseEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -51,22 +53,30 @@ export default function ExpertiseEditScreen() {
   const [company, setCompany] = useState(existing?.companyName ?? '');
   const [number, setNumber] = useState(existing?.reportNumber ?? '');
   const [note, setNote] = useState(existing?.overallNote ?? '');
-  const [attachmentPath, setAttachmentPath] = useState(existing?.attachmentPath ?? null);
-  const [picked, setPicked] = useState<PickedAttachment | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentListItem[]>(
+    existing?.attachments ?? [],
+  );
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [opening, setOpening] = useState(false);
-  const uploadRequestId = useRef(createRequestId());
+  const generatedReportId = useRef(createRequestId()).current;
+  const reportId = existing?.id ?? id ?? generatedReportId;
   const isDirty = haveFormValuesChanged(
     {
       date: existing?.reportDate ?? null,
       company: existing?.companyName ?? '',
       number: existing?.reportNumber ?? '',
       note: existing?.overallNote ?? '',
-      attachmentPath: existing?.attachmentPath ?? null,
-      pickedUri: null,
+      attachments: (existing?.attachments ?? []).map((item) => item.storagePath),
     },
-    { date, company, number, note, attachmentPath, pickedUri: picked?.uri ?? null },
+    {
+      date,
+      company,
+      number,
+      note,
+      attachments: attachments.map((item) =>
+        isPendingAttachment(item) ? item.uri : item.storagePath,
+      ),
+    },
   );
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = invalidRouteId
@@ -76,12 +86,22 @@ export default function ExpertiseEditScreen() {
     if (!activeVehicleId) return;
     setLocalError(null);
     setSubmitting(true);
-    let uploadedPath: string | null = null;
+    const uploadedPaths: string[] = [];
     try {
-      let path = attachmentPath;
-      if (picked) {
-        path = await uploadAttachment(activeVehicleId, picked, uploadRequestId.current);
-        uploadedPath = path;
+      const attachmentPaths: string[] = [];
+      for (const attachment of attachments) {
+        if (!isPendingAttachment(attachment)) {
+          if (!attachment.legacy) attachmentPaths.push(attachment.storagePath);
+          continue;
+        }
+        const uploaded = await uploadParentAttachment(
+          activeVehicleId,
+          'expertise_report',
+          reportId,
+          attachment,
+        );
+        uploadedPaths.push(uploaded.path);
+        attachmentPaths.push(uploaded.path);
       }
       const success = await saveExpertise(
         {
@@ -89,21 +109,33 @@ export default function ExpertiseEditScreen() {
           companyName: company || null,
           reportNumber: number || null,
           overallNote: note || null,
-          attachmentPath: path,
+          attachmentPath: existing?.attachmentPath ?? null,
+          attachmentPaths,
+          keepLegacyAttachment: attachments.some(
+            (attachment) => !isPendingAttachment(attachment) && attachment.legacy === true,
+          ),
         },
-        existing?.id,
+        reportId,
       );
-      if (success) {
-        uploadedPath = null;
-        if (existing?.attachmentPath && existing.attachmentPath !== path)
-          await deleteAttachment(existing.attachmentPath);
-        leaveWithoutPrompt(() => {
-          Alert.alert('Kaydedildi', 'Ekspertiz raporu kaydedildi.');
-          goBackOr('/expertise');
-        });
+      if (!success) {
+        for (const uploadedPath of uploadedPaths) {
+          try {
+            await deleteAttachment(uploadedPath);
+          } catch {
+            // Reconciliation will retry cleanup without exposing provider details.
+          }
+        }
+        uploadedPaths.length = 0;
+        setLocalError('Ekspertiz raporu kaydedilemedi. Lütfen tekrar deneyin.');
+        return;
       }
+      uploadedPaths.length = 0;
+      leaveWithoutPrompt(() => {
+        Alert.alert('Kaydedildi', 'Ekspertiz raporu kaydedildi.');
+        goBackOr('/expertise');
+      });
     } catch (caught) {
-      if (uploadedPath) {
+      for (const uploadedPath of uploadedPaths) {
         try {
           await deleteAttachment(uploadedPath);
         } catch {
@@ -113,18 +145,6 @@ export default function ExpertiseEditScreen() {
       setLocalError(getFriendlyError(caught));
     } finally {
       setSubmitting(false);
-    }
-  };
-  const openExistingAttachment = async () => {
-    if (!existing?.attachmentPath || opening) return;
-    setLocalError(null);
-    setOpening(true);
-    try {
-      await openAttachment(existing.attachmentPath);
-    } catch {
-      setLocalError(ATTACHMENT_OPEN_ERROR_MESSAGE);
-    } finally {
-      setOpening(false);
     }
   };
   const remove = () =>
@@ -156,27 +176,13 @@ export default function ExpertiseEditScreen() {
         <AppInput label="Firma adı" value={company} onChangeText={setCompany} />
         <AppInput label="Rapor numarası" value={number} onChangeText={setNumber} />
         <AppInput label="Genel not" value={note} onChangeText={setNote} multiline />
-        <AttachmentField
-          picked={picked}
-          existingPath={attachmentPath}
-          onPick={(attachment) => {
-            uploadRequestId.current = createRequestId();
-            setPicked(attachment);
-          }}
-          onRemove={() => {
-            setPicked(null);
-            setAttachmentPath(null);
-          }}
+        <UnifiedAttachmentField
+          items={attachments}
+          disabled={submitting}
+          onChange={setAttachments}
+          onOpen={(attachment) => openAttachment(attachment.storagePath)}
         />
       </FormSection>
-      {existing?.attachmentPath ? (
-        <AppButton
-          title="Mevcut eki aç"
-          variant="secondary"
-          loading={opening}
-          onPress={() => void openExistingAttachment()}
-        />
-      ) : null}
       <AppButton title="Raporu kaydet" loading={loading || submitting} onPress={submit} />
       {existing ? <AppButton title="Raporu sil" variant="danger" onPress={remove} /> : null}
     </Screen>

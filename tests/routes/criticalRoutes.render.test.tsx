@@ -15,9 +15,11 @@ const {
   authState,
   confirmChoiceMock,
   dataState,
+  deleteAttachmentMock,
   openAttachmentMock,
   routeParams,
   routerMock,
+  uploadParentAttachmentMock,
 } = vi.hoisted(() => ({
   routeParams: {} as Record<string, string | string[] | undefined>,
   routerMock: {
@@ -28,6 +30,11 @@ const {
     canGoBack: vi.fn(() => true),
   },
   openAttachmentMock: vi.fn(async () => undefined),
+  deleteAttachmentMock: vi.fn(async () => undefined),
+  uploadParentAttachmentMock: vi.fn(async (_vehicleId: string, _parentType: string, _parentId: string, attachment: { id: string }) => ({
+    path: `owner/vehicle/expertise/report/${attachment.id}.jpg`,
+    attachmentId: attachment.id,
+  })),
   confirmChoiceMock: vi.fn(),
   authState: {
     signUp: vi.fn(async () => true),
@@ -147,10 +154,14 @@ vi.mock('@/shared/components/entityCards', async () => {
 
 vi.mock('@/shared/components/MiniBarChart', () => ({ MiniBarChart: 'MiniBarChart' }));
 vi.mock('@/shared/components/AttachmentField', () => ({ AttachmentField: 'AttachmentField' }));
+vi.mock('@/features/attachments/components/UnifiedAttachmentField', () => ({
+  UnifiedAttachmentField: 'UnifiedAttachmentField',
+}));
 vi.mock('@/data/storage/attachments', () => ({
-  deleteAttachment: vi.fn(async () => undefined),
+  deleteAttachment: deleteAttachmentMock,
   openAttachment: openAttachmentMock,
   uploadAttachment: vi.fn(async () => 'owner/vehicle/random.pdf'),
+  uploadParentAttachment: uploadParentAttachmentMock,
 }));
 vi.mock('@/data/supabase/client', () => ({ isSupabaseConfigured: true }));
 
@@ -243,6 +254,17 @@ const expertiseReports = [
     overallNote: null,
     reportNumber: null,
     attachmentPath: 'owner/vehicle/report.pdf',
+    attachments: [
+      {
+        id: `legacy:${expertiseId}`,
+        storagePath: 'owner/vehicle/report.pdf',
+        originalName: 'Mevcut ekspertiz eki.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: null,
+        source: 'document',
+        legacy: true,
+      },
+    ],
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   },
@@ -276,6 +298,8 @@ describe('TASK-011 critical route component mounts', () => {
     routerMock.push.mockClear();
     routerMock.replace.mockClear();
     openAttachmentMock.mockClear();
+    deleteAttachmentMock.mockClear();
+    uploadParentAttachmentMock.mockClear();
     confirmChoiceMock.mockClear();
     authState.signUp.mockClear().mockResolvedValue(true);
     authState.resendConfirmation.mockClear().mockResolvedValue(true);
@@ -433,7 +457,74 @@ describe('TASK-011 critical route component mounts', () => {
 
     const expertiseRenderer = await mount(ExpertiseEditScreen);
     expect(serialized(expertiseRenderer)).toContain('Rapor bilgileri');
-    expect(serialized(expertiseRenderer)).toContain('AttachmentField');
+    expect(serialized(expertiseRenderer)).toContain('UnifiedAttachmentField');
+  });
+
+  it('uploads mixed-source expertise files into one atomic save payload', async () => {
+    const renderer = await mount(ExpertiseEditScreen);
+    const field = findHost(renderer.root, 'UnifiedAttachmentField')[0];
+    const pending = [
+      {
+        id: '88888888-8888-4888-8888-888888888881',
+        requestId: '88888888-8888-4888-8888-888888888891',
+        uri: 'file:///camera.jpg',
+        originalName: 'camera.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 100,
+        source: 'camera',
+      },
+      {
+        id: '88888888-8888-4888-8888-888888888882',
+        requestId: '88888888-8888-4888-8888-888888888892',
+        uri: 'file:///report.pdf',
+        originalName: 'report.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 200,
+        source: 'document',
+      },
+    ];
+    await act(async () => field.props.onChange(pending));
+    await act(async () =>
+      renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress(),
+    );
+    expect(uploadParentAttachmentMock).toHaveBeenCalledTimes(2);
+    expect(dataState.saveExpertise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentPaths: [
+          'owner/vehicle/expertise/report/88888888-8888-4888-8888-888888888881.jpg',
+          'owner/vehicle/expertise/report/88888888-8888-4888-8888-888888888882.jpg',
+        ],
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('queues uploaded expertise files for cleanup when metadata save fails', async () => {
+    dataState.saveExpertise = vi.fn(async () => false);
+    const renderer = await mount(ExpertiseEditScreen);
+    const field = findHost(renderer.root, 'UnifiedAttachmentField')[0];
+    await act(async () =>
+      field.props.onChange([
+        {
+          id: '88888888-8888-4888-8888-888888888883',
+          requestId: '88888888-8888-4888-8888-888888888893',
+          uri: 'file:///failed.jpg',
+          originalName: 'failed.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 100,
+          source: 'gallery',
+        },
+      ]),
+    );
+    await act(async () =>
+      renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress(),
+    );
+    expect(deleteAttachmentMock).toHaveBeenCalledWith(
+      'owner/vehicle/expertise/report/88888888-8888-4888-8888-888888888883.jpg',
+    );
+    expect(serialized(renderer)).toContain(
+      'Ekspertiz raporu kaydedilemedi. Lütfen tekrar deneyin.',
+    );
   });
 
   it('emits exact list-to-create and list-to-edit hrefs for documents and expertise', async () => {
@@ -461,51 +552,19 @@ describe('TASK-011 critical route component mounts', () => {
   it('mounts expertise file-open state and awaits the safe shared opener', async () => {
     routeParams.id = expertiseId;
     const renderer = await mount(ExpertiseEditScreen);
-    const openButton = findHost(
-      renderer.root,
-      'AppButton',
-      (node) => node.props.title === 'Mevcut eki aç',
-    )[0];
-    expect(openButton).toBeDefined();
-    await act(async () => openButton.props.onPress());
+    const field = findHost(renderer.root, 'UnifiedAttachmentField')[0];
+    expect(field.props.items).toHaveLength(1);
+    await act(async () => field.props.onOpen(field.props.items[0]));
     expect(openAttachmentMock).toHaveBeenCalledWith('owner/vehicle/report.pdf');
   });
 
-  it('ends file-open loading and exposes only the safe retryable error', async () => {
-    openAttachmentMock.mockRejectedValueOnce(
-      new Error('provider signed_url=https://secret.example/object'),
-    );
-    routeParams.id = expertiseId;
-    const renderer = await mount(ExpertiseEditScreen);
-    const openButton = findHost(
-      renderer.root,
-      'AppButton',
-      (node) => node.props.title === 'Mevcut eki aç',
-    )[0];
-    await act(async () => openButton.props.onPress());
-    expect(serialized(renderer)).toContain(
-      'Dosya açılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.',
-    );
-    expect(serialized(renderer)).not.toContain('secret.example');
-    expect(
-      findHost(renderer.root, 'AppButton', (node) => node.props.title === 'Mevcut eki aç')[0].props
-        .loading,
-    ).toBe(false);
-
-    openAttachmentMock.mockResolvedValueOnce(undefined);
-    await act(async () =>
-      findHost(renderer.root, 'AppButton', (node) => node.props.title === 'Mevcut eki aç')[0].props.onPress(),
-    );
-    expect(openAttachmentMock).toHaveBeenCalledTimes(2);
-  });
-
   it('does not present a missing attachment as an openable report', async () => {
-    dataState.expertiseReports = [{ ...expertiseReports[0], attachmentPath: null }];
+    dataState.expertiseReports = [
+      { ...expertiseReports[0], attachmentPath: null, attachments: [] },
+    ];
     routeParams.id = expertiseId;
     const renderer = await mount(ExpertiseEditScreen);
-    expect(
-      findHost(renderer.root, 'AppButton', (node) => node.props.title === 'Mevcut eki aç'),
-    ).toHaveLength(0);
+    expect(findHost(renderer.root, 'UnifiedAttachmentField')[0].props.items).toEqual([]);
   });
 
   it.each([

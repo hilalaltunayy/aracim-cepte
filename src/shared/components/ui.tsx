@@ -346,6 +346,77 @@ export interface SelectOption<T extends string> {
   swatchColor?: string;
 }
 
+export interface ActionSheetOption<T extends string> {
+  value: T;
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+}
+
+export function ActionSheet<T extends string>({
+  visible,
+  title,
+  options,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  options: ActionSheetOption<T>[];
+  onSelect: (value: T) => void;
+  onClose: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const modalLayout = getSelectionModalLayout(windowHeight, insets);
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={[
+          styles.modalBackdrop,
+          { paddingTop: modalLayout.paddingTop, paddingBottom: modalLayout.paddingBottom },
+        ]}
+        onPress={onClose}
+      >
+        <View
+          testID="action-sheet-card"
+          accessibilityViewIsModal
+          style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
+        >
+          <Text style={styles.modalTitle}>{title}</Text>
+          <ScrollView
+            testID="action-sheet-options"
+            style={styles.optionList}
+            contentContainerStyle={{ paddingBottom: modalLayout.listPaddingBottom }}
+          >
+            {options.map((option) => (
+              <Pressable
+                key={option.value}
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                style={({ pressed }) => [styles.option, pressed && styles.optionSelected]}
+                onPress={() => {
+                  onSelect(option.value);
+                  onClose();
+                }}
+              >
+                <View style={styles.selectValue}>
+                  {option.icon ? (
+                    <Ionicons name={option.icon} size={22} color={colors.primary} accessible={false} />
+                  ) : null}
+                  <Text style={styles.optionText}>{option.label}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function SelectField<T extends string>({
   label,
   value,

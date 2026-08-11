@@ -12,7 +12,6 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
-import { getAttachmentTypeLabel } from '@/data/storage/attachmentPresentation';
 
 export default function ExpertiseListScreen() {
   const { colors } = useAppTheme();
@@ -39,8 +38,8 @@ export default function ExpertiseListScreen() {
                   <Text style={styles.meta}>Rapor no: {report.reportNumber}</Text>
                 ) : null}
                 <Text style={styles.meta}>
-                  {report.attachmentPath
-                    ? `Ekspertiz eki · ${getAttachmentTypeLabel(report.attachmentPath)}`
+                  {report.attachments.length
+                    ? `${report.attachments.length} ek dosya`
                     : 'Ek dosya yok'}
                 </Text>
               </View>
