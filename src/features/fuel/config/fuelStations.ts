@@ -21,3 +21,21 @@ export function isFuelStationId(value: unknown): value is FuelStationId {
 export function getFuelStationLabel(value: FuelStationId | null | undefined): string | null {
   return FUEL_STATIONS.find((station) => station.id === value)?.label ?? null;
 }
+
+const receiptStationMatchers: readonly [FuelStationId, RegExp][] = [
+  ['petrol_ofisi', /petrol\s*ofisi|p\.?\s*o\.?(?:\s|$)/i],
+  ['totalenergies', /total\s*energies|totalenergies/i],
+  ['aytemiz', /aytemiz/i],
+  ['shell', /shell/i],
+  ['opet', /opet/i],
+  ['bp', /(?:^|[^a-z])bp(?:[^a-z]|$)/i],
+];
+
+export function detectFuelStationFromReceiptText(value: string): FuelStationId | null {
+  const searchable = value
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return receiptStationMatchers.find(([, matcher]) => matcher.test(searchable))?.[0] ?? null;
+}
