@@ -54,4 +54,14 @@ describe('record category presentation', () => {
       }).summary,
     ).toBe('Motor yağı + 2 işlem daha');
   });
+
+  it('adds a normalized service label without expanding the history card', () => {
+    expect(
+      getRecordPresentation({
+        recordType: 'maintenance',
+        category: 'Periyodik bakım',
+        serviceType: 'authorized_service',
+      }).summary,
+    ).toBe('Yetkili Servis');
+  });
 });

@@ -136,7 +136,7 @@ export class SupabaseAppRepository implements AppRepository {
         .from('attachments')
         .select('*')
         .eq('vehicle_id', vehicleId)
-        .in('parent_type', ['expertise_report', 'vehicle_document'])
+        .in('parent_type', ['expertise_report', 'vehicle_document', 'maintenance_record'])
         .order('created_at'),
       client
         .from('vehicle_notes')
@@ -179,7 +179,13 @@ export class SupabaseAppRepository implements AppRepository {
       attachmentsByParent.set(key, current);
     }
     return {
-      records: (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [])),
+      records: (records.data ?? []).map((row) =>
+        mapRecord(
+          row,
+          itemsByRecord.get(row.id) ?? [],
+          attachmentsByParent.get(`maintenance_record:${row.id}`) ?? [],
+        ),
+      ),
       reminders: mappedReminders,
       bodyConditions: (body.data ?? []).map((row) =>
         mapBodyCondition(row, bodyValuesByParent.get(row.id) ?? []),
@@ -268,6 +274,28 @@ export class SupabaseAppRepository implements AppRepository {
   async saveRecord(vehicleId: string, draft: RecordDraft, id?: string, requestId?: string) {
     const client = getSupabaseClient();
     if (draft.recordType === 'maintenance') {
+      if (draft.attachmentPaths) {
+        if (!id) throw new AppError('Bakım kaydı kimliği oluşturulamadı.');
+        const { data, error } = await client.rpc('save_maintenance_record_with_details', {
+          p_request_id: requestId ?? createRequestId(),
+          p_vehicle_id: vehicleId,
+          p_record_id: id,
+          p_category: draft.category.trim(),
+          p_amount: draft.amount,
+          p_record_date: draft.recordDate,
+          p_kilometer: draft.kilometer,
+          p_description: draft.description?.trim() || null,
+          p_item_types: [...(draft.maintenanceItemTypes ?? [])],
+          p_service_type: draft.serviceType ?? null,
+          p_service_name: draft.serviceName?.trim() || null,
+          p_parts_cost: draft.partsCost ?? null,
+          p_labor_cost: draft.laborCost ?? null,
+          p_invoice_number: draft.invoiceNumber?.trim() || null,
+          p_attachment_paths: draft.attachmentPaths,
+        });
+        if (error) throw error;
+        return mapRecord(required(data, 'Bakım kaydı kaydedilemedi.'));
+      }
       const { data, error } = await client.rpc('save_maintenance_record_atomic', {
         p_request_id: requestId ?? createRequestId(),
         p_vehicle_id: vehicleId,
@@ -303,6 +331,7 @@ export class SupabaseAppRepository implements AppRepository {
   async deleteRecord(id: string) {
     const { error } = await getSupabaseClient().from('vehicle_records').delete().eq('id', id);
     if (error) throw error;
+    void reconcileAttachments().catch(() => undefined);
   }
 
   async saveMaintenanceTemplate(draft: MaintenanceTemplateDraft, id?: string) {

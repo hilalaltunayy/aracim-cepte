@@ -41,7 +41,9 @@ const {
       path:
         parentType === 'expertise_report'
           ? `owner/vehicle/expertise/report/${attachment.id}.jpg`
-          : `owner/vehicle/document/${attachment.id}.jpg`,
+          : parentType === 'maintenance_record'
+            ? `owner/vehicle/maintenance/record/${attachment.id}.jpg`
+            : `owner/vehicle/document/${attachment.id}.jpg`,
       attachmentId: attachment.id,
     }),
   ),
@@ -452,7 +454,7 @@ describe('TASK-011 critical route component mounts', () => {
     const amountField = findHost(
       renderer.root,
       'AppInput',
-      (node) => node.props.label === 'Tutar',
+      (node) => node.props.label === 'Toplam tutar',
     )[0];
     const kilometerField = findHost(
       renderer.root,
@@ -498,6 +500,53 @@ describe('TASK-011 critical route component mounts', () => {
     const expertiseRenderer = await mount(ExpertiseEditScreen);
     expect(serialized(expertiseRenderer)).toContain('Rapor bilgileri');
     expect(serialized(expertiseRenderer)).toContain('UnifiedAttachmentField');
+  });
+
+  it('saves optional maintenance service details through the shared attachment flow', async () => {
+    routeParams.type = 'maintenance';
+    const renderer = await mount(RecordEditScreen);
+    act(() => renderer.root.findByProps({ title: 'Detay ekle' }).props.onPress());
+    const field = findHost(renderer.root, 'UnifiedAttachmentField')[0];
+    const pending = {
+      id: '88888888-8888-4888-8888-888888888886',
+      requestId: '88888888-8888-4888-8888-888888888896',
+      uri: 'file:///maintenance-invoice.pdf',
+      originalName: 'maintenance-invoice.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 200,
+      source: 'document',
+    };
+    act(() => {
+      renderer.root.findByProps({ label: 'Parça tutarı' }).props.onChangeText('3200');
+      renderer.root.findByProps({ label: 'İşçilik tutarı' }).props.onChangeText('1800');
+      renderer.root.findByProps({ label: 'Servis türü' }).props.onChange('authorized_service');
+      renderer.root.findByProps({ label: 'Servis / Usta adı' }).props.onChangeText('QA Servis');
+      renderer.root.findByProps({ label: 'Fatura / Fiş no' }).props.onChangeText('QA-001');
+      field.props.onChange([pending]);
+    });
+    await act(async () => renderer.root.findByProps({ title: 'Kaydet' }).props.onPress());
+
+    expect(uploadParentAttachmentMock).toHaveBeenCalledWith(
+      vehicleId,
+      'maintenance_record',
+      '99999999-9999-4999-8999-999999999999',
+      pending,
+    );
+    expect(dataState.saveRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 5000,
+        serviceType: 'authorized_service',
+        serviceName: 'QA Servis',
+        partsCost: 3200,
+        laborCost: 1800,
+        invoiceNumber: 'QA-001',
+        attachmentPaths: [
+          'owner/vehicle/maintenance/record/88888888-8888-4888-8888-888888888886.jpg',
+        ],
+      }),
+      '99999999-9999-4999-8999-999999999999',
+      expect.any(String),
+    );
   });
 
   it('uploads a vehicle-document attachment through the TASK-022 parent flow', async () => {

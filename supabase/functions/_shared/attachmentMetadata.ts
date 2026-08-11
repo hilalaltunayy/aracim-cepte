@@ -7,5 +7,7 @@ export function safeStoredFilename(source: string, mimeType: string): string {
 }
 
 export function isSupportedAttachmentParent(value: string | null): boolean {
-  return value === 'expertise_report' || value === 'vehicle_document';
+  return (
+    value === 'expertise_report' || value === 'vehicle_document' || value === 'maintenance_record'
+  );
 }

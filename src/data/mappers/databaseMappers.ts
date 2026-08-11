@@ -13,6 +13,7 @@ import { Database } from '@/data/supabase/database.types';
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { resolveLegacyVehicleColor } from '@/features/vehicles/config/vehicleColors';
 import { isFuelStationId } from '@/features/fuel/config/fuelStations';
+import { normalizeMaintenanceServiceType } from '@/features/maintenance/config/maintenanceServiceTypes';
 import { resolvePersistedBodyConditions } from '@/features/bodyCondition/domain/bodyConditionRules';
 import type { Attachment, PersistedAttachment } from '@/features/attachments/domain/types';
 import { normalizeAttachmentMime } from '@/features/attachments/domain/attachmentRules';
@@ -39,6 +40,7 @@ export const mapVehicle = (row: Tables['vehicles']['Row']): Vehicle => ({
 export const mapRecord = (
   row: Tables['vehicle_records']['Row'],
   maintenanceItems: MaintenanceItem[] = [],
+  storedAttachments: Tables['attachments']['Row'][] = [],
 ): VehicleRecord => ({
   id: row.id,
   vehicleId: row.vehicle_id,
@@ -54,6 +56,12 @@ export const mapRecord = (
   description: row.description,
   source: row.source,
   maintenanceItems,
+  serviceType: normalizeMaintenanceServiceType(row.service_type),
+  serviceName: row.service_name,
+  partsCost: row.parts_cost === null ? null : Number(row.parts_cost),
+  laborCost: row.labor_cost === null ? null : Number(row.labor_cost),
+  invoiceNumber: row.invoice_number,
+  attachments: storedAttachments.map(mapAttachment),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
