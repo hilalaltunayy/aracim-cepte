@@ -1,5 +1,34 @@
 export type FuelType = 'gasoline' | 'diesel' | 'lpg' | 'electric' | 'hybrid';
-export type BodyType = 'sedan_hatchback' | 'suv_crossover' | 'pickup_light_commercial';
+export type BodySchemaType = 'sedan_hatchback' | 'suv_crossover' | 'pickup_light_commercial';
+export type NormalizedBodyType =
+  | 'sedan'
+  | 'hatchback'
+  | 'crossover'
+  | 'suv'
+  | 'station_wagon'
+  | 'coupe'
+  | 'cabrio'
+  | 'roadster'
+  | 'pickup'
+  | 'mpv_minivan'
+  | 'van'
+  | 'sports_car'
+  | 'campervan'
+  | 'minibus';
+export type BodyType = BodySchemaType | NormalizedBodyType;
+export type VehicleColorId =
+  | 'white'
+  | 'black'
+  | 'gray'
+  | 'silver'
+  | 'red'
+  | 'blue'
+  | 'green'
+  | 'brown'
+  | 'beige'
+  | 'gold'
+  | 'yellow'
+  | 'orange';
 export type RecordType = 'fuel' | 'maintenance' | 'expense';
 export type MaintenanceSource =
   | 'manual'
@@ -45,6 +74,7 @@ export interface Vehicle {
   currentKm: number;
   fuelType: FuelType;
   bodyType: BodyType;
+  colorId: VehicleColorId | null;
   color: string | null;
   createdAt: string;
   updatedAt: string;
@@ -111,7 +141,7 @@ export interface BodyPartCondition {
   id: string;
   vehicleId: string;
   ownerId: string;
-  schemaType: BodyType;
+  schemaType: BodySchemaType;
   partKey: string;
   condition: BodyCondition;
   note: string | null;
@@ -159,7 +189,7 @@ export interface VehicleDocument {
 
 export type VehicleDraft = Pick<
   Vehicle,
-  'brand' | 'model' | 'year' | 'plate' | 'currentKm' | 'fuelType' | 'bodyType' | 'color'
+  'brand' | 'model' | 'year' | 'plate' | 'currentKm' | 'fuelType' | 'bodyType' | 'colorId' | 'color'
 >;
 export type RecordDraft = Pick<
   VehicleRecord,

@@ -68,6 +68,7 @@ const vehicleDraft = (brand: string): VehicleDraft => ({
   currentKm: 10_000,
   fuelType: 'gasoline',
   bodyType: 'sedan_hatchback',
+  colorId: null,
   color: null,
 });
 

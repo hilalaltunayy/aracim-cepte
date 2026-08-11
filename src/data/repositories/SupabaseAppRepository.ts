@@ -30,6 +30,8 @@ import {
   reconcileReminderNotification,
 } from '@/features/reminders/notifications';
 import { isValidPartKey } from '@/features/bodyCondition/schemas';
+import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
+import { getVehicleTaxonomyPersistenceFields } from '@/features/vehicles/services/vehiclePersistence';
 import { createRequestId } from '@/shared/utils/requestId';
 import { reconcileAttachments } from '@/data/storage/attachments';
 import {
@@ -69,8 +71,7 @@ export class SupabaseAppRepository implements AppRepository {
       plate: draft.plate?.trim().toLocaleUpperCase('tr-TR') || null,
       current_km: draft.currentKm,
       fuel_type: draft.fuelType,
-      body_type: draft.bodyType,
-      color: draft.color?.trim() || null,
+      ...getVehicleTaxonomyPersistenceFields(draft),
       archived_at: null,
     };
     const query = id
@@ -384,7 +385,7 @@ export class SupabaseAppRepository implements AppRepository {
         {
           vehicle_id: vehicle.id,
           owner_id: await ownerId(),
-          schema_type: vehicle.bodyType,
+          schema_type: getBodySchemaType(vehicle.bodyType),
           part_key: partKey,
           condition,
           note: note?.trim() || null,

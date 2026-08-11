@@ -336,6 +336,7 @@ export function PasswordInput({
 export interface SelectOption<T extends string> {
   value: T;
   label: string;
+  swatchColor?: string;
 }
 
 export function SelectField<T extends string>({
@@ -366,7 +367,15 @@ export function SelectField<T extends string>({
         style={({ pressed }) => [styles.select, pressed && styles.selectPressed]}
         onPress={() => setOpen(true)}
       >
-        <Text style={styles.selectText}>{selected?.label ?? 'Seçin'}</Text>
+        <View style={styles.selectValue}>
+          {selected?.swatchColor ? (
+            <View
+              accessible={false}
+              style={[styles.colorSwatch, { backgroundColor: selected.swatchColor }]}
+            />
+          ) : null}
+          <Text style={styles.selectText}>{selected?.label ?? 'Seçin'}</Text>
+        </View>
         <Ionicons name="chevron-down" size={20} color={colors.muted} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -400,7 +409,15 @@ export function SelectField<T extends string>({
                     setOpen(false);
                   }}
                 >
-                  <Text style={styles.optionText}>{option.label}</Text>
+                  <View style={styles.selectValue}>
+                    {option.swatchColor ? (
+                      <View
+                        accessible={false}
+                        style={[styles.colorSwatch, { backgroundColor: option.swatchColor }]}
+                      />
+                    ) : null}
+                    <Text style={styles.optionText}>{option.label}</Text>
+                  </View>
                   {option.value === value ? (
                     <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
                   ) : null}
@@ -752,6 +769,20 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       gap: spacing.md,
     },
     selectPressed: { backgroundColor: colors.paleAqua, borderColor: colors.borderStrong },
+    selectValue: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    colorSwatch: {
+      width: 20,
+      height: 20,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
     selectText: { color: colors.textPrimary, ...typography.bodyMedium, flexShrink: 1 },
     modalBackdrop: {
       flex: 1,

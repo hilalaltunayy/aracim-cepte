@@ -27,6 +27,7 @@ import {
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { router } from 'expo-router';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
+import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 
 export default function BodyConditionScreen() {
   const { colors } = useAppTheme();
@@ -42,7 +43,7 @@ export default function BodyConditionScreen() {
     bootstrapped,
   } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
-  const schema = vehicle ? bodySchemas[vehicle.bodyType] : null;
+  const schema = vehicle ? bodySchemas[getBodySchemaType(vehicle.bodyType)] : null;
   const [selectedPartOverride, setSelectedPartOverride] = useState('');
   const selectedPart =
     schema?.parts.find((part) => part.key === selectedPartOverride)?.key ??

@@ -466,6 +466,20 @@ export type Database = {
           body_type: Database['public']['Enums']['body_type'];
           brand: string;
           color: string | null;
+          color_id:
+            | 'white'
+            | 'black'
+            | 'gray'
+            | 'silver'
+            | 'red'
+            | 'blue'
+            | 'green'
+            | 'brown'
+            | 'beige'
+            | 'gold'
+            | 'yellow'
+            | 'orange'
+            | null;
           created_at: string;
           current_km: number;
           fuel_type: Database['public']['Enums']['fuel_type'];
@@ -481,6 +495,20 @@ export type Database = {
           body_type: Database['public']['Enums']['body_type'];
           brand: string;
           color?: string | null;
+          color_id?:
+            | 'white'
+            | 'black'
+            | 'gray'
+            | 'silver'
+            | 'red'
+            | 'blue'
+            | 'green'
+            | 'brown'
+            | 'beige'
+            | 'gold'
+            | 'yellow'
+            | 'orange'
+            | null;
           created_at?: string;
           current_km?: number;
           fuel_type: Database['public']['Enums']['fuel_type'];
@@ -496,6 +524,20 @@ export type Database = {
           body_type?: Database['public']['Enums']['body_type'];
           brand?: string;
           color?: string | null;
+          color_id?:
+            | 'white'
+            | 'black'
+            | 'gray'
+            | 'silver'
+            | 'red'
+            | 'blue'
+            | 'green'
+            | 'brown'
+            | 'beige'
+            | 'gold'
+            | 'yellow'
+            | 'orange'
+            | null;
           created_at?: string;
           current_km?: number;
           fuel_type?: Database['public']['Enums']['fuel_type'];
@@ -600,7 +642,24 @@ export type Database = {
     Enums: {
       body_condition:
         'original' | 'painted' | 'locally_painted' | 'replaced' | 'damaged' | 'unknown';
-      body_type: 'sedan_hatchback' | 'suv_crossover' | 'pickup_light_commercial';
+      body_type:
+        | 'sedan_hatchback'
+        | 'suv_crossover'
+        | 'pickup_light_commercial'
+        | 'sedan'
+        | 'hatchback'
+        | 'crossover'
+        | 'suv'
+        | 'station_wagon'
+        | 'coupe'
+        | 'cabrio'
+        | 'roadster'
+        | 'pickup'
+        | 'mpv_minivan'
+        | 'van'
+        | 'sports_car'
+        | 'campervan'
+        | 'minibus';
       document_type:
         | 'registration'
         | 'traffic_insurance'
@@ -743,7 +802,25 @@ export const Constants = {
   public: {
     Enums: {
       body_condition: ['original', 'painted', 'locally_painted', 'replaced', 'damaged', 'unknown'],
-      body_type: ['sedan_hatchback', 'suv_crossover', 'pickup_light_commercial'],
+      body_type: [
+        'sedan_hatchback',
+        'suv_crossover',
+        'pickup_light_commercial',
+        'sedan',
+        'hatchback',
+        'crossover',
+        'suv',
+        'station_wagon',
+        'coupe',
+        'cabrio',
+        'roadster',
+        'pickup',
+        'mpv_minivan',
+        'van',
+        'sports_car',
+        'campervan',
+        'minibus',
+      ],
       document_type: [
         'registration',
         'traffic_insurance',

@@ -19,10 +19,12 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
-import { bodyTypeLabels, fuelTypeLabels } from '@/shared/constants/labels';
+import { fuelTypeLabels } from '@/shared/constants/labels';
 import { formatNumber } from '@/shared/utils/format';
 import { getBodyConditionSummary } from '@/shared/utils/analytics';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
+import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
+import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehicleProfile';
 
 const sections = [
   {
@@ -91,6 +93,7 @@ export default function VehicleScreen() {
               .filter(Boolean)
               .join(' · ')}
           </Text>
+          <Text style={styles.meta}>{getVehicleTaxonomySummary(vehicle)}</Text>
           <Text style={styles.km}>{formatNumber(vehicle.currentKm)} km</Text>
         </View>
         <Pressable
@@ -105,7 +108,7 @@ export default function VehicleScreen() {
       <Card style={styles.bodySummary}>
         <View>
           <Text style={styles.cardTitle}>Gövde özeti</Text>
-          <Text style={styles.meta}>{bodyTypeLabels[vehicle.bodyType]}</Text>
+          <Text style={styles.meta}>{getVehicleBodyTypeLabel(vehicle.bodyType)}</Text>
         </View>
         <View style={styles.summaryRow}>
           {[

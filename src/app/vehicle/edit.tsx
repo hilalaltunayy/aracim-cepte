@@ -11,8 +11,8 @@ import {
   SelectField,
   confirmChoice,
 } from '@/shared/components/ui';
-import { BodyType, FuelType } from '@/domain/entities';
-import { bodyTypeLabels, fuelTypeLabels } from '@/shared/constants/labels';
+import { BodyType, FuelType, VehicleColorId } from '@/domain/entities';
+import { fuelTypeLabels } from '@/shared/constants/labels';
 import { parseDecimal } from '@/shared/utils/format';
 import { spacing } from '@/shared/theme';
 import { useDataStore } from '@/store/dataStore';
@@ -23,6 +23,15 @@ import {
 } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
+import { getVehicleBodyTypeOptions } from '@/features/vehicles/config/bodyTypes';
+import {
+  resolveLegacyVehicleColor,
+  VEHICLE_COLORS,
+} from '@/features/vehicles/config/vehicleColors';
+import {
+  getVehicleColorPersistence,
+  getVehicleTaxonomyFormState,
+} from '@/features/vehicles/domain/vehicleProfile';
 
 export default function VehicleEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -34,8 +43,9 @@ export default function VehicleEditScreen() {
   const [plate, setPlate] = useState(existing?.plate ?? '');
   const [km, setKm] = useState(existing?.currentKm.toString() ?? '');
   const [fuelType, setFuelType] = useState<FuelType>(existing?.fuelType ?? 'gasoline');
-  const [bodyType, setBodyType] = useState<BodyType>(existing?.bodyType ?? 'sedan_hatchback');
-  const [color, setColor] = useState(existing?.color ?? '');
+  const initialTaxonomy = getVehicleTaxonomyFormState(existing);
+  const [bodyType, setBodyType] = useState<BodyType | ''>(initialTaxonomy.bodyType);
+  const [colorId, setColorId] = useState<VehicleColorId | ''>(initialTaxonomy.colorId);
   const [submitted, setSubmitted] = useState(false);
   const initialValues = {
     brand: existing?.brand ?? '',
@@ -44,8 +54,7 @@ export default function VehicleEditScreen() {
     plate: existing?.plate ?? '',
     km: existing?.currentKm.toString() ?? '',
     fuelType: existing?.fuelType ?? 'gasoline',
-    bodyType: existing?.bodyType ?? 'sedan_hatchback',
-    color: existing?.color ?? '',
+    ...initialTaxonomy,
   };
   const isDirty = haveFormValuesChanged(initialValues, {
     brand,
@@ -55,7 +64,7 @@ export default function VehicleEditScreen() {
     km,
     fuelType,
     bodyType,
-    color,
+    colorId,
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, vehicles, bootstrapped);
@@ -71,7 +80,9 @@ export default function VehicleEditScreen() {
     model.trim().length > 0 &&
     parsedKm !== null &&
     parsedKm >= 0 &&
-    validYear;
+    validYear &&
+    bodyType !== '' &&
+    (colorId !== '' || Boolean(existing?.color));
   const save = async (allowMileageDecrease: boolean) => {
     if (parsedKm === null) return;
     const success = await saveVehicle(
@@ -82,8 +93,8 @@ export default function VehicleEditScreen() {
         plate: plate || null,
         currentKm: Math.round(parsedKm),
         fuelType,
-        bodyType,
-        color: color || null,
+        bodyType: bodyType as BodyType,
+        ...getVehicleColorPersistence(colorId, existing?.color),
       },
       existing?.id,
       { allowMileageDecrease },
@@ -172,12 +183,27 @@ export default function VehicleEditScreen() {
           label="Gövde tipi"
           value={bodyType}
           onChange={setBodyType}
-          options={(Object.keys(bodyTypeLabels) as BodyType[]).map((value) => ({
+          options={getVehicleBodyTypeOptions(existing?.bodyType)}
+        />
+        <SelectField
+          label="Araç rengi"
+          value={colorId}
+          onChange={setColorId}
+          options={VEHICLE_COLORS.map(({ id: value, label, hexFallback: swatchColor }) => ({
             value,
-            label: bodyTypeLabels[value],
+            label,
+            swatchColor,
           }))}
         />
-        <AppInput label="Araç rengi" value={color} onChangeText={setColor} autoCapitalize="words" />
+        {existing?.color && !resolveLegacyVehicleColor(existing.color) && !colorId ? (
+          <ErrorBanner
+            message={`Kayıtlı renk “${existing.color}” katalogda bulunmuyor. Değiştirmek istemiyorsanız mevcut değer korunur.`}
+          />
+        ) : null}
+        {submitted && !bodyType ? <ErrorBanner message="Gövde tipi seçin." /> : null}
+        {submitted && !colorId && !existing?.color ? (
+          <ErrorBanner message="Araç rengi seçin." />
+        ) : null}
       </FormSection>
       <AppButton
         title={existing ? 'Değişiklikleri kaydet' : 'Aracımı kaydet'}
