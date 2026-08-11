@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PendingAttachment } from '@/features/attachments/domain/types';
 import type { DocumentOcrProvider } from '../domain/documentOcrTypes';
+import { createOnDeviceDocumentOcrProvider } from '../providers/onDeviceDocumentOcrProvider';
 import { analyzeDocumentAttachment } from './documentOcrService';
 
 const image: PendingAttachment = {
@@ -44,6 +45,22 @@ describe('document OCR service', () => {
         provider({ status: 'error', code: 'provider_unavailable' }),
       ),
     ).resolves.toEqual({ status: 'error', code: 'provider_unavailable' });
+  });
+
+  it('passes on-device provider text through the existing parser without persisting it', async () => {
+    const nativeProvider = createOnDeviceDocumentOcrProvider(() => ({
+      isSupported: () => true,
+      recognizeText: vi.fn().mockResolvedValue({ text: 'Poliçe No: LOCAL-99' }),
+    }));
+
+    await expect(
+      analyzeDocumentAttachment('traffic_insurance', image, nativeProvider),
+    ).resolves.toEqual({
+      status: 'success',
+      suggestions: [
+        { fieldId: 'documentNumber', suggestedValue: 'LOCAL-99', source: 'document_ocr' },
+      ],
+    });
   });
 
   it('handles thrown provider errors without provider details', async () => {

@@ -2,14 +2,14 @@ import type { DocumentType } from '@/domain/entities';
 import type { PendingAttachment } from '@/features/attachments/domain/types';
 import { OCR_SUPPORTED_DOCUMENT_TYPES, parseDocumentOcrText } from '../domain/documentOcrParser';
 import type { DocumentOcrAnalysisResult, DocumentOcrProvider } from '../domain/documentOcrTypes';
-import { unavailableDocumentOcrProvider } from '../providers/unavailableDocumentOcrProvider';
+import { onDeviceDocumentOcrProvider } from '../providers/onDeviceDocumentOcrProvider';
 
 const OCR_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
 
 export async function analyzeDocumentAttachment(
   documentType: DocumentType,
   attachment: PendingAttachment,
-  provider: DocumentOcrProvider = unavailableDocumentOcrProvider,
+  provider: DocumentOcrProvider = onDeviceDocumentOcrProvider,
 ): Promise<DocumentOcrAnalysisResult> {
   if (!OCR_SUPPORTED_DOCUMENT_TYPES.includes(documentType)) {
     return { status: 'unsupported', code: 'unsupported_document_type' };
