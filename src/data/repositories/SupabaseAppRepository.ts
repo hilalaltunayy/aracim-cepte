@@ -38,6 +38,7 @@ import {
   removeNotificationPreferences,
   setNotificationLeadDays,
 } from '@/features/reminders/notificationPreferences';
+import { validateReminderDateTime } from '@/features/reminders/reminderDateTimeValidation';
 
 async function ownerId(): Promise<string> {
   const { data, error } = await getSupabaseClient().auth.getUser();
@@ -218,7 +219,7 @@ export class SupabaseAppRepository implements AppRepository {
       if (error) throw error;
       return mapRecord(required(data, 'Bakım kaydı kaydedilemedi.'));
     }
-    const { data, error } = await client.rpc('save_vehicle_record_atomic', {
+    const { data, error } = await client.rpc('save_vehicle_record_atomic_v2', {
       p_request_id: requestId ?? createRequestId(),
       p_vehicle_id: vehicleId,
       p_record_id: id ?? null,
@@ -228,6 +229,8 @@ export class SupabaseAppRepository implements AppRepository {
       p_record_date: draft.recordDate,
       p_kilometer: draft.kilometer,
       p_liters: draft.recordType === 'fuel' ? draft.liters : null,
+      p_price_per_liter: draft.recordType === 'fuel' ? (draft.pricePerLiter ?? null) : null,
+      p_station_brand: draft.recordType === 'fuel' ? (draft.stationBrand ?? null) : null,
       p_description: draft.description?.trim() || null,
     });
     if (error) throw error;
@@ -262,6 +265,10 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveReminder(vehicleId: string, draft: ReminderDraft, id?: string) {
+    const dateTimeValidation = validateReminderDateTime(draft.dueDate, draft.dueTime);
+    if (!dateTimeValidation.valid) {
+      throw new AppError('Geçmiş bir tarih için hatırlatıcı oluşturamazsınız.', 'VALIDATION');
+    }
     const client = getSupabaseClient();
     let previous: Reminder | null = null;
     if (id) {
@@ -275,6 +282,7 @@ export class SupabaseAppRepository implements AppRepository {
       title: draft.title.trim(),
       reminder_type: draft.reminderType,
       due_date: draft.dueDate,
+      due_time: draft.dueDate ? (draft.dueTime ?? '09:00') : null,
       due_kilometer: draft.dueKilometer,
       notification_id: null,
       notification_status: draft.dueDate ? ('pending' as const) : ('not_required' as const),

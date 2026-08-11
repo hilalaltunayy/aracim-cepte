@@ -33,7 +33,14 @@ import {
 } from '@/shared/theme';
 import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
-import { formatDate, parseDateOnly, todayDateOnly, toDateOnly } from '@/shared/utils/format';
+import {
+  formatDate,
+  parseDateOnly,
+  parseTimeOnly,
+  todayDateOnly,
+  toDateOnly,
+  toTimeOnly,
+} from '@/shared/utils/format';
 import { withoutOptionalSuffix } from '@/shared/utils/formLabels';
 import {
   getButtonAccessibility,
@@ -531,6 +538,72 @@ export function DateField({
               <Text style={styles.pickerDoneText}>Bitti</Text>
             </Pressable>
           ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function TimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
+  const [show, setShow] = useState(false);
+  const selected = parseTimeOnly(value) ?? parseTimeOnly('09:00') ?? new Date();
+  const handleChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') setShow(false);
+    if (event.type === 'dismissed') setShow(false);
+    if (event.type === 'set' && date) onChange(toTimeOnly(date));
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.field}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <View style={[styles.webDateField, styles.flex]}>
+          <Ionicons name="time-outline" size={20} color={colors.primary} />
+          {createElement('input', {
+            type: 'time',
+            value,
+            'aria-label': label,
+            onInput: (event: { target: { value: string } }) => onChange(event.target.value),
+            onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+            style: createWebDateInputStyle(colors.textPrimary),
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value}`}
+        style={({ pressed }) => [styles.select, pressed && styles.selectPressed]}
+        onPress={() => setShow(true)}
+      >
+        <Text style={styles.selectText}>{value}</Text>
+        <Ionicons name="time-outline" size={20} color={colors.primary} />
+      </Pressable>
+      {show ? (
+        <View style={styles.nativePicker}>
+          <DateTimePicker
+            value={selected}
+            mode="time"
+            display="default"
+            is24Hour
+            locale="tr-TR"
+            onChange={handleChange}
+          />
         </View>
       ) : null}
     </View>

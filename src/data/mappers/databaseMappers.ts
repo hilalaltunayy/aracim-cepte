@@ -12,6 +12,7 @@ import {
 import { Database } from '@/data/supabase/database.types';
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { resolveLegacyVehicleColor } from '@/features/vehicles/config/vehicleColors';
+import { isFuelStationId } from '@/features/fuel/config/fuelStations';
 
 type Tables = Database['public']['Tables'];
 
@@ -45,6 +46,8 @@ export const mapRecord = (
   recordDate: row.record_date,
   kilometer: row.kilometer,
   liters: row.liters === null ? null : Number(row.liters),
+  pricePerLiter: row.price_per_liter === null ? null : Number(row.price_per_liter),
+  stationBrand: isFuelStationId(row.station_brand) ? row.station_brand : null,
   description: row.description,
   source: row.source,
   maintenanceItems,
@@ -82,6 +85,7 @@ export const mapReminder = (row: Tables['reminders']['Row']): Reminder => ({
   title: row.title,
   reminderType: row.reminder_type,
   dueDate: row.due_date,
+  dueTime: row.due_time?.slice(0, 5) ?? null,
   dueKilometer: row.due_kilometer,
   completed: row.completed,
   completedAt: row.completed_at,

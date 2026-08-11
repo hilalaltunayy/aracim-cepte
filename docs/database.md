@@ -53,7 +53,7 @@ için mevcut owner-scoped RLS politikaları ek bir erişim yüzeyi açmadan alan
 `vehicle_records.record_date` event tarihidir. Boş kilometre “Kilometreyi bilmiyorum” anlamına gelir
 ve `0` gibi sahte bir sentinel değer kullanılmaz.
 
-Yakıt ve diğer gider create/update işlemleri mobil repository'de `save_vehicle_record_atomic`,
+Yakıt ve diğer gider create/update işlemleri mobil repository'de `save_vehicle_record_atomic_v2`,
 bakım event + final operasyon seti ise `save_maintenance_record_atomic` RPC'sinden geçer. Her iki
 RPC aynı transaction içinde kaydı yazar ve bilinen event kilometresi mevcut `current_km` değerinden
 yüksekse aracı ilerletir:
@@ -69,6 +69,28 @@ tablosundaki `MAX(kilometer)` üzerinden yeniden türetilmez. Aynı gün içinde
 bir sırası olmadığı için çelişkili bilinen kilometreler uygulamada advisory warning üretir, hard
 block oluşturmaz. Form, en yakın önceki/sonraki bilinen kilometreyle çelişki gördüğünde kullanıcıdan
 “Yine de kaydet” onayı ister.
+
+## Yakıt kayıt modeli
+
+Yakıt event'inin toplam tutarı mevcut `vehicle_records.amount` alanında zorunlu kalır. Litre ve
+litre fiyatı bilinmiyorsa sahte `0` yerine sırasıyla nullable `liters` ve `price_per_liter` kullanılır;
+bu nedenle yalnız toplam tutarlı bir yakıt kaydı geçerlidir. Opsiyonel `station_brand`, uygulamadaki
+merkezi katalogdan gelen kararlı kimliği (`opet`, `petrol_ofisi`, `other` gibi) saklar ve serbest metin
+veya kişisel veri içermez.
+
+Yeni mobil istemci `save_vehicle_record_atomic_v2` ile bu alanları owner-scoped, idempotent ve
+kilometre high-water kuralıyla aynı transaction'da yazar. Önceki RPC imzası eski istemciler için
+korunur. Bir kayıt yakıt dışı türe çevrilirse BEFORE trigger litre/fiyat/istasyon alanlarını temizler;
+DB constraint'i yakıt ayrıntılarının gider/bakım satırında kalmasını önler. Mevcut `vehicle_records`
+RLS politikaları yeni nullable kolonları da aynı sahiplik sınırı içinde korur.
+
+## Hatırlatıcı yerel saat modeli
+
+`reminders.due_date` takvim gününü, nullable `due_time` ise kullanıcının seçtiği yerel duvar saatini
+saklar. Yeni tarihli hatırlatıcılarda varsayılan `09:00`'dır. Migration legacy satırlara sahte saat
+yazmaz; `due_time is null` olan eski satırlar istemcide 09:00 fallback'iyle okunur. Yeni/düzenlenen
+hatırlatıcı için birleşik yerel tarih+saat geçmişteyse repository DB write ve local notification
+schedule başlamadan işlemi reddeder. Bu alan mevcut `reminders` RLS sahiplik sınırını değiştirmez.
 
 ## Bakım event ve paket modeli
 
@@ -121,6 +143,8 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 4. `20260810212244_historical_odometer_support.sql`
 5. `20260810221647_maintenance_packages_foundation.sql`
 6. `20260811102853_vehicle_taxonomy_normalized_colors.sql`
+7. `20260811133756_feedback_stabilization_fuel_fields.sql`
+8. `20260811134804_reminder_due_time.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

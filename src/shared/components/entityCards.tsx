@@ -132,7 +132,9 @@ export function ReminderCard({
           <Text style={styles.meta}>{reminderTypeLabels[reminder.reminderType]}</Text>
           <Text style={styles.meta}>
             {[
-              reminder.dueDate ? formatDate(reminder.dueDate) : null,
+              reminder.dueDate
+                ? `${formatDate(reminder.dueDate)}${reminder.dueTime ? ` · ${reminder.dueTime}` : ''}`
+                : null,
               reminder.dueKilometer !== null ? `${formatNumber(reminder.dueKilometer)} km` : null,
             ]
               .filter(Boolean)

@@ -15,6 +15,18 @@ describe('notification lead-time rules', () => {
     expect(trigger?.getHours()).toBe(DEFAULT_NOTIFICATION_HOUR);
   });
 
+  it('preserves the selected local reminder time when calculating lead days', () => {
+    const trigger = getReminderNotificationTrigger(
+      '2026-08-10',
+      1,
+      new Date(2026, 7, 1, 12),
+      '18:30',
+    );
+    expect(trigger?.getDate()).toBe(9);
+    expect(trigger?.getHours()).toBe(18);
+    expect(trigger?.getMinutes()).toBe(30);
+  });
+
   it('supports 7, 3, 1, same-day and bounded custom day differences', () => {
     expect([7, 3, 1, 0, 15].map(normalizeLeadDays)).toEqual([7, 3, 1, 0, 15]);
     expect(normalizeLeadDays(-1)).toBe(1);

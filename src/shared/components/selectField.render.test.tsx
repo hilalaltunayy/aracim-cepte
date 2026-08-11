@@ -42,7 +42,7 @@ vi.mock('@/shared/theme', () => {
   };
 });
 
-import { SelectField } from './ui';
+import { SelectField, TimeField } from './ui';
 
 async function mount(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
@@ -83,5 +83,21 @@ describe('shared SelectField Android safe area', () => {
       Array.isArray(node.props.style),
     );
     expect(backdrop?.props.style).toContainEqual({ paddingTop: 24, paddingBottom: 48 });
+  });
+});
+
+describe('shared TimeField', () => {
+  it('opens the native 24-hour time picker and returns a normalized local time', async () => {
+    const onChange = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(<TimeField label="Hatırlatma saati" value="09:00" onChange={onChange} />);
+    });
+    const trigger = renderer!.root.findByProps({ accessibilityLabel: 'Hatırlatma saati: 09:00' });
+    act(() => trigger.props.onPress());
+    const picker = renderer!.root.find((node) => String(node.type) === 'DateTimePicker');
+    expect(picker.props).toMatchObject({ mode: 'time', is24Hour: true });
+    act(() => picker.props.onChange({ type: 'set' }, new Date(2026, 7, 11, 18, 30)));
+    expect(onChange).toHaveBeenCalledWith('18:30');
   });
 });
