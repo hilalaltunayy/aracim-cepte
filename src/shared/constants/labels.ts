@@ -1,5 +1,6 @@
-import { DocumentType, FuelType, RecordType, ReminderType } from '@/domain/entities';
+import { FuelType, RecordType, ReminderType } from '@/domain/entities';
 export { bodyConditionLabels } from '@/features/bodyCondition/config/bodyConditions';
+export { documentTypeLabels } from '@/features/documents/config/documentTypes';
 
 export const fuelTypeLabels: Record<FuelType, string> = {
   gasoline: 'Benzin',
@@ -23,18 +24,6 @@ export const reminderTypeLabels: Record<ReminderType, string> = {
   periodic_maintenance: 'Periyodik bakım',
   tire_change: 'Lastik değişimi',
   custom: 'Özel hatırlatıcı',
-};
-
-export const documentTypeLabels: Record<DocumentType, string> = {
-  registration: 'Ruhsat',
-  traffic_insurance: 'Trafik sigortası',
-  comprehensive_insurance: 'Kasko',
-  inspection: 'Muayene',
-  tax: 'MTV',
-  service_document: 'Servis belgesi',
-  expertise_report: 'Ekspertiz raporu',
-  invoice: 'Fatura',
-  custom: 'Diğer belge',
 };
 
 export const maintenanceCategories = [

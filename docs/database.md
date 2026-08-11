@@ -15,7 +15,8 @@
 - `attachments`: kamera, galeri ve dosya seçiciden gelen ekler için ortak owner/vehicle/parent
   scoped metadata.
 - `vehicle_notes`: araç özelinde düz metin notlar.
-- `vehicle_documents`: belge türü, tarihler, not ve özel ek yolu.
+- `vehicle_documents`: tür bazlı normalize kurum/tarih/numara metadata'sı, not ve geriye uyumlu özel
+  tek-ek yolu.
 
 Araç ilişkili bütün tablolar `vehicle_id` ve `owner_id` taşır. Araç silinirse yabancı anahtarlar
 üzerinden ilişkili satırlar cascade ile silinir. Paylaşım özelliği ileride ayrı izin tablosu ile
@@ -122,6 +123,28 @@ yazmaz; `due_time is null` olan eski satırlar istemcide 09:00 fallback'iyle oku
 hatırlatıcı için birleşik yerel tarih+saat geçmişteyse repository DB write ve local notification
 schedule başlamadan işlemi reddeder. Bu alan mevcut `reminders` RLS sahiplik sınırını değiştirmez.
 
+## Araç belgesi metadata modeli
+
+`vehicle_documents.document_type` merkezi uygulama kataloğundaki kararlı tür kimliğidir. Mevcut
+`title`, `document_number`, `issue_date`, `expiry_date`, `note` ve `attachment_path` alanları eski
+istemciler için korunur. TASK-023 şu nullable normalize alanları ekler:
+
+- `issuer_name`: sigorta şirketi, muayene istasyonu, ekspertiz merkezi veya belgeyi düzenleyen kurum.
+- `start_date`: sigorta poliçesi başlangıç tarihi.
+- `event_date`: türüne göre tescil, muayene, rapor, fatura veya diğer belge tarihi.
+
+Yeni istemci sigorta başlangıcını `start_date`, diğer türlerin olay tarihini `event_date` üzerinden
+okur; normalize alan yoksa `issue_date` türüne göre deterministik fallback'tir. Sync trigger eski
+istemcinin `issue_date` yazısını sigortada `start_date`, diğer türlerde `event_date` ile uyumlu tutar;
+yeni RPC de legacy alanı aynı tür kuralıyla yazar. Eksik legacy metadata uydurulmaz ve yeni alanlar
+başlangıçta nullable'dır.
+
+Sigorta için `start_date <= expiry_date`, muayene için `event_date <= expiry_date` ilişkisi hem saf
+uygulama doğrulamasında hem database constraint/RPC katmanında korunur. Diğer türlere ilgisiz bir
+genel `issue_date` zorunluluğu uygulanmaz. Süre durumu persist edilmez; merkezi 30 günlük eşikle
+`active`, `expiring_soon`, `expired` veya `no_expiry` olarak türetilir. Expired belge otomatik
+silinmez.
+
 ## Bakım event ve paket modeli
 
 `vehicle_records` içindeki `record_type='maintenance'` satırı bakım event source-of-truth'udur;
@@ -152,7 +175,8 @@ grant'leri daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayr
 `vehicle-attachments` bucket’ı özeldir, dosya başına 5 MB sınırı vardır ve yalnız JPEG, PNG ve PDF
 kabul eder. Yeni upload için servis tarafında kullanıcı başına en fazla 10 nesne ve toplam 25 MB
 kotası atomik rezervasyonla uygulanır. TASK-022 ekspertiz entegrasyonu ayrıca parent başına ortak
-5 ek ve 15 MB sınırı uygular; kamera, galeri ve dosya kaynakları ayrı kota değildir. Merkezi mobil
+5 ek ve 15 MB sınırı uygular; TASK-023 aynı parent havuzunu `vehicle_document` için de kullanır.
+Kamera, galeri ve dosya kaynakları ayrı kota değildir. Merkezi mobil
 varsayılanlar `src/features/attachments/config/attachmentConfig.ts` içindedir.
 
 Legacy nesne yolu korunur:
@@ -178,11 +202,12 @@ adı object path'e veya kalıcı metadata'ya taşınmaz; Edge Function kaynak/MI
 
 `attachments` doğrudan authenticated write grant'i vermez. Metadata seçimi owner + vehicle RLS ile
 sınırlıdır; parent-scoped reservation yalnız service role Edge Function tarafından çağrılır.
-`save_expertise_report_with_attachments` authenticated kullanıcının `auth.uid()` sahipliğini
-doğrular, rapor ve final ek listesini tek transaction içinde bağlar. Ekspertiz silme trigger/RPC'si
-metadata'yı kaldırıp Storage nesnelerini idempotent cleanup queue'ya alır. Eski
+`save_expertise_report_with_attachments` ve `save_vehicle_document_with_attachments` authenticated
+kullanıcının `auth.uid()` sahipliğini doğrular, parent ve final ek listesini tek transaction içinde
+bağlar. Ekspertiz/belge silme trigger'ları metadata'yı kaldırıp Storage nesnelerini idempotent cleanup
+queue'ya alır. Eski
 `expertise_reports.attachment_path` satırları read-time mapper fallback'iyle açılabilir kalır; sahte
-metadata migration'ı yapılmaz.
+metadata migration'ı yapılmaz. Aynı fallback `vehicle_documents.attachment_path` için de geçerlidir.
 
 ## Migrasyon akışı
 
@@ -198,6 +223,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 8. `20260811134804_reminder_due_time.sql`
 9. `20260811140844_body_condition_multiselect.sql`
 10. `20260811144343_unified_attachment_foundation.sql`
+11. `20260811153131_document_type_details.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

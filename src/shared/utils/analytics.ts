@@ -264,20 +264,6 @@ export function getReminderDisplay(
   return { status: 'planned', reasons };
 }
 
-export type DocumentExpiryStatus = 'expired' | 'approaching' | 'valid' | 'no_expiry';
-
-export function getDocumentExpiryStatus(
-  expiryDate: string | null,
-  today = todayDateOnly(),
-): DocumentExpiryStatus {
-  if (!expiryDate) return 'no_expiry';
-  const expiry = parseDateOnly(expiryDate);
-  const current = parseDateOnly(today);
-  if (!expiry || !current) return 'no_expiry';
-  const days = Math.ceil((expiry.getTime() - current.getTime()) / 86_400_000);
-  return days < 0 ? 'expired' : days <= 30 ? 'approaching' : 'valid';
-}
-
 export function getBodyConditionSummary(
   conditions: BodyPartCondition[],
 ): Record<BodyCondition, number> {

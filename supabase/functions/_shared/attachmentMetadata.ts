@@ -5,3 +5,7 @@ export function safeStoredFilename(source: string, mimeType: string): string {
   if (source === 'gallery') return `galeri-fotografi.${extension}`;
   return `belge.${extension}`;
 }
+
+export function isSupportedAttachmentParent(value: string | null): boolean {
+  return value === 'expertise_report' || value === 'vehicle_document';
+}

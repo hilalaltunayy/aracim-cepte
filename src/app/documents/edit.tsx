@@ -1,36 +1,44 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { AttachmentField } from '@/shared/components/AttachmentField';
 import {
   AppButton,
-  AppInput,
-  DateField,
   ErrorBanner,
   FormSection,
   LoadingScreen,
+  NoVehicleState,
   Screen,
   SelectField,
   confirmAction,
 } from '@/shared/components/ui';
-import { DocumentType } from '@/domain/entities';
-import { documentTypeLabels } from '@/shared/constants/labels';
+import type { DocumentType } from '@/domain/entities';
 import {
   deleteAttachment,
   openAttachment,
-  PickedAttachment,
-  uploadAttachment,
+  uploadParentAttachment,
 } from '@/data/storage/attachments';
 import { useDataStore } from '@/store/dataStore';
 import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
-import { ATTACHMENT_OPEN_ERROR_MESSAGE } from '@/data/storage/attachmentRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
+import { isPendingAttachment, type AttachmentListItem } from '@/features/attachments/domain/types';
+import { DocumentDetailsFields } from '@/features/documents/components/DocumentDetailsFields';
+import {
+  documentTypeOptions,
+  getDocumentTypeDefinition,
+} from '@/features/documents/config/documentTypes';
+import {
+  normalizeDocumentValues,
+  preserveHiddenLegacyDocumentValues,
+  resolveDocumentTitleForTypeChange,
+  validateDocument,
+  type DocumentFormValues,
+} from '@/features/documents/domain/documentValidation';
 
 export default function DocumentEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -40,78 +48,116 @@ export default function DocumentEditScreen() {
     useDataStore();
   const existing = useMemo(() => documents.find((document) => document.id === id), [documents, id]);
   const [type, setType] = useState<DocumentType>(existing?.documentType ?? 'registration');
-  const [title, setTitle] = useState(existing?.title ?? documentTypeLabels.registration);
-  const [number, setNumber] = useState(existing?.documentNumber ?? '');
-  const [issueDate, setIssueDate] = useState<string | null>(existing?.issueDate ?? null);
-  const [expiryDate, setExpiryDate] = useState<string | null>(existing?.expiryDate ?? null);
-  const [note, setNote] = useState(existing?.note ?? '');
-  const [attachmentPath, setAttachmentPath] = useState(existing?.attachmentPath ?? null);
-  const [picked, setPicked] = useState<PickedAttachment | null>(null);
+  const [values, setValues] = useState<DocumentFormValues>({
+    title: existing?.title ?? getDocumentTypeDefinition('registration').label,
+    documentNumber: existing?.documentNumber ?? '',
+    issuerName: existing?.issuerName ?? '',
+    startDate: existing?.startDate ?? null,
+    eventDate: existing?.eventDate ?? existing?.issueDate ?? null,
+    expiryDate: existing?.expiryDate ?? null,
+    note: existing?.note ?? '',
+  });
+  const [attachments, setAttachments] = useState<AttachmentListItem[]>(existing?.attachments ?? []);
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [opening, setOpening] = useState(false);
-  const uploadRequestId = useRef(createRequestId());
+  const generatedDocumentId = useRef(createRequestId()).current;
+  const documentId = existing?.id ?? id ?? generatedDocumentId;
+  const validation = validateDocument(type, values);
   const isDirty = haveFormValuesChanged(
     {
       type: existing?.documentType ?? 'registration',
-      title: existing?.title ?? documentTypeLabels.registration,
-      number: existing?.documentNumber ?? '',
-      issueDate: existing?.issueDate ?? null,
-      expiryDate: existing?.expiryDate ?? null,
-      note: existing?.note ?? '',
-      attachmentPath: existing?.attachmentPath ?? null,
-      pickedUri: null,
+      values: {
+        title: existing?.title ?? getDocumentTypeDefinition('registration').label,
+        documentNumber: existing?.documentNumber ?? '',
+        issuerName: existing?.issuerName ?? '',
+        startDate: existing?.startDate ?? null,
+        eventDate: existing?.eventDate ?? existing?.issueDate ?? null,
+        expiryDate: existing?.expiryDate ?? null,
+        note: existing?.note ?? '',
+      },
+      attachments: (existing?.attachments ?? []).map((item) => item.storagePath),
     },
     {
       type,
-      title,
-      number,
-      issueDate,
-      expiryDate,
-      note,
-      attachmentPath,
-      pickedUri: picked?.uri ?? null,
+      values,
+      attachments: attachments.map((item) =>
+        isPendingAttachment(item) ? item.uri : item.storagePath,
+      ),
     },
   );
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(id, documents, bootstrapped);
-  const datesValid = !issueDate || !expiryDate || expiryDate >= issueDate;
+
+  const updateValue = <K extends keyof DocumentFormValues>(key: K, value: DocumentFormValues[K]) =>
+    setValues((current) => ({ ...current, [key]: value }));
+
+  const changeType = (nextType: DocumentType) => {
+    setValues((current) => ({
+      ...current,
+      title: resolveDocumentTitleForTypeChange(type, nextType, current.title, Boolean(existing)),
+    }));
+    setType(nextType);
+  };
+
   const submit = async () => {
     setSubmitted(true);
-    if (!title.trim() || !datesValid || !activeVehicleId) return;
+    if (!validation.valid || !activeVehicleId) return;
     setLocalError(null);
     setSubmitting(true);
-    let uploadedPath: string | null = null;
+    const uploadedPaths: string[] = [];
     try {
-      let path = attachmentPath;
-      if (picked) {
-        path = await uploadAttachment(activeVehicleId, picked, uploadRequestId.current);
-        uploadedPath = path;
+      const attachmentPaths: string[] = [];
+      for (const attachment of attachments) {
+        if (!isPendingAttachment(attachment)) {
+          if (!attachment.legacy) attachmentPaths.push(attachment.storagePath);
+          continue;
+        }
+        const uploaded = await uploadParentAttachment(
+          activeVehicleId,
+          'vehicle_document',
+          documentId,
+          attachment,
+        );
+        uploadedPaths.push(uploaded.path);
+        attachmentPaths.push(uploaded.path);
       }
+      const normalized = preserveHiddenLegacyDocumentValues(
+        type,
+        normalizeDocumentValues(type, values),
+        existing,
+      );
       const success = await saveDocument(
         {
           documentType: type,
-          title,
-          documentNumber: number || null,
-          issueDate,
-          expiryDate,
-          note: note || null,
-          attachmentPath: path,
+          ...normalized,
+          attachmentPath: existing?.attachmentPath ?? null,
+          attachmentPaths,
+          keepLegacyAttachment: attachments.some(
+            (attachment) => !isPendingAttachment(attachment) && attachment.legacy === true,
+          ),
         },
-        existing?.id,
+        documentId,
       );
-      if (success) {
-        uploadedPath = null;
-        if (existing?.attachmentPath && existing.attachmentPath !== path)
-          await deleteAttachment(existing.attachmentPath);
-        leaveWithoutPrompt(() => {
-          Alert.alert('Kaydedildi', 'Belge bilgileri güvenli buluta kaydedildi.');
-          goBackOr('/documents');
-        });
+      if (!success) {
+        for (const uploadedPath of uploadedPaths) {
+          try {
+            await deleteAttachment(uploadedPath);
+          } catch {
+            // Reconciliation will retry without exposing provider details.
+          }
+        }
+        uploadedPaths.length = 0;
+        setLocalError('Belge kaydedilemedi. Lütfen tekrar deneyin.');
+        return;
       }
+      uploadedPaths.length = 0;
+      leaveWithoutPrompt(() => {
+        Alert.alert('Kaydedildi', 'Belge bilgileri güvenli buluta kaydedildi.');
+        goBackOr('/documents');
+      });
     } catch (caught) {
-      if (uploadedPath) {
+      for (const uploadedPath of uploadedPaths) {
         try {
           await deleteAttachment(uploadedPath);
         } catch {
@@ -123,19 +169,15 @@ export default function DocumentEditScreen() {
       setSubmitting(false);
     }
   };
-  const openExistingAttachment = async () => {
-    if (!existing?.attachmentPath || opening) return;
-    setLocalError(null);
-    setOpening(true);
-    try {
-      await openAttachment(existing.attachmentPath);
-    } catch {
-      setLocalError(ATTACHMENT_OPEN_ERROR_MESSAGE);
-    } finally {
-      setOpening(false);
-    }
-  };
+
   if (routeState === 'loading') return <LoadingScreen />;
+  if (routeState === 'create' && !activeVehicleId) {
+    return (
+      <Screen style={styles.form}>
+        <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
+      </Screen>
+    );
+  }
   if (routeState === 'missing') {
     return (
       <Screen style={styles.form}>
@@ -144,62 +186,29 @@ export default function DocumentEditScreen() {
       </Screen>
     );
   }
+
   return (
     <Screen style={styles.form}>
       {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
-      <FormSection title="Belge bilgileri">
+      <FormSection title="Belge türü">
         <SelectField
           label="Belge türü"
           value={type}
-          onChange={(value) => {
-            setType(value);
-            if (!existing) setTitle(documentTypeLabels[value]);
-          }}
-          options={(Object.keys(documentTypeLabels) as DocumentType[]).map((value) => ({
-            value,
-            label: documentTypeLabels[value],
-          }))}
-        />
-        <AppInput
-          label="Başlık"
-          value={title}
-          onChangeText={setTitle}
-          error={submitted && !title.trim() ? 'Başlık gereklidir.' : null}
-        />
-        <AppInput label="Belge numarası" value={number} onChangeText={setNumber} />
-      </FormSection>
-      <FormSection
-        title="Geçerlilik ve ek"
-        description="Bitiş tarihi girerseniz daha sonra tek dokunuşla hatırlatıcı oluşturabilirsiniz."
-      >
-        <DateField label="Düzenlenme tarihi" value={issueDate} onChange={setIssueDate} optional />
-        <DateField label="Bitiş tarihi" value={expiryDate} onChange={setExpiryDate} optional />
-        {submitted && !datesValid ? (
-          <ErrorBanner message="Bitiş tarihi düzenlenme tarihinden önce olamaz." />
-        ) : null}
-        <AppInput label="Not" value={note} onChangeText={setNote} multiline />
-        <AttachmentField
-          picked={picked}
-          existingPath={attachmentPath}
-          onPick={(attachment) => {
-            uploadRequestId.current = createRequestId();
-            setPicked(attachment);
-          }}
-          onRemove={() => {
-            setPicked(null);
-            setAttachmentPath(null);
-          }}
+          onChange={changeType}
+          options={documentTypeOptions}
         />
       </FormSection>
-      {existing?.attachmentPath ? (
-        <AppButton
-          title="Mevcut eki aç"
-          variant="secondary"
-          loading={opening}
-          onPress={() => void openExistingAttachment()}
-        />
-      ) : null}
-      {existing && expiryDate ? (
+      <DocumentDetailsFields
+        type={type}
+        values={values}
+        errors={submitted ? validation.errors : {}}
+        attachments={attachments}
+        disabled={submitting}
+        onChange={updateValue}
+        onAttachmentsChange={setAttachments}
+        onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+      />
+      {existing && values.expiryDate ? (
         <AppButton
           title="Bitiş tarihi için hatırlatıcı ekle"
           variant="secondary"
@@ -207,7 +216,7 @@ export default function DocumentEditScreen() {
           onPress={() =>
             router.push({
               pathname: '/reminder/edit',
-              params: { dueDate: expiryDate, title: `${title} yenileme` },
+              params: { dueDate: values.expiryDate ?? '', title: `${values.title} yenileme` },
             })
           }
         />
@@ -218,7 +227,7 @@ export default function DocumentEditScreen() {
           title="Belgeyi sil"
           variant="danger"
           onPress={() =>
-            confirmAction('Belgeyi sil', 'Belge bilgileri ve ek dosyası silinecek.', async () => {
+            confirmAction('Belgeyi sil', 'Belge bilgileri ve ek dosyaları silinecek.', async () => {
               if (await deleteDocument(existing.id)) {
                 leaveWithoutPrompt(() => goBackOr('/documents'));
               }

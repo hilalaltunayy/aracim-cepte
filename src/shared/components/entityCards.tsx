@@ -1,10 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Reminder, VehicleDocument, VehicleRecord } from '@/domain/entities';
-import {
-  reminderTypeLabels,
-  documentTypeLabels,
-} from '@/shared/constants/labels';
+import { reminderTypeLabels, documentTypeLabels } from '@/shared/constants/labels';
 import {
   fontFamilies,
   radii,
@@ -15,13 +12,10 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatCurrency, formatDate, formatNumber } from '@/shared/utils/format';
-import {
-  getDocumentExpiryStatus,
-  getReminderDisplay,
-  getReminderKilometerProgress,
-} from '@/shared/utils/analytics';
+import { getReminderDisplay, getReminderKilometerProgress } from '@/shared/utils/analytics';
 import { Card, StatusBadge } from './ui';
 import { getRecordPresentation } from '@/features/records/recordPresentation';
+import { getDocumentStatus } from '@/features/documents/domain/documentStatus';
 
 export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress?: () => void }) {
   const { colors } = useAppTheme();
@@ -37,12 +31,7 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
     >
       <Card style={styles.rowCard}>
         <View style={styles.icon}>
-          <Ionicons
-            name={presentation.icon}
-            size={22}
-            color={colors.primary}
-            accessible={false}
-          />
+          <Ionicons name={presentation.icon} size={22} color={colors.primary} accessible={false} />
         </View>
         <View style={styles.content}>
           <View style={styles.between}>
@@ -140,13 +129,13 @@ export function ReminderCard({
               .filter(Boolean)
               .join(' · ')}
           </Text>
-          {kilometerProgress ? (
-            display.reasons.map((reason) => (
-              <Text key={reason} style={styles.meta}>
-                {reason}
-              </Text>
-            ))
-          ) : null}
+          {kilometerProgress
+            ? display.reasons.map((reason) => (
+                <Text key={reason} style={styles.meta}>
+                  {reason}
+                </Text>
+              ))
+            : null}
           {!kilometerProgress
             ? display.reasons.map((reason) => (
                 <Text key={reason} style={styles.meta}>
@@ -162,8 +151,8 @@ export function ReminderCard({
 
 const documentLabels = {
   expired: ['Süresi doldu', 'danger'],
-  approaching: ['Yaklaşıyor', 'warning'],
-  valid: ['Geçerli', 'success'],
+  expiring_soon: ['Yaklaşıyor', 'warning'],
+  active: ['Geçerli', 'success'],
   no_expiry: ['Süresiz', 'neutral'],
 } as const;
 
@@ -176,7 +165,7 @@ export function DocumentCard({
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const status = getDocumentExpiryStatus(document.expiryDate);
+  const status = getDocumentStatus(document.expiryDate);
   const [label, tone] = documentLabels[status];
   return (
     <Pressable

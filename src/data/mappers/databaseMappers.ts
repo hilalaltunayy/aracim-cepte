@@ -137,17 +137,34 @@ export const mapAttachment = (row: Tables['attachments']['Row']): Attachment => 
   createdAt: row.created_at,
 });
 
-function legacyExpertiseAttachment(
-  row: Tables['expertise_reports']['Row'],
-): PersistedAttachment[] {
+function legacyExpertiseAttachment(row: Tables['expertise_reports']['Row']): PersistedAttachment[] {
   if (!row.attachment_path) return [];
   const extension = row.attachment_path.split('.').at(-1)?.toLowerCase();
-  const mimeType = extension === 'png' ? 'image/png' : extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
+  const mimeType =
+    extension === 'png' ? 'image/png' : extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
   return [
     {
       id: `legacy:${row.id}`,
       storagePath: row.attachment_path,
       originalName: `Mevcut ekspertiz eki.${extension === 'jpeg' ? 'jpg' : (extension ?? 'pdf')}`,
+      mimeType,
+      sizeBytes: null,
+      source: 'document',
+      legacy: true,
+    },
+  ];
+}
+
+function legacyDocumentAttachment(row: Tables['vehicle_documents']['Row']): PersistedAttachment[] {
+  if (!row.attachment_path) return [];
+  const extension = row.attachment_path.split('.').at(-1)?.toLowerCase();
+  const mimeType =
+    extension === 'png' ? 'image/png' : extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
+  return [
+    {
+      id: `legacy:${row.id}`,
+      storagePath: row.attachment_path,
+      originalName: `Mevcut belge eki.${extension === 'jpeg' ? 'jpg' : (extension ?? 'pdf')}`,
       mimeType,
       sizeBytes: null,
       source: 'document',
@@ -168,10 +185,7 @@ export const mapExpertise = (
   overallNote: row.overall_note,
   reportNumber: row.report_number,
   attachmentPath: row.attachment_path,
-  attachments: [
-    ...legacyExpertiseAttachment(row),
-    ...storedAttachments.map(mapAttachment),
-  ],
+  attachments: [...legacyExpertiseAttachment(row), ...storedAttachments.map(mapAttachment)],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -186,17 +200,32 @@ export const mapNote = (row: Tables['vehicle_notes']['Row']): VehicleNote => ({
   updatedAt: row.updated_at,
 });
 
-export const mapDocument = (row: Tables['vehicle_documents']['Row']): VehicleDocument => ({
+export const mapDocument = (
+  row: Tables['vehicle_documents']['Row'],
+  storedAttachments: Tables['attachments']['Row'][] = [],
+): VehicleDocument => ({
   id: row.id,
   vehicleId: row.vehicle_id,
   ownerId: row.owner_id,
   documentType: row.document_type,
   title: row.title,
   documentNumber: row.document_number,
+  issuerName: row.issuer_name,
+  startDate:
+    row.start_date ??
+    (row.document_type === 'traffic_insurance' || row.document_type === 'comprehensive_insurance'
+      ? row.issue_date
+      : null),
+  eventDate:
+    row.event_date ??
+    (row.document_type === 'traffic_insurance' || row.document_type === 'comprehensive_insurance'
+      ? null
+      : row.issue_date),
   issueDate: row.issue_date,
   expiryDate: row.expiry_date,
   note: row.note,
   attachmentPath: row.attachment_path,
+  attachments: [...legacyDocumentAttachment(row), ...storedAttachments.map(mapAttachment)],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

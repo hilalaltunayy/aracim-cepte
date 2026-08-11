@@ -31,20 +31,9 @@ export type VehicleColorId =
   | 'orange';
 export type RecordType = 'fuel' | 'maintenance' | 'expense';
 export type FuelStationId =
-  | 'opet'
-  | 'shell'
-  | 'petrol_ofisi'
-  | 'bp'
-  | 'totalenergies'
-  | 'aytemiz'
-  | 'other';
+  'opet' | 'shell' | 'petrol_ofisi' | 'bp' | 'totalenergies' | 'aytemiz' | 'other';
 export type MaintenanceSource =
-  | 'manual'
-  | 'receipt_ocr'
-  | 'service'
-  | 'obd'
-  | 'connected_vehicle'
-  | 'import';
+  'manual' | 'receipt_ocr' | 'service' | 'obd' | 'connected_vehicle' | 'import';
 export type ReminderType =
   | 'inspection'
   | 'traffic_insurance'
@@ -54,11 +43,7 @@ export type ReminderType =
   | 'tire_change'
   | 'custom';
 export type ReminderNotificationStatus =
-  | 'pending'
-  | 'scheduled'
-  | 'not_required'
-  | 'permission_denied'
-  | 'failed';
+  'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
 export type BodyCondition =
   'original' | 'painted' | 'locally_painted' | 'replaced' | 'damaged' | 'unknown';
 export type DocumentType =
@@ -192,10 +177,15 @@ export interface VehicleDocument {
   documentType: DocumentType;
   title: string;
   documentNumber: string | null;
+  issuerName: string | null;
+  startDate: string | null;
+  eventDate: string | null;
+  /** Legacy generic date retained for older clients and deterministic read fallback. */
   issueDate: string | null;
   expiryDate: string | null;
   note: string | null;
   attachmentPath: string | null;
+  attachments: import('@/features/attachments/domain/types').PersistedAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -234,8 +224,13 @@ export type DocumentDraft = Pick<
   | 'documentType'
   | 'title'
   | 'documentNumber'
-  | 'issueDate'
+  | 'issuerName'
+  | 'startDate'
+  | 'eventDate'
   | 'expiryDate'
   | 'note'
   | 'attachmentPath'
->;
+> & {
+  attachmentPaths?: string[];
+  keepLegacyAttachment?: boolean;
+};
