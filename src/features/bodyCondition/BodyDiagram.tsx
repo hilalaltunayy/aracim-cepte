@@ -11,6 +11,7 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
+import { getRepresentativeBodyCondition } from '@/features/bodyCondition/domain/bodyConditionRules';
 
 export function BodyDiagram({
   bodyType,
@@ -90,8 +91,9 @@ export function BodyDiagram({
             />
             {schema.parts.map((part) => {
               const status =
-                conditions.find((condition) => condition.partKey === part.key)?.condition ??
-                'unknown';
+                getRepresentativeBodyCondition(
+                  conditions.find((condition) => condition.partKey === part.key)?.conditions ?? [],
+                ) ?? 'unknown';
               const selected = part.key === selectedPart;
               return (
                 <Path

@@ -8,13 +8,18 @@ import {
   LoadingScreen,
   NoVehicleState,
   Screen,
-  SelectField,
   StatusBadge,
 } from '@/shared/components/ui';
 import { BodyCondition } from '@/domain/entities';
-import { bodyConditionLabels } from '@/shared/constants/labels';
 import { bodySchemas } from '@/features/bodyCondition/schemas';
 import { BodyDiagram } from '@/features/bodyCondition/BodyDiagram';
+import { BodyConditionSelector } from '@/features/bodyCondition/components/BodyConditionSelector';
+import { bodyConditionCatalog } from '@/features/bodyCondition/config/bodyConditions';
+import {
+  areBodyConditionSetsEqual,
+  formatBodyConditionSet,
+  getRepresentativeBodyCondition,
+} from '@/features/bodyCondition/domain/bodyConditionRules';
 import { useDataStore } from '@/store/dataStore';
 import {
   radii,
@@ -53,12 +58,13 @@ export default function BodyConditionScreen() {
     () => bodyConditions.find((condition) => condition.partKey === selectedPart),
     [bodyConditions, selectedPart],
   );
-  const [conditionOverride, setConditionOverride] = useState<BodyCondition | null>(null);
+  const [conditionOverride, setConditionOverride] = useState<BodyCondition[] | null>(null);
   const [noteOverride, setNoteOverride] = useState<string | null>(null);
-  const condition = conditionOverride ?? existing?.condition ?? 'unknown';
+  const conditions = conditionOverride ?? existing?.conditions ?? [];
   const note = noteOverride ?? existing?.note ?? '';
   const isDirty =
-    condition !== (existing?.condition ?? 'unknown') || note !== (existing?.note ?? '');
+    !areBodyConditionSetsEqual(conditions, existing?.conditions ?? []) ||
+    note !== (existing?.note ?? '');
   useUnsavedChangesGuard(isDirty);
 
   const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
@@ -76,6 +82,7 @@ export default function BodyConditionScreen() {
     setNoteOverride(null);
   };
   const selectedLabel = schema.parts.find((part) => part.key === selectedPart)?.label ?? 'Parça';
+  const representativeCondition = getRepresentativeBodyCondition(conditions) ?? 'unknown';
   return (
     <Screen>
       {error ? <ErrorBanner message={error} /> : null}
@@ -89,28 +96,32 @@ export default function BodyConditionScreen() {
         <View style={styles.headingRow}>
           <View style={styles.headingCopy}>
             <View style={styles.partHeading}>
-              <View style={[styles.partDot, { backgroundColor: conditionColors[condition] }]} />
+              <View
+                style={[
+                  styles.partDot,
+                  { backgroundColor: conditionColors[representativeCondition] },
+                ]}
+              />
               <Text style={styles.partTitle}>{selectedLabel}</Text>
             </View>
-            <Text style={styles.hint}>Parçanın güncel durumunu seçin.</Text>
+            <Text style={styles.hint}>Parçanın geçerli tüm durumlarını seçin.</Text>
           </View>
-          <StatusBadge label={bodyConditionLabels[condition]} tone="neutral" />
+          <StatusBadge
+            label={
+              conditions.length > 1
+                ? `${conditions.length} durum`
+                : formatBodyConditionSet(conditions)
+            }
+            tone="neutral"
+          />
         </View>
-        <SelectField
-          label="Parça durumu"
-          value={condition}
-          onChange={setConditionOverride}
-          options={(Object.keys(bodyConditionLabels) as BodyCondition[]).map((value) => ({
-            value,
-            label: bodyConditionLabels[value],
-          }))}
-        />
+        <BodyConditionSelector selected={conditions} onChange={setConditionOverride} />
         <AppInput label="Not" value={note} onChangeText={setNoteOverride} multiline />
         <AppButton
           title="Parça durumunu kaydet"
           loading={loading}
           onPress={() =>
-            void saveBodyCondition(selectedPart, condition, note || null).then((saved) => {
+            void saveBodyCondition(selectedPart, conditions, note || null).then((saved) => {
               if (!saved) return;
               setConditionOverride(null);
               setNoteOverride(null);
@@ -121,17 +132,18 @@ export default function BodyConditionScreen() {
       <Card style={styles.overviewCard}>
         <Text style={styles.legendTitle}>Durum renkleri</Text>
         <View style={styles.legend}>
-          {(Object.keys(bodyConditionLabels) as BodyCondition[]).map((value) => (
-            <View key={value} style={styles.legendItem}>
-              <View style={[styles.swatch, { backgroundColor: conditionColors[value] }]} />
-              <Text style={styles.legendText}>{bodyConditionLabels[value]}</Text>
+          {bodyConditionCatalog.map((condition) => (
+            <View key={condition.id} style={styles.legendItem}>
+              <View style={[styles.swatch, { backgroundColor: conditionColors[condition.id] }]} />
+              <Text style={styles.legendText}>{condition.label}</Text>
             </View>
           ))}
         </View>
         <View style={styles.summary}>
           {schema.parts.map((part) => {
             const item = bodyConditions.find((entry) => entry.partKey === part.key);
-            const currentCondition = item?.condition ?? 'unknown';
+            const currentConditions = item?.conditions ?? [];
+            const currentCondition = getRepresentativeBodyCondition(currentConditions) ?? 'unknown';
             return (
               <View key={part.key} style={styles.summaryRow}>
                 <View style={styles.summaryName}>
@@ -143,7 +155,9 @@ export default function BodyConditionScreen() {
                   />
                   <Text style={styles.summaryPart}>{part.label}</Text>
                 </View>
-                <Text style={styles.summaryStatus}>{bodyConditionLabels[currentCondition]}</Text>
+                <Text style={styles.summaryStatus}>
+                  {formatBodyConditionSet(currentConditions)}
+                </Text>
               </View>
             );
           })}
@@ -184,5 +198,11 @@ const createStyles = ({ colors }: AppTheme) =>
     summaryName: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
     summaryDot: { width: 8, height: 8, borderRadius: radii.pill },
     summaryPart: { color: colors.navy, ...typography.bodyMedium },
-    summaryStatus: { color: colors.muted, ...typography.status },
+    summaryStatus: {
+      color: colors.muted,
+      ...typography.status,
+      flexShrink: 1,
+      maxWidth: '56%',
+      textAlign: 'right',
+    },
   });

@@ -53,7 +53,7 @@ export interface AppRepository {
   saveBodyCondition(
     vehicle: Vehicle,
     partKey: string,
-    condition: BodyPartCondition['condition'],
+    conditions: BodyPartCondition['conditions'],
     note: string | null,
   ): Promise<BodyPartCondition>;
   saveExpertise(vehicleId: string, draft: ExpertiseDraft, id?: string): Promise<ExpertiseReport>;

@@ -8,7 +8,9 @@
 - `maintenance_items`: bakım event'ine bağlı sıfır veya daha çok yapılandırılmış operasyon.
 - `maintenance_templates`: kullanıcıya ait, tekrar kullanılabilir bakım operasyonu preset'leri.
 - `reminders`: tarih ve/veya kilometre hedefleri ile yerel bildirim kimliği.
-- `body_part_conditions`: araç, gövde şeması ve parça için tekil durum.
+- `body_part_conditions`: araç, gövde şeması ve parça için geriye uyumlu parent/representative
+  durum ve not.
+- `body_part_condition_values`: bir parent gövde parçasına bağlı normalize edilmiş durum seti.
 - `expertise_reports`: rapor meta verisi ve isteğe bağlı özel ek yolu.
 - `vehicle_notes`: araç özelinde düz metin notlar.
 - `vehicle_documents`: belge türü, tarihler, not ve özel ek yolu.
@@ -39,6 +41,32 @@ kimlikler kullanır; mevcut `sedan_hatchback`, `suv_crossover` ve `pickup_light_
 geriye uyumluluk için yerinde kalır ve kullanıcı normal edit/save yapmadan yapay bir tipe çevrilmez.
 Mevcut gövde durumu SVG'leri ayrı bir merkezi uyumluluk eşlemesiyle üç eski şemadan birini kullanır;
 bu eşleme yeni bir silüet veya 3D desteği iddiası değildir.
+
+## Gövde parçası çoklu durum modeli
+
+`body_part_conditions` mevcut araç/şema/parça kimliğini, notu ve eski istemciler için deterministic
+representative `condition` alanını korur. Yeni `body_part_condition_values`, aynı parent altında
+normalize durumları ayrı satırlar olarak saklar. `condition_set_initialized=false` olan ve child
+satırı bulunmayan parent legacy tekli kayıttır; istemcide `[condition]` olarak okunur. Aynı marker
+`true` iken child satırı yoksa bu gerçek boş settir ve `unknown` olarak yorumlanmaz.
+
+Primary durumlar `original`, `painted`, `locally_painted` ve `replaced` olup aynı sette en fazla biri
+bulunabilir. `damaged` primary durumla birlikte veya tek başına kullanılabilir. `unknown` yalnız
+başına geçerlidir. Mobil toggle bu uyumsuzlukları seçim anında değiştirerek çözer; database RPC'si
+de aynı invariants'ı tekrar doğrular. Representative renk önceliği merkezi helper'da deterministik
+olup `damaged`, bilinen boya/değişim durumlarının önünde gösterilir; gerçek tüm durumlar metinsel
+etiketlerde korunur.
+
+`save_body_part_conditions_atomic` owner vehicle'ı kilitler, parent satırı ile final child setini
+tek transaction içinde değiştirir ve güvenli boş `search_path` kullanır. Child tablo authenticated
+istemciye yalnız SELECT grant verir; doğrudan write kapalıdır. RLS parent ve araç sahipliğini birlikte
+doğrular. Eski istemcinin mevcut parent `condition` alanına owner-scoped yazması, child setini silip
+satırı tekrar legacy singleton moduna alan trigger ile geriye uyumlu kalır.
+
+Araç veya parent silinince child değerler cascade ile temizlenir. Remote rollback, migration
+history'sini değiştirmek yerine yeni forward migration ile RPC erişimini durdurup istemciyi korunan
+legacy `condition` alanına döndürmelidir; child verisi inceleme/migrasyon tamamlanana kadar
+silinmemelidir.
 
 `vehicles.color` bilinmeyen legacy serbest metni kayıpsız tutar. Nullable `vehicles.color_id`, yalnız
 merkezi katalogdaki 12 kararlı renk tokenından birini saklar ve DB check constraint ile doğrulanır.
@@ -145,6 +173,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 6. `20260811102853_vehicle_taxonomy_normalized_colors.sql`
 7. `20260811133756_feedback_stabilization_fuel_fields.sql`
 8. `20260811134804_reminder_due_time.sql`
+9. `20260811140844_body_condition_multiselect.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

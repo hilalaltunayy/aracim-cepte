@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
-  BodyCondition,
   BodyPartCondition,
   DocumentDraft,
   ExpertiseDraft,
@@ -67,7 +66,7 @@ interface DataState {
   deleteReminder: (id: string) => Promise<boolean>;
   saveBodyCondition: (
     partKey: string,
-    condition: BodyCondition,
+    conditions: BodyPartCondition['conditions'],
     note: string | null,
   ) => Promise<boolean>;
   saveExpertise: (draft: ExpertiseDraft, id?: string) => Promise<boolean>;
@@ -276,11 +275,11 @@ export const useDataStore = create<DataState>()(
 
         deleteReminder: (id) => mutate(() => appRepository.deleteReminder(id)),
 
-        saveBodyCondition: (partKey, condition, note) =>
+        saveBodyCondition: (partKey, conditions, note) =>
           mutate(async () => {
             const vehicle = activeVehicle();
             if (!vehicle) throw new Error('Aktif araç yok.');
-            await appRepository.saveBodyCondition(vehicle, partKey, condition, note);
+            await appRepository.saveBodyCondition(vehicle, partKey, conditions, note);
           }),
 
         saveExpertise: (draft, id) =>

@@ -154,6 +154,7 @@ export interface BodyPartCondition {
   ownerId: string;
   schemaType: BodySchemaType;
   partKey: string;
+  conditions: BodyCondition[];
   condition: BodyCondition;
   note: string | null;
   createdAt: string;
