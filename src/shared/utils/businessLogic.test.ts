@@ -168,6 +168,7 @@ describe('body condition schemas', () => {
         ownerId: 'o',
         schemaType: 'sedan_hatchback',
         partKey: 'hood',
+        conditions: ['painted', 'damaged'],
         condition: 'painted',
         note: null,
         createdAt: '',
@@ -179,6 +180,7 @@ describe('body condition schemas', () => {
         ownerId: 'o',
         schemaType: 'sedan_hatchback',
         partKey: 'roof',
+        conditions: ['painted'],
         condition: 'painted',
         note: null,
         createdAt: '',
@@ -186,6 +188,7 @@ describe('body condition schemas', () => {
       },
     ];
     expect(getBodyConditionSummary(items).painted).toBe(2);
+    expect(getBodyConditionSummary(items).damaged).toBe(1);
     expect(getBodyConditionSummary(items).replaced).toBe(0);
   });
 

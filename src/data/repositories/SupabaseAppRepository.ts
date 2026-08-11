@@ -30,6 +30,10 @@ import {
   reconcileReminderNotification,
 } from '@/features/reminders/notifications';
 import { isValidPartKey } from '@/features/bodyCondition/schemas';
+import {
+  normalizeBodyConditions,
+  validateBodyConditions,
+} from '@/features/bodyCondition/domain/bodyConditionRules';
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomyPersistenceFields } from '@/features/vehicles/services/vehiclePersistence';
 import { createRequestId } from '@/shared/utils/requestId';
@@ -101,7 +105,17 @@ export class SupabaseAppRepository implements AppRepository {
 
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
     const client = getSupabaseClient();
-    const [records, maintenanceItems, maintenanceTemplates, reminders, body, expertise, notes, documents] = await Promise.all([
+    const [
+      records,
+      maintenanceItems,
+      maintenanceTemplates,
+      reminders,
+      body,
+      bodyValues,
+      expertise,
+      notes,
+      documents,
+    ] = await Promise.all([
       client
         .from('vehicle_records')
         .select('*')
@@ -111,6 +125,7 @@ export class SupabaseAppRepository implements AppRepository {
       client.from('maintenance_templates').select('*').order('updated_at', { ascending: false }),
       client.from('reminders').select('*').eq('vehicle_id', vehicleId).order('due_date'),
       client.from('body_part_conditions').select('*').eq('vehicle_id', vehicleId),
+      client.from('body_part_condition_values').select('*').eq('vehicle_id', vehicleId),
       client
         .from('expertise_reports')
         .select('*')
@@ -129,6 +144,7 @@ export class SupabaseAppRepository implements AppRepository {
       maintenanceTemplates.error ??
       reminders.error ??
       body.error ??
+      bodyValues.error ??
       expertise.error ??
       notes.error ??
       documents.error;
@@ -141,10 +157,18 @@ export class SupabaseAppRepository implements AppRepository {
       current.push(item);
       itemsByRecord.set(item.maintenanceRecordId, current);
     }
+    const bodyValuesByParent = new Map<string, NonNullable<typeof bodyValues.data>>();
+    for (const value of bodyValues.data ?? []) {
+      const current = bodyValuesByParent.get(value.body_part_condition_id) ?? [];
+      current.push(value);
+      bodyValuesByParent.set(value.body_part_condition_id, current);
+    }
     return {
       records: (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [])),
       reminders: mappedReminders,
-      bodyConditions: (body.data ?? []).map(mapBodyCondition),
+      bodyConditions: (body.data ?? []).map((row) =>
+        mapBodyCondition(row, bodyValuesByParent.get(row.id) ?? []),
+      ),
       expertiseReports: (expertise.data ?? []).map(mapExpertise),
       notes: (notes.data ?? []).map(mapNote),
       documents: (documents.data ?? []).map(mapDocument),
@@ -382,28 +406,25 @@ export class SupabaseAppRepository implements AppRepository {
   async saveBodyCondition(
     vehicle: Vehicle,
     partKey: string,
-    condition: BodyPartCondition['condition'],
+    conditions: BodyPartCondition['conditions'],
     note: string | null,
   ) {
     if (!isValidPartKey(vehicle.bodyType, partKey))
       throw new AppError('Bu parça araç gövde şemasında bulunmuyor.');
-    const { data, error } = await getSupabaseClient()
-      .from('body_part_conditions')
-      .upsert(
-        {
-          vehicle_id: vehicle.id,
-          owner_id: await ownerId(),
-          schema_type: getBodySchemaType(vehicle.bodyType),
-          part_key: partKey,
-          condition,
-          note: note?.trim() || null,
-        },
-        { onConflict: 'vehicle_id,schema_type,part_key' },
-      )
-      .select('*')
-      .single();
+    if (!validateBodyConditions(conditions).valid)
+      throw new AppError('Seçilen parça durumları birlikte kullanılamıyor.');
+    const { data, error } = await getSupabaseClient().rpc('save_body_part_conditions_atomic', {
+      p_vehicle_id: vehicle.id,
+      p_schema_type: getBodySchemaType(vehicle.bodyType),
+      p_part_key: partKey,
+      p_conditions: conditions,
+      p_note: note?.trim() || '',
+    });
     if (error) throw error;
-    return mapBodyCondition(required(data, 'Parça durumu kaydedilemedi.'));
+    return {
+      ...mapBodyCondition(required(data, 'Parça durumu kaydedilemedi.')),
+      conditions: normalizeBodyConditions(conditions),
+    };
   }
 
   async saveExpertise(vehicleId: string, draft: ExpertiseDraft, id?: string) {

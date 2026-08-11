@@ -13,6 +13,7 @@ import { Database } from '@/data/supabase/database.types';
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { resolveLegacyVehicleColor } from '@/features/vehicles/config/vehicleColors';
 import { isFuelStationId } from '@/features/fuel/config/fuelStations';
+import { resolvePersistedBodyConditions } from '@/features/bodyCondition/domain/bodyConditionRules';
 
 type Tables = Database['public']['Tables'];
 
@@ -99,17 +100,26 @@ export const mapReminder = (row: Tables['reminders']['Row']): Reminder => ({
 
 export const mapBodyCondition = (
   row: Tables['body_part_conditions']['Row'],
-): BodyPartCondition => ({
-  id: row.id,
-  vehicleId: row.vehicle_id,
-  ownerId: row.owner_id,
-  schemaType: getBodySchemaType(row.schema_type),
-  partKey: row.part_key,
-  condition: row.condition,
-  note: row.note,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+  storedValues: Tables['body_part_condition_values']['Row'][] = [],
+): BodyPartCondition => {
+  const conditions = resolvePersistedBodyConditions(
+    row.condition,
+    storedValues.map((value) => value.condition),
+    row.condition_set_initialized,
+  );
+  return {
+    id: row.id,
+    vehicleId: row.vehicle_id,
+    ownerId: row.owner_id,
+    schemaType: getBodySchemaType(row.schema_type),
+    partKey: row.part_key,
+    conditions,
+    condition: row.condition,
+    note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 export const mapExpertise = (row: Tables['expertise_reports']['Row']): ExpertiseReport => ({
   id: row.id,

@@ -290,7 +290,7 @@ export function getBodyConditionSummary(
     unknown: 0,
   };
   return conditions.reduce((summary, item) => {
-    summary[item.condition] += 1;
+    for (const condition of item.conditions) summary[condition] += 1;
     return summary;
   }, initial);
 }

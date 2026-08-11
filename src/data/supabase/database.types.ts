@@ -76,9 +76,45 @@ export type Database = {
           },
         ];
       };
+      body_part_condition_values: {
+        Row: {
+          body_part_condition_id: string;
+          condition: Database['public']['Enums']['body_condition'];
+          created_at: string;
+          id: string;
+          owner_id: string;
+          vehicle_id: string;
+        };
+        Insert: {
+          body_part_condition_id: string;
+          condition: Database['public']['Enums']['body_condition'];
+          created_at?: string;
+          id?: string;
+          owner_id: string;
+          vehicle_id: string;
+        };
+        Update: {
+          body_part_condition_id?: string;
+          condition?: Database['public']['Enums']['body_condition'];
+          created_at?: string;
+          id?: string;
+          owner_id?: string;
+          vehicle_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'body_part_condition_values_parent_fkey';
+            columns: ['body_part_condition_id', 'vehicle_id', 'owner_id'];
+            isOneToOne: false;
+            referencedRelation: 'body_part_conditions';
+            referencedColumns: ['id', 'vehicle_id', 'owner_id'];
+          },
+        ];
+      };
       body_part_conditions: {
         Row: {
           condition: Database['public']['Enums']['body_condition'];
+          condition_set_initialized: boolean;
           created_at: string;
           id: string;
           note: string | null;
@@ -90,6 +126,7 @@ export type Database = {
         };
         Insert: {
           condition?: Database['public']['Enums']['body_condition'];
+          condition_set_initialized?: boolean;
           created_at?: string;
           id?: string;
           note?: string | null;
@@ -101,6 +138,7 @@ export type Database = {
         };
         Update: {
           condition?: Database['public']['Enums']['body_condition'];
+          condition_set_initialized?: boolean;
           created_at?: string;
           id?: string;
           note?: string | null;
@@ -564,6 +602,16 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      save_body_part_conditions_atomic: {
+        Args: {
+          p_conditions: Database['public']['Enums']['body_condition'][];
+          p_note: string;
+          p_part_key: string;
+          p_schema_type: Database['public']['Enums']['body_type'];
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['body_part_conditions']['Row'];
+      };
       clear_vehicle_documents_consistent: {
         Args: { p_vehicle_id: string };
         Returns: number;
