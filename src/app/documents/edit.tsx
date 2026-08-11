@@ -39,6 +39,7 @@ import {
   validateDocument,
   type DocumentFormValues,
 } from '@/features/documents/domain/documentValidation';
+import type { DocumentOcrFormPatch } from '@/features/documents/ocr/domain/documentOcrTypes';
 
 export default function DocumentEditScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -91,6 +92,9 @@ export default function DocumentEditScreen() {
 
   const updateValue = <K extends keyof DocumentFormValues>(key: K, value: DocumentFormValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
+
+  const applyOcrSuggestions = (patch: DocumentOcrFormPatch) =>
+    setValues((current) => ({ ...current, ...patch }));
 
   const changeType = (nextType: DocumentType) => {
     setValues((current) => ({
@@ -207,6 +211,7 @@ export default function DocumentEditScreen() {
         onChange={updateValue}
         onAttachmentsChange={setAttachments}
         onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+        onApplyOcrSuggestions={applyOcrSuggestions}
       />
       {existing && values.expiryDate ? (
         <AppButton

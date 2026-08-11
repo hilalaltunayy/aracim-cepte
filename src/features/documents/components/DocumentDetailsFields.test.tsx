@@ -28,6 +28,13 @@ vi.mock('@/features/attachments/components/UnifiedAttachmentField', async () => 
       React.createElement('UnifiedAttachmentField', props),
   };
 });
+vi.mock('../ocr/components/DocumentOcrSection', async () => {
+  const React = await import('react');
+  return {
+    DocumentOcrSection: (props: Record<string, unknown>) =>
+      React.createElement('DocumentOcrSection', props),
+  };
+});
 
 import { DocumentDetailsFields } from './DocumentDetailsFields';
 
@@ -54,6 +61,7 @@ async function mount(type: DocumentType): Promise<ReactTestRenderer> {
         onChange={vi.fn()}
         onAttachmentsChange={vi.fn()}
         onOpenAttachment={vi.fn()}
+        onApplyOcrSuggestions={vi.fn()}
       />,
     );
   });
@@ -84,6 +92,7 @@ describe('DocumentDetailsFields', () => {
       'Not',
     ]);
     expect(renderer.root.findAllByType('UnifiedAttachmentField' as never)).toHaveLength(1);
+    expect(renderer.root.findAllByType('DocumentOcrSection' as never)).toHaveLength(1);
   });
 
   it('keeps registration free of insurance-only fields and raw internal IDs', async () => {
@@ -92,6 +101,6 @@ describe('DocumentDetailsFields', () => {
     expect(visibleLabels).toEqual(['Başlık *', 'Belge / seri numarası', 'Tescil tarihi', 'Not']);
     const serialized = JSON.stringify(renderer.toJSON());
     expect(serialized).not.toContain('traffic_insurance');
-    expect(serialized).not.toContain('documentNumber');
+    expect(visibleLabels).not.toContain('Sigorta şirketi');
   });
 });

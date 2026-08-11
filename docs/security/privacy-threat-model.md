@@ -53,6 +53,16 @@ Bu belge uygulama odaklı risk kaydıdır; penetration test veya hukuki değerle
   davranışı test edilmelidir.
 - Offline/kayıp ağ: uygulama uzakta saklanmayan veriyi kalıcı kaydedilmiş gibi göstermemelidir.
 
+## TASK-025 OCR foundation sınırı
+
+TASK-025, onaylı bir cihaz veya sunucu OCR motoru bulunmadığı için belgeyi üçüncü tarafa göndermez.
+JPEG/PNG eki üzerinde yalnız kullanıcı aksiyonuyla çalışan provider sınırı, deterministik alan
+parser'ları ve açık inceleme/forma aktarma deneyimi vardır; production provider varsayılanı
+`unavailable` durumundadır. Raw OCR metni invocation ömrünü aşmaz, log/analytics/Supabase'e yazılmaz
+ve önerilerin forma aktarılması mevcut belge `Kaydet` eyleminden ayrı kalır. Gelecekte gerçek bir
+provider etkinleştirmek; veri akışı, ülke/alt işleyen, retention/training, secret yönetimi, Android
+uyumluluğu ve hukuk incelemesini kapsayan ayrı onay gerektirir.
+
 ## Security/privacy regression kontrolü
 
 Her ilgili görevde completion report şu sorulara cevap verir:
