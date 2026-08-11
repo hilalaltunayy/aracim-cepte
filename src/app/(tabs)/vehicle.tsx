@@ -25,6 +25,7 @@ import { getBodyConditionSummary } from '@/shared/utils/analytics';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehicleProfile';
+import { Vehicle3DRegion } from '@/features/vehicle3d/Vehicle3DRegion';
 
 const sections = [
   {
@@ -105,6 +106,7 @@ export default function VehicleScreen() {
           <Ionicons name="pencil-outline" size={20} color={colors.primary} />
         </Pressable>
       </Card>
+      <Vehicle3DRegion bodyType={vehicle.bodyType} colorId={vehicle.colorId} />
       <Card style={styles.bodySummary}>
         <View>
           <Text style={styles.cardTitle}>Gövde özeti</Text>
