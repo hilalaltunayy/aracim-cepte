@@ -288,7 +288,8 @@ export type Database = {
           notification_id: string | null;
           notification_error_code: string | null;
           notification_last_attempt_at: string | null;
-          notification_status: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
+          notification_status:
+            'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id: string;
           reminder_type: Database['public']['Enums']['reminder_type'];
           title: string;
@@ -306,7 +307,8 @@ export type Database = {
           notification_id?: string | null;
           notification_error_code?: string | null;
           notification_last_attempt_at?: string | null;
-          notification_status?: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
+          notification_status?:
+            'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id: string;
           reminder_type: Database['public']['Enums']['reminder_type'];
           title: string;
@@ -324,7 +326,8 @@ export type Database = {
           notification_id?: string | null;
           notification_error_code?: string | null;
           notification_last_attempt_at?: string | null;
-          notification_status?: 'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
+          notification_status?:
+            'pending' | 'scheduled' | 'not_required' | 'permission_denied' | 'failed';
           owner_id?: string;
           reminder_type?: Database['public']['Enums']['reminder_type'];
           title?: string;
@@ -347,11 +350,14 @@ export type Database = {
           created_at: string;
           document_number: string | null;
           document_type: Database['public']['Enums']['document_type'];
+          event_date: string | null;
           expiry_date: string | null;
           id: string;
           issue_date: string | null;
+          issuer_name: string | null;
           note: string | null;
           owner_id: string;
+          start_date: string | null;
           title: string;
           updated_at: string;
           vehicle_id: string;
@@ -361,11 +367,14 @@ export type Database = {
           created_at?: string;
           document_number?: string | null;
           document_type: Database['public']['Enums']['document_type'];
+          event_date?: string | null;
           expiry_date?: string | null;
           id?: string;
           issue_date?: string | null;
+          issuer_name?: string | null;
           note?: string | null;
           owner_id: string;
+          start_date?: string | null;
           title: string;
           updated_at?: string;
           vehicle_id: string;
@@ -375,11 +384,14 @@ export type Database = {
           created_at?: string;
           document_number?: string | null;
           document_type?: Database['public']['Enums']['document_type'];
+          event_date?: string | null;
           expiry_date?: string | null;
           id?: string;
           issue_date?: string | null;
+          issuer_name?: string | null;
           note?: string | null;
           owner_id?: string;
+          start_date?: string | null;
           title?: string;
           updated_at?: string;
           vehicle_id?: string;
@@ -743,6 +755,23 @@ export type Database = {
           p_id: string | null;
           p_issue_date: string | null;
           p_note: string | null;
+          p_title: string;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['vehicle_documents']['Row'];
+      };
+      save_vehicle_document_with_attachments: {
+        Args: {
+          p_attachment_paths: Json;
+          p_document_number: string | null;
+          p_document_type: Database['public']['Enums']['document_type'];
+          p_event_date: string | null;
+          p_expiry_date: string | null;
+          p_id: string;
+          p_issuer_name: string | null;
+          p_keep_legacy_attachment: boolean;
+          p_note: string | null;
+          p_start_date: string | null;
           p_title: string;
           p_vehicle_id: string;
         };

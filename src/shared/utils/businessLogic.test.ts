@@ -3,7 +3,6 @@ import { formatCurrency, formatDate, parseDecimal } from '@/shared/utils/format'
 import {
   getBodyConditionSummary,
   getCostPerKilometer,
-  getDocumentExpiryStatus,
   getMonthlyTotals,
   getPreviousMonthComparison,
   getReminderDisplay,
@@ -149,13 +148,6 @@ describe('status calculations', () => {
         '2026-08-02',
       ),
     ).toBe('both_overdue');
-  });
-
-  it('calculates document expiry status from date-only values', () => {
-    expect(getDocumentExpiryStatus(null, '2026-02-01')).toBe('no_expiry');
-    expect(getDocumentExpiryStatus('2026-01-31', '2026-02-01')).toBe('expired');
-    expect(getDocumentExpiryStatus('2026-02-20', '2026-02-01')).toBe('approaching');
-    expect(getDocumentExpiryStatus('2026-12-01', '2026-02-01')).toBe('valid');
   });
 });
 

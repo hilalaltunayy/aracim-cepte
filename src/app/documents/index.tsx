@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { AppButton, EmptyState, Screen, SectionHeader } from '@/shared/components/ui';
 import { DocumentCard } from '@/shared/components/entityCards';
 import { useDataStore } from '@/store/dataStore';
-import { getDocumentExpiryStatus } from '@/shared/utils/analytics';
+import { getDocumentStatus } from '@/features/documents/domain/documentStatus';
 import { spacing } from '@/shared/theme';
 
 export default function DocumentsListScreen() {
@@ -11,19 +11,19 @@ export default function DocumentsListScreen() {
   const groups = [
     {
       title: 'Yaklaşan süreler',
-      items: documents.filter((item) => getDocumentExpiryStatus(item.expiryDate) === 'approaching'),
+      items: documents.filter((item) => getDocumentStatus(item.expiryDate) === 'expiring_soon'),
     },
     {
       title: 'Geçerli belgeler',
-      items: documents.filter((item) => getDocumentExpiryStatus(item.expiryDate) === 'valid'),
+      items: documents.filter((item) => getDocumentStatus(item.expiryDate) === 'active'),
     },
     {
       title: 'Süresi dolanlar',
-      items: documents.filter((item) => getDocumentExpiryStatus(item.expiryDate) === 'expired'),
+      items: documents.filter((item) => getDocumentStatus(item.expiryDate) === 'expired'),
     },
     {
       title: 'Bitiş tarihi olmayanlar',
-      items: documents.filter((item) => getDocumentExpiryStatus(item.expiryDate) === 'no_expiry'),
+      items: documents.filter((item) => getDocumentStatus(item.expiryDate) === 'no_expiry'),
     },
   ];
   return (

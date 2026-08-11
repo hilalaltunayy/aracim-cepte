@@ -136,7 +136,7 @@ export class SupabaseAppRepository implements AppRepository {
         .from('attachments')
         .select('*')
         .eq('vehicle_id', vehicleId)
-        .eq('parent_type', 'expertise_report')
+        .in('parent_type', ['expertise_report', 'vehicle_document'])
         .order('created_at'),
       client
         .from('vehicle_notes')
@@ -173,9 +173,10 @@ export class SupabaseAppRepository implements AppRepository {
     }
     const attachmentsByParent = new Map<string, NonNullable<typeof attachments.data>>();
     for (const attachment of attachments.data ?? []) {
-      const current = attachmentsByParent.get(attachment.parent_id) ?? [];
+      const key = `${attachment.parent_type}:${attachment.parent_id}`;
+      const current = attachmentsByParent.get(key) ?? [];
       current.push(attachment);
-      attachmentsByParent.set(attachment.parent_id, current);
+      attachmentsByParent.set(key, current);
     }
     return {
       records: (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [])),
@@ -184,10 +185,12 @@ export class SupabaseAppRepository implements AppRepository {
         mapBodyCondition(row, bodyValuesByParent.get(row.id) ?? []),
       ),
       expertiseReports: (expertise.data ?? []).map((row) =>
-        mapExpertise(row, attachmentsByParent.get(row.id) ?? []),
+        mapExpertise(row, attachmentsByParent.get(`expertise_report:${row.id}`) ?? []),
       ),
       notes: (notes.data ?? []).map(mapNote),
-      documents: (documents.data ?? []).map(mapDocument),
+      documents: (documents.data ?? []).map((row) =>
+        mapDocument(row, attachmentsByParent.get(`vehicle_document:${row.id}`) ?? []),
+      ),
       maintenanceTemplates: (maintenanceTemplates.data ?? []).map(mapMaintenanceTemplate),
     };
   }
@@ -223,7 +226,9 @@ export class SupabaseAppRepository implements AppRepository {
     );
     const allReminderIds = await client.from('reminders').select('id');
     if (!allReminderIds.error) {
-      await cancelUnknownReminderNotifications(new Set((allReminderIds.data ?? []).map((item) => item.id)));
+      await cancelUnknownReminderNotifications(
+        new Set((allReminderIds.data ?? []).map((item) => item.id)),
+      );
     }
     const [expertise, attachments, documents] = await Promise.all([
       client
@@ -235,7 +240,7 @@ export class SupabaseAppRepository implements AppRepository {
         .from('attachments')
         .select('*')
         .eq('vehicle_id', vehicleId)
-        .eq('parent_type', 'expertise_report')
+        .in('parent_type', ['expertise_report', 'vehicle_document'])
         .order('created_at'),
       client.from('vehicle_documents').select('*').eq('vehicle_id', vehicleId).order('expiry_date'),
     ]);
@@ -244,16 +249,19 @@ export class SupabaseAppRepository implements AppRepository {
     if (documents.error) throw documents.error;
     const attachmentsByParent = new Map<string, NonNullable<typeof attachments.data>>();
     for (const attachment of attachments.data ?? []) {
-      const current = attachmentsByParent.get(attachment.parent_id) ?? [];
+      const key = `${attachment.parent_type}:${attachment.parent_id}`;
+      const current = attachmentsByParent.get(key) ?? [];
       current.push(attachment);
-      attachmentsByParent.set(attachment.parent_id, current);
+      attachmentsByParent.set(key, current);
     }
     return {
       reminders: reconciledReminders,
       expertiseReports: (expertise.data ?? []).map((row) =>
-        mapExpertise(row, attachmentsByParent.get(row.id) ?? []),
+        mapExpertise(row, attachmentsByParent.get(`expertise_report:${row.id}`) ?? []),
       ),
-      documents: (documents.data ?? []).map(mapDocument),
+      documents: (documents.data ?? []).map((row) =>
+        mapDocument(row, attachmentsByParent.get(`vehicle_document:${row.id}`) ?? []),
+      ),
     };
   }
 
@@ -312,10 +320,7 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async deleteMaintenanceTemplate(id: string) {
-    const { error } = await getSupabaseClient()
-      .from('maintenance_templates')
-      .delete()
-      .eq('id', id);
+    const { error } = await getSupabaseClient().from('maintenance_templates').delete().eq('id', id);
     if (error) throw error;
   }
 
@@ -519,13 +524,39 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveDocument(vehicleId: string, draft: DocumentDraft, id?: string) {
+    if (draft.attachmentPaths) {
+      if (!id) throw new AppError('Belge kimliği oluşturulamadı.');
+      const { data, error } = await getSupabaseClient().rpc(
+        'save_vehicle_document_with_attachments',
+        {
+          p_id: id,
+          p_vehicle_id: vehicleId,
+          p_document_type: draft.documentType,
+          p_title: draft.title.trim(),
+          p_document_number: draft.documentNumber?.trim() || null,
+          p_issuer_name: draft.issuerName?.trim() || null,
+          p_start_date: draft.startDate,
+          p_event_date: draft.eventDate,
+          p_expiry_date: draft.expiryDate,
+          p_note: draft.note?.trim() || null,
+          p_keep_legacy_attachment: draft.keepLegacyAttachment ?? false,
+          p_attachment_paths: draft.attachmentPaths,
+        },
+      );
+      if (error) throw error;
+      return mapDocument(required(data, 'Belge kaydedilemedi.'));
+    }
     const { data, error } = await getSupabaseClient().rpc('save_vehicle_document_consistent', {
       p_id: id ?? null,
       p_vehicle_id: vehicleId,
       p_document_type: draft.documentType,
       p_title: draft.title.trim(),
       p_document_number: draft.documentNumber?.trim() || null,
-      p_issue_date: draft.issueDate,
+      p_issue_date:
+        draft.documentType === 'traffic_insurance' ||
+        draft.documentType === 'comprehensive_insurance'
+          ? draft.startDate
+          : draft.eventDate,
       p_expiry_date: draft.expiryDate,
       p_note: draft.note?.trim() || null,
       p_attachment_path: draft.attachmentPath,
@@ -555,7 +586,9 @@ export class SupabaseAppRepository implements AppRepository {
       if (listError) throw listError;
       const { error } = await client.from('reminders').delete().eq('vehicle_id', vehicleId);
       if (error) throw error;
-      await Promise.all((data ?? []).map((item) => cancelReminderNotification(item.notification_id)));
+      await Promise.all(
+        (data ?? []).map((item) => cancelReminderNotification(item.notification_id)),
+      );
       await removeNotificationPreferences((data ?? []).map((item) => item.id));
       return;
     }

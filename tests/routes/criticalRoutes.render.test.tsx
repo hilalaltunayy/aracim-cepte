@@ -31,10 +31,20 @@ const {
   },
   openAttachmentMock: vi.fn(async () => undefined),
   deleteAttachmentMock: vi.fn(async () => undefined),
-  uploadParentAttachmentMock: vi.fn(async (_vehicleId: string, _parentType: string, _parentId: string, attachment: { id: string }) => ({
-    path: `owner/vehicle/expertise/report/${attachment.id}.jpg`,
-    attachmentId: attachment.id,
-  })),
+  uploadParentAttachmentMock: vi.fn(
+    async (
+      _vehicleId: string,
+      parentType: string,
+      _parentId: string,
+      attachment: { id: string },
+    ) => ({
+      path:
+        parentType === 'expertise_report'
+          ? `owner/vehicle/expertise/report/${attachment.id}.jpg`
+          : `owner/vehicle/document/${attachment.id}.jpg`,
+      attachmentId: attachment.id,
+    }),
+  ),
   confirmChoiceMock: vi.fn(),
   authState: {
     signUp: vi.fn(async () => true),
@@ -145,9 +155,15 @@ vi.mock('@/shared/components/ui', async () => {
 vi.mock('@/shared/components/entityCards', async () => {
   const React = await import('react');
   return {
-    DocumentCard: ({ document, ...props }: Record<string, unknown> & { document: { title: string } }) =>
+    DocumentCard: ({
+      document,
+      ...props
+    }: Record<string, unknown> & { document: { title: string } }) =>
       React.createElement('DocumentCard', { ...props, document }, document.title),
-    RecordCard: ({ record, ...props }: Record<string, unknown> & { record: { category: string } }) =>
+    RecordCard: ({
+      record,
+      ...props
+    }: Record<string, unknown> & { record: { category: string } }) =>
       React.createElement('RecordCard', { ...props, record }, record.category),
   };
 });
@@ -217,7 +233,12 @@ const records = (['fuel', 'maintenance', 'expense'] as const).map((recordType, i
   vehicleId,
   ownerId,
   recordType,
-  category: recordType === 'expense' ? 'Otopark' : recordType === 'maintenance' ? 'Periyodik bakım' : 'Yakıt alımı',
+  category:
+    recordType === 'expense'
+      ? 'Otopark'
+      : recordType === 'maintenance'
+        ? 'Periyodik bakım'
+        : 'Yakıt alımı',
   amount: recordType === 'fuel' ? 500 : index + 1,
   recordDate: '2026-08-01',
   kilometer: 10_000 + index,
@@ -235,10 +256,24 @@ const documents = [
     documentType: 'registration',
     title: 'Ruhsat',
     documentNumber: null,
+    issuerName: null,
+    startDate: null,
+    eventDate: null,
     issueDate: null,
     expiryDate: null,
     note: null,
     attachmentPath: 'owner/vehicle/random.pdf',
+    attachments: [
+      {
+        id: `legacy:${documentId}`,
+        storagePath: 'owner/vehicle/random.pdf',
+        originalName: 'Mevcut belge eki.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: null,
+        source: 'document',
+        legacy: true,
+      },
+    ],
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
   },
@@ -278,7 +313,11 @@ async function mount(Component: () => React.JSX.Element): Promise<ReactTestRende
   return renderer!;
 }
 
-function findHost(root: ReactTestInstance, type: string, predicate?: (node: ReactTestInstance) => boolean) {
+function findHost(
+  root: ReactTestInstance,
+  type: string,
+  predicate?: (node: ReactTestInstance) => boolean,
+) {
   return root.findAll((node) => node.type === type && (!predicate || predicate(node)));
 }
 
@@ -288,8 +327,9 @@ function serialized(renderer: ReactTestRenderer): string {
 
 describe('TASK-011 critical route component mounts', () => {
   beforeAll(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   beforeEach(() => {
@@ -452,12 +492,43 @@ describe('TASK-011 critical route component mounts', () => {
 
   it('mounts attachment and expertise create routes', async () => {
     const documentRenderer = await mount(DocumentEditScreen);
-    expect(serialized(documentRenderer)).toContain('Belge bilgileri');
-    expect(serialized(documentRenderer)).toContain('AttachmentField');
+    expect(serialized(documentRenderer)).toContain('Belge ayrıntıları');
+    expect(serialized(documentRenderer)).toContain('UnifiedAttachmentField');
 
     const expertiseRenderer = await mount(ExpertiseEditScreen);
     expect(serialized(expertiseRenderer)).toContain('Rapor bilgileri');
     expect(serialized(expertiseRenderer)).toContain('UnifiedAttachmentField');
+  });
+
+  it('uploads a vehicle-document attachment through the TASK-022 parent flow', async () => {
+    const renderer = await mount(DocumentEditScreen);
+    const field = findHost(renderer.root, 'UnifiedAttachmentField')[0];
+    const pending = {
+      id: '88888888-8888-4888-8888-888888888884',
+      requestId: '88888888-8888-4888-8888-888888888894',
+      uri: 'file:///registration.pdf',
+      originalName: 'registration.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 200,
+      source: 'document',
+    };
+    await act(async () => field.props.onChange([pending]));
+    await act(async () => renderer.root.findByProps({ title: 'Belgeyi kaydet' }).props.onPress());
+
+    expect(uploadParentAttachmentMock).toHaveBeenCalledWith(
+      vehicleId,
+      'vehicle_document',
+      '99999999-9999-4999-8999-999999999999',
+      pending,
+    );
+    expect(dataState.saveDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentType: 'registration',
+        eventDate: null,
+        attachmentPaths: ['owner/vehicle/document/88888888-8888-4888-8888-888888888884.jpg'],
+      }),
+      '99999999-9999-4999-8999-999999999999',
+    );
   });
 
   it('uploads mixed-source expertise files into one atomic save payload', async () => {
@@ -484,9 +555,7 @@ describe('TASK-011 critical route component mounts', () => {
       },
     ];
     await act(async () => field.props.onChange(pending));
-    await act(async () =>
-      renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress(),
-    );
+    await act(async () => renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress());
     expect(uploadParentAttachmentMock).toHaveBeenCalledTimes(2);
     expect(dataState.saveExpertise).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -516,9 +585,7 @@ describe('TASK-011 critical route component mounts', () => {
         },
       ]),
     );
-    await act(async () =>
-      renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress(),
-    );
+    await act(async () => renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress());
     expect(deleteAttachmentMock).toHaveBeenCalledWith(
       'owner/vehicle/expertise/report/88888888-8888-4888-8888-888888888883.jpg',
     );
@@ -585,10 +652,8 @@ describe('TASK-011 critical route component mounts', () => {
       ['Bakım', 'maintenance'],
       ['Masraf', 'expense'],
     ] as const) {
-      const action = findHost(
-        renderer.root,
-        'Pressable',
-        (node) => String(node.props.accessibilityLabel).startsWith(label),
+      const action = findHost(renderer.root, 'Pressable', (node) =>
+        String(node.props.accessibilityLabel).startsWith(label),
       )[0];
       expect(action).toBeDefined();
       act(() => action.props.onPress());
@@ -665,9 +730,9 @@ describe('TASK-011 critical route component mounts', () => {
       act(() => {
         vi.advanceTimersByTime(60_000);
       });
-      const resendButton = renderer.root.findAll((node) => String(node.type) === 'AppButton').find((node) =>
-        String(node.props.title).includes('Doğrulama e-postasını tekrar gönder'),
-      );
+      const resendButton = renderer.root
+        .findAll((node) => String(node.type) === 'AppButton')
+        .find((node) => String(node.props.title).includes('Doğrulama e-postasını tekrar gönder'));
       expect(resendButton).toBeDefined();
       await act(async () => resendButton!.props.onPress());
     }
@@ -679,9 +744,9 @@ describe('TASK-011 critical route component mounts', () => {
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
-    expect(renderer.root.findByProps({ title: 'Tekrar gönderme sınırına ulaşıldı' }).props.disabled).toBe(
-      true,
-    );
+    expect(
+      renderer.root.findByProps({ title: 'Tekrar gönderme sınırına ulaşıldı' }).props.disabled,
+    ).toBe(true);
     act(() => renderer.unmount());
   });
 });

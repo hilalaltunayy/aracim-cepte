@@ -1,7 +1,7 @@
 import '@supabase/functions-js/edge-runtime.d.ts';
 import { withSupabase } from '@supabase/server';
 import { readBodyWithLimit, RequestBodyTooLargeError } from '../_shared/bodyReader.ts';
-import { safeStoredFilename } from '../_shared/attachmentMetadata.ts';
+import { isSupportedAttachmentParent, safeStoredFilename } from '../_shared/attachmentMetadata.ts';
 import { MAX_ATTACHMENT_BYTES, validateAttachment } from '../_shared/fileValidation.ts';
 import { corsHeaders, jsonResponse } from '../_shared/http.ts';
 
@@ -55,7 +55,7 @@ export default {
     const parentUpload = Boolean(parentType || parentId || source);
     if (
       parentUpload &&
-      (parentType !== 'expertise_report' ||
+      (!isSupportedAttachmentParent(parentType) ||
         !parentId ||
         !uuidPattern.test(parentId) ||
         !source ||
