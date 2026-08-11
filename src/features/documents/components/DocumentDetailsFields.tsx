@@ -5,6 +5,8 @@ import type { DocumentType } from '@/domain/entities';
 import { AppInput, DateField, ErrorBanner, FormSection } from '@/shared/components/ui';
 import { getDocumentTypeDefinition, type DocumentFieldKey } from '../config/documentTypes';
 import type { DocumentFormValues, DocumentValidationResult } from '../domain/documentValidation';
+import { DocumentOcrSection } from '../ocr/components/DocumentOcrSection';
+import type { DocumentOcrFormPatch } from '../ocr/domain/documentOcrTypes';
 
 function visibleLabel(label: string, required: boolean): string {
   return required ? `${label} *` : label;
@@ -19,6 +21,7 @@ export function DocumentDetailsFields({
   onChange,
   onAttachmentsChange,
   onOpenAttachment,
+  onApplyOcrSuggestions,
 }: {
   type: DocumentType;
   values: DocumentFormValues;
@@ -28,6 +31,7 @@ export function DocumentDetailsFields({
   onChange: <K extends keyof DocumentFormValues>(key: K, value: DocumentFormValues[K]) => void;
   onAttachmentsChange: (items: AttachmentListItem[]) => void;
   onOpenAttachment: (item: PersistedAttachment) => Promise<void> | void;
+  onApplyOcrSuggestions: (patch: DocumentOcrFormPatch) => void;
 }) {
   const definition = getDocumentTypeDefinition(type);
 
@@ -76,6 +80,14 @@ export function DocumentDetailsFields({
           />
         );
       })}
+      <DocumentOcrSection
+        key={`document-ocr-${type}`}
+        documentType={type}
+        attachments={attachments}
+        currentValues={values}
+        disabled={disabled}
+        onApply={onApplyOcrSuggestions}
+      />
     </FormSection>
   );
 }
