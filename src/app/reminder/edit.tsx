@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   AppButton,
@@ -11,6 +11,7 @@ import {
   NoVehicleState,
   Screen,
   SelectField,
+  TimeField,
   confirmAction,
 } from '@/shared/components/ui';
 import { ReminderType } from '@/domain/entities';
@@ -18,7 +19,7 @@ import { reminderTypeLabels } from '@/shared/constants/labels';
 import { parseDecimal } from '@/shared/utils/format';
 import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
-import { spacing, useAppTheme } from '@/shared/theme';
+import { spacing } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
@@ -29,9 +30,9 @@ import {
 } from '@/features/reminders/notificationSchedule';
 import { getNotificationLeadDays } from '@/features/reminders/notificationPreferences';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
+import { validateReminderDateTime } from '@/features/reminders/reminderDateTimeValidation';
 
 export default function ReminderEditScreen() {
-  const { colors } = useAppTheme();
   const params = useLocalSearchParams<{
     id?: string | string[];
     dueDate?: string | string[];
@@ -60,6 +61,7 @@ export default function ReminderEditScreen() {
     existing?.title ?? requestedTitle ?? reminderTypeLabels.periodic_maintenance,
   );
   const [date, setDate] = useState<string | null>(existing?.dueDate ?? requestedDate ?? null);
+  const [time, setTime] = useState(existing?.dueTime ?? '09:00');
   const [km, setKm] = useState(existing?.dueKilometer?.toString() ?? '');
   const [leadChoice, setLeadChoice] = useState('1');
   const [customLeadDays, setCustomLeadDays] = useState('2');
@@ -93,19 +95,22 @@ export default function ReminderEditScreen() {
       type: existing?.reminderType ?? 'periodic_maintenance',
       title: existing?.title ?? requestedTitle ?? reminderTypeLabels.periodic_maintenance,
       date: existing?.dueDate ?? requestedDate ?? null,
+      time: existing?.dueTime ?? '09:00',
       km: existing?.dueKilometer?.toString() ?? '',
       notificationLeadDays: initialLeadDays,
     },
-    { type, title, date, km, notificationLeadDays: selectedLeadDays },
+    { type, title, date, time, km, notificationLeadDays: selectedLeadDays },
   );
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(reminderId, reminders, bootstrapped);
   const parsedKm = km ? parseDecimal(km) : null;
+  const dateTimeValidation = validateReminderDateTime(date, time);
   const valid =
     title.trim().length > 0 &&
     (date !== null || parsedKm !== null) &&
     (parsedKm === null || parsedKm >= 0) &&
-    (!date || leadDaysValid);
+    (!date || leadDaysValid) &&
+    dateTimeValidation.valid;
   const submit = async () => {
     setSubmitted(true);
     if (!valid) return;
@@ -114,6 +119,7 @@ export default function ReminderEditScreen() {
         title,
         reminderType: type,
         dueDate: date,
+        dueTime: date ? time : null,
         dueKilometer: parsedKm === null ? null : Math.round(parsedKm),
         notificationLeadDays: normalizeLeadDays(selectedLeadDays),
       },
@@ -195,7 +201,7 @@ export default function ReminderEditScreen() {
                 }
               />
             ) : null}
-            <Text style={[styles.helper, { color: colors.muted }]}>Bildirim saati: 09:00</Text>
+            <TimeField label="Hatırlatma saati" value={time} onChange={setTime} />
           </>
         ) : null}
         <AppInput
@@ -209,6 +215,9 @@ export default function ReminderEditScreen() {
         />
         {submitted && date === null && parsedKm === null ? (
           <ErrorBanner message="En az bir tarih veya kilometre hedefi girin." />
+        ) : null}
+        {submitted && !dateTimeValidation.valid ? (
+          <ErrorBanner message="Geçmiş bir tarih için hatırlatıcı oluşturamazsınız." />
         ) : null}
       </FormSection>
       <AppButton title="Hatırlatıcıyı kaydet" loading={loading} onPress={submit} />
@@ -231,5 +240,4 @@ export default function ReminderEditScreen() {
 
 const styles = StyleSheet.create({
   form: { gap: spacing.xl },
-  helper: { fontSize: 12, lineHeight: 17 },
 });

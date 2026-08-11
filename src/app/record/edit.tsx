@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   AppButton,
@@ -23,7 +23,7 @@ import {
 import { parseDecimal, todayDateOnly } from '@/shared/utils/format';
 import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
-import { spacing } from '@/shared/theme';
+import { spacing, useAppTheme } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
@@ -35,8 +35,19 @@ import {
   type MaintenancePackageKey,
 } from '@/features/maintenance/components/MaintenanceOperationsField';
 import { createMaintenanceTitle } from '@/features/maintenance/domain/maintenancePackages';
+import {
+  createFuelEntryState,
+  getFuelEntryValues,
+  updateFuelEntry,
+  validateFuelEntry,
+} from '@/features/fuel/domain/fuelEntry';
+import {
+  FUEL_STATIONS,
+  type FuelStationId,
+} from '@/features/fuel/config/fuelStations';
 
 export default function RecordEditScreen() {
+  const { colors } = useAppTheme();
   const params = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>();
   const routeId = safeEntityId(params.id);
   const invalidRouteId = Boolean(firstRouteParam(params.id) && !routeId);
@@ -67,7 +78,16 @@ export default function RecordEditScreen() {
         : ['Yakıt alımı'];
   const [category, setCategory] = useState(existing?.category ?? categories[0]);
   const [amount, setAmount] = useState(existing?.amount.toString() ?? '');
-  const [liters, setLiters] = useState(existing?.liters?.toString() ?? '');
+  const [fuelEntry, setFuelEntry] = useState(() =>
+    createFuelEntryState({
+      total: existing?.amount,
+      liters: existing?.liters,
+      pricePerLiter: existing?.pricePerLiter,
+    }),
+  );
+  const [stationBrand, setStationBrand] = useState<FuelStationId | ''>(
+    existing?.stationBrand ?? '',
+  );
   const [km, setKm] = useState(existing?.kilometer?.toString() ?? '');
   const [date, setDate] = useState(existing?.recordDate ?? todayDateOnly());
   const [description, setDescription] = useState(existing?.description ?? '');
@@ -85,6 +105,8 @@ export default function RecordEditScreen() {
     category: existing?.category ?? categories[0],
     amount: existing?.amount.toString() ?? '',
     liters: existing?.liters?.toString() ?? '',
+    pricePerLiter: existing?.pricePerLiter?.toString() ?? '',
+    stationBrand: existing?.stationBrand ?? '',
     km: existing?.kilometer?.toString() ?? '',
     date: existing?.recordDate ?? todayDateOnly(),
     description: existing?.description ?? '',
@@ -93,8 +115,10 @@ export default function RecordEditScreen() {
   const isDirty = haveFormValuesChanged(initialValues, {
     type,
     category,
-    amount,
-    liters,
+    amount: type === 'fuel' ? fuelEntry.total : amount,
+    liters: type === 'fuel' ? fuelEntry.liters : '',
+    pricePerLiter: type === 'fuel' ? fuelEntry.pricePerLiter : '',
+    stationBrand: type === 'fuel' ? stationBrand : '',
     km,
     date,
     description,
@@ -102,8 +126,10 @@ export default function RecordEditScreen() {
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = invalidRouteId ? 'missing' : resolveEntityRoute(routeId, records, bootstrapped);
-  const parsedAmount = parseDecimal(amount);
-  const parsedLiters = parseDecimal(liters);
+  const fuelValues = getFuelEntryValues(fuelEntry);
+  const fuelValidation = validateFuelEntry(fuelEntry);
+  const parsedAmount = type === 'fuel' ? fuelValues.total : parseDecimal(amount);
+  const parsedLiters = type === 'fuel' ? fuelValues.liters : null;
   const hasEnteredMileage = km.trim().length > 0;
   const parsedKm = hasEnteredMileage ? parseDecimal(km) : null;
   const eventMileage = hasEnteredMileage ? (parsedKm ?? Number.NaN) : null;
@@ -118,7 +144,7 @@ export default function RecordEditScreen() {
     parsedAmount !== null &&
     parsedAmount > 0 &&
     Boolean(date) &&
-    (type !== 'fuel' || parsedLiters === null || parsedLiters > 0) &&
+    (type !== 'fuel' || fuelValidation.valid) &&
     mileageEvaluation.level !== 'blockingError';
   const persistRecord = async () => {
     if (parsedAmount === null) return;
@@ -132,6 +158,8 @@ export default function RecordEditScreen() {
         category: maintenanceTitle,
         amount: parsedAmount,
         liters: type === 'fuel' ? parsedLiters : null,
+        pricePerLiter: type === 'fuel' ? fuelValues.pricePerLiter : null,
+        stationBrand: type === 'fuel' && stationBrand ? stationBrand : null,
         kilometer: eventMileage === null ? null : Math.round(eventMileage),
         recordDate: date,
         description: description || null,
@@ -193,6 +221,11 @@ export default function RecordEditScreen() {
           label="Kayıt türü"
           value={type}
           onChange={(value) => {
+            if (value === 'fuel' && type !== 'fuel') {
+              setFuelEntry(updateFuelEntry(createFuelEntryState(), 'total', amount));
+            } else if (type === 'fuel' && value !== 'fuel') {
+              setAmount(fuelEntry.total);
+            }
             setType(value);
             setMaintenanceItemTypes([]);
             setMaintenancePackageKey('manual');
@@ -251,9 +284,13 @@ export default function RecordEditScreen() {
           />
         ) : null}
         <AppInput
-          label="Tutar"
-          value={amount}
-          onChangeText={setAmount}
+          label={type === 'fuel' ? 'Toplam tutar' : 'Tutar'}
+          value={type === 'fuel' ? fuelEntry.total : amount}
+          onChangeText={(value) =>
+            type === 'fuel'
+              ? setFuelEntry((current) => updateFuelEntry(current, 'total', value))
+              : setAmount(value)
+          }
           keyboardType="decimal-pad"
           placeholder="0,00"
           error={
@@ -262,19 +299,55 @@ export default function RecordEditScreen() {
               : null
           }
         />
+        {type === 'fuel' && fuelEntry.calculatedField === 'total' ? (
+          <Text style={[styles.calculated, { color: colors.muted }]}>Otomatik hesaplandı</Text>
+        ) : null}
         {type === 'fuel' ? (
-          <AppInput
-            label="Litre"
-            value={liters}
-            onChangeText={setLiters}
-            keyboardType="decimal-pad"
-            placeholder="0,00"
-            error={
-              submitted && parsedLiters !== null && parsedLiters <= 0
-                ? 'Litre sıfırdan büyük olmalı.'
-                : null
-            }
-          />
+          <>
+            <AppInput
+              label="Litre"
+              value={fuelEntry.liters}
+              onChangeText={(value) =>
+                setFuelEntry((current) => updateFuelEntry(current, 'liters', value))
+              }
+              keyboardType="decimal-pad"
+              placeholder="Bilinmiyor"
+              error={
+                submitted && fuelValidation.errors.liters
+                  ? 'Litre sıfırdan büyük olmalı.'
+                  : null
+              }
+            />
+            {fuelEntry.calculatedField === 'liters' ? (
+              <Text style={[styles.calculated, { color: colors.muted }]}>Otomatik hesaplandı</Text>
+            ) : null}
+            <AppInput
+              label="Litre fiyatı"
+              value={fuelEntry.pricePerLiter}
+              onChangeText={(value) =>
+                setFuelEntry((current) => updateFuelEntry(current, 'pricePerLiter', value))
+              }
+              keyboardType="decimal-pad"
+              placeholder="Bilinmiyor"
+              error={
+                submitted && fuelValidation.errors.pricePerLiter
+                  ? 'Litre fiyatı sıfırdan büyük olmalı.'
+                  : null
+              }
+            />
+            {fuelEntry.calculatedField === 'pricePerLiter' ? (
+              <Text style={[styles.calculated, { color: colors.muted }]}>Otomatik hesaplandı</Text>
+            ) : null}
+            <SelectField<FuelStationId | ''>
+              label="Yakıt istasyonu"
+              value={stationBrand}
+              onChange={setStationBrand}
+              options={[
+                { value: '', label: 'İstasyon seçilmedi' },
+                ...FUEL_STATIONS.map(({ id, label }) => ({ value: id, label })),
+              ]}
+            />
+          </>
         ) : null}
         <AppInput
           label="Kilometre"
@@ -299,4 +372,7 @@ export default function RecordEditScreen() {
   );
 }
 
-const styles = StyleSheet.create({ form: { gap: spacing.xl } });
+const styles = StyleSheet.create({
+  form: { gap: spacing.xl },
+  calculated: { fontSize: 12, lineHeight: 16, marginTop: -spacing.sm },
+});

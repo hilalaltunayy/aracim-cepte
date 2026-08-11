@@ -41,6 +41,21 @@ export function todayDateOnly(): string {
   return toDateOnly(new Date());
 }
 
+export function parseTimeOnly(value: string, anchor = new Date()): Date | null {
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  const date = new Date(anchor);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
+export function toTimeOnly(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return 'Tarih yok';
   const date = parseDateOnly(value) ?? new Date(value);

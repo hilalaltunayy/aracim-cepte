@@ -194,6 +194,7 @@ export type Database = {
           completed_at: string | null;
           created_at: string;
           due_date: string | null;
+          due_time: string | null;
           due_kilometer: number | null;
           id: string;
           notification_id: string | null;
@@ -211,6 +212,7 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           due_date?: string | null;
+          due_time?: string | null;
           due_kilometer?: number | null;
           id?: string;
           notification_id?: string | null;
@@ -228,6 +230,7 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           due_date?: string | null;
+          due_time?: string | null;
           due_kilometer?: number | null;
           id?: string;
           notification_id?: string | null;
@@ -350,6 +353,8 @@ export type Database = {
           id: string;
           kilometer: number | null;
           liters: number | null;
+          price_per_liter: number | null;
+          station_brand: string | null;
           owner_id: string;
           record_date: string;
           record_type: Database['public']['Enums']['record_type'];
@@ -365,6 +370,8 @@ export type Database = {
           id?: string;
           kilometer?: number | null;
           liters?: number | null;
+          price_per_liter?: number | null;
+          station_brand?: string | null;
           owner_id: string;
           record_date: string;
           record_type: Database['public']['Enums']['record_type'];
@@ -380,6 +387,8 @@ export type Database = {
           id?: string;
           kilometer?: number | null;
           liters?: number | null;
+          price_per_liter?: number | null;
+          station_brand?: string | null;
           owner_id?: string;
           record_date?: string;
           record_type?: Database['public']['Enums']['record_type'];
@@ -620,6 +629,23 @@ export type Database = {
           p_record_id: string | null;
           p_record_type: Database['public']['Enums']['record_type'];
           p_request_id: string;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['vehicle_records']['Row'];
+      };
+      save_vehicle_record_atomic_v2: {
+        Args: {
+          p_amount: number;
+          p_category: string;
+          p_description: string | null;
+          p_kilometer: number | null;
+          p_liters: number | null;
+          p_price_per_liter: number | null;
+          p_record_date: string;
+          p_record_id: string | null;
+          p_record_type: Database['public']['Enums']['record_type'];
+          p_request_id: string;
+          p_station_brand: string | null;
           p_vehicle_id: string;
         };
         Returns: Database['public']['Tables']['vehicle_records']['Row'];

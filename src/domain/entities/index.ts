@@ -30,6 +30,14 @@ export type VehicleColorId =
   | 'yellow'
   | 'orange';
 export type RecordType = 'fuel' | 'maintenance' | 'expense';
+export type FuelStationId =
+  | 'opet'
+  | 'shell'
+  | 'petrol_ofisi'
+  | 'bp'
+  | 'totalenergies'
+  | 'aytemiz'
+  | 'other';
 export type MaintenanceSource =
   | 'manual'
   | 'receipt_ocr'
@@ -91,6 +99,8 @@ export interface VehicleRecord {
   recordDate: string;
   kilometer: number | null;
   liters: number | null;
+  pricePerLiter?: number | null;
+  stationBrand?: FuelStationId | null;
   description: string | null;
   source?: MaintenanceSource;
   maintenanceItems?: MaintenanceItem[];
@@ -126,6 +136,7 @@ export interface Reminder {
   title: string;
   reminderType: ReminderType;
   dueDate: string | null;
+  dueTime?: string | null;
   dueKilometer: number | null;
   completed: boolean;
   completedAt: string | null;
@@ -193,12 +204,20 @@ export type VehicleDraft = Pick<
 >;
 export type RecordDraft = Pick<
   VehicleRecord,
-  'recordType' | 'category' | 'amount' | 'recordDate' | 'kilometer' | 'liters' | 'description'
+  | 'recordType'
+  | 'category'
+  | 'amount'
+  | 'recordDate'
+  | 'kilometer'
+  | 'liters'
+  | 'pricePerLiter'
+  | 'stationBrand'
+  | 'description'
 > & { maintenanceItemTypes?: string[]; source?: MaintenanceSource };
 export type MaintenanceTemplateDraft = Pick<MaintenanceTemplate, 'title' | 'itemDefinitions'>;
 export type ReminderDraft = Pick<
   Reminder,
-  'title' | 'reminderType' | 'dueDate' | 'dueKilometer'
+  'title' | 'reminderType' | 'dueDate' | 'dueTime' | 'dueKilometer'
 > & { notificationLeadDays?: number };
 export type ExpertiseDraft = Pick<
   ExpertiseReport,

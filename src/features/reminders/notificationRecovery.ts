@@ -54,7 +54,7 @@ export async function synchronizeReminderNotification(
     ];
     const leadDays = options.leadDays ?? DEFAULT_NOTIFICATION_LEAD_DAYS;
     const date = reminder.dueDate
-      ? getReminderNotificationTrigger(reminder.dueDate, leadDays, options.now)
+      ? getReminderNotificationTrigger(reminder.dueDate, leadDays, options.now, reminder.dueTime)
       : null;
 
     if (reminder.completed || !reminder.dueDate) {

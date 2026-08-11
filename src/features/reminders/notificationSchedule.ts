@@ -1,7 +1,10 @@
-import { parseDateOnly } from '@/shared/utils/format';
+import {
+  DEFAULT_REMINDER_TIME,
+  getReminderDueDateTime,
+} from './reminderDateTimeValidation';
 
 export const DEFAULT_NOTIFICATION_LEAD_DAYS = 1;
-export const DEFAULT_NOTIFICATION_HOUR = 9;
+export const DEFAULT_NOTIFICATION_HOUR = Number(DEFAULT_REMINDER_TIME.slice(0, 2));
 export const NOTIFICATION_LEAD_OPTIONS = [
   { value: '7', label: '7 gün önce' },
   { value: '3', label: '3 gün önce' },
@@ -20,12 +23,12 @@ export function getReminderNotificationTrigger(
   dueDate: string,
   leadDays: number,
   now = new Date(),
+  dueTime: string | null | undefined = DEFAULT_REMINDER_TIME,
 ): Date | null {
-  const due = parseDateOnly(dueDate);
+  const due = getReminderDueDateTime(dueDate, dueTime);
   if (!due) return null;
   const trigger = new Date(due);
   trigger.setDate(trigger.getDate() - normalizeLeadDays(leadDays));
-  trigger.setHours(DEFAULT_NOTIFICATION_HOUR, 0, 0, 0);
   return trigger.getTime() > now.getTime() ? trigger : null;
 }
 
