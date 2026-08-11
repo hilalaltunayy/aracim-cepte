@@ -148,4 +148,32 @@ describe('DocumentOcrSection', () => {
     expect(onApply).not.toHaveBeenCalled();
     expect(renderer!.root.findAllByType('AppButton' as never)).toHaveLength(1);
   });
+
+  it('ignores a late OCR result after unmounting the document form', async () => {
+    let resolveAnalysis: ((value: { status: 'success'; suggestions: [] }) => void) | undefined;
+    const analyze = vi.fn(
+      () =>
+        new Promise<{ status: 'success'; suggestions: [] }>((resolve) => {
+          resolveAnalysis = resolve;
+        }),
+    );
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <DocumentOcrSection
+          documentType="registration"
+          attachments={[image]}
+          currentValues={values}
+          disabled={false}
+          onApply={vi.fn()}
+          analyze={analyze}
+        />,
+      );
+    });
+    act(() => renderer!.root.findByProps({ title: 'Belgeden bilgileri tara' }).props.onPress());
+    renderer!.unmount();
+    await act(async () => resolveAnalysis?.({ status: 'success', suggestions: [] }));
+
+    expect(analyze).toHaveBeenCalledTimes(1);
+  });
 });

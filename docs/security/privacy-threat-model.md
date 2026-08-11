@@ -53,15 +53,16 @@ Bu belge uygulama odaklı risk kaydıdır; penetration test veya hukuki değerle
   davranışı test edilmelidir.
 - Offline/kayıp ağ: uygulama uzakta saklanmayan veriyi kalıcı kaydedilmiş gibi göstermemelidir.
 
-## TASK-025 OCR foundation sınırı
+## TASK-025B on-device OCR sınırı
 
-TASK-025, onaylı bir cihaz veya sunucu OCR motoru bulunmadığı için belgeyi üçüncü tarafa göndermez.
-JPEG/PNG eki üzerinde yalnız kullanıcı aksiyonuyla çalışan provider sınırı, deterministik alan
-parser'ları ve açık inceleme/forma aktarma deneyimi vardır; production provider varsayılanı
-`unavailable` durumundadır. Raw OCR metni invocation ömrünü aşmaz, log/analytics/Supabase'e yazılmaz
-ve önerilerin forma aktarılması mevcut belge `Kaydet` eyleminden ayrı kalır. Gelecekte gerçek bir
-provider etkinleştirmek; veri akışı, ülke/alt işleyen, retention/training, secret yönetimi, Android
-uyumluluğu ve hukuk incelemesini kapsayan ayrı onay gerektirir.
+TASK-025B, Android'de `expo-mlkit-ocr` üzerinden Google ML Kit Text Recognition'ı yalnız kullanıcı
+aksiyonuyla ve yerel attachment URI'si üzerinde çağırır. Bu adapter belge byte'larını veya tanınan
+metni Supabase'e, analytics'e, loglara ya da üçüncü taraf bir OCR/AI sağlayıcısına göndermez. Raw OCR
+metni yalnız provider çağrısı ve mevcut parser boyunca geçicidir; persistence yoktur. Öneriler
+düzenlenebilir ve seçilidir; açık `Forma aktar` yalnız unsaved form state'ini değiştirir, normal belge
+`Kaydet` eylemi ise tek persistence kapısı olarak kalır. PDF başlangıçta desteklenmez. Gerçek Android
+binary/device kabulü gereklidir; gelecekte cloud provider, raw output retention veya farklı bir veri
+akışı için ayrı privacy/security ve hukuk incelemesi gerekir.
 
 ## Security/privacy regression kontrolü
 

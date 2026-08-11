@@ -31,9 +31,10 @@ limit kontrolü repository/entity kimlikleri değişmeden eklenebilir.
 - Premium/RevenueCat: araç oluşturma use-case’inin önüne entitlement kontrolü eklenebilir.
 - Onaylı paylaşım: araç kimliğini değiştirmeden ayrı `vehicle_permissions` ve süreli
   `share_codes` tabloları eklenebilir; mevcut owner RLS’i korunur.
-- AI/OCR: ek dosya yolları ekspertiz ve belgelerde hazırdır. Gelecekte sunucu tarafı Edge
-  Function işleme sonucu ayrı yapılandırılmış tablolarda tutulmalıdır; mobil istemciye ayrıcalıklı
-  anahtar verilmemelidir.
+- OCR: belge OCR'ı `DocumentOcrProvider` sınırından geçer. Mevcut Android adapter'ı yerel ML Kit
+  tanıma kullanır; raw text transient kalır, parser yalnız öneri üretir ve mevcut formun açık
+  `Kaydet` eylemi tek persistence kapısıdır. Gelecekte server/provider işleme ayrı privacy/security
+  ve hukuk kararı gerektirir; mobil istemciye ayrıcalıklı anahtar verilmemelidir.
 - Satış raporu: mevcut kaynak entity’lerden türetilir; hesaplanan toplamlar veritabanında
   yinelenmez.
 
