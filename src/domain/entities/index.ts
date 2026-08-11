@@ -170,6 +170,7 @@ export interface ExpertiseReport {
   overallNote: string | null;
   reportNumber: string | null;
   attachmentPath: string | null;
+  attachments: import('@/features/attachments/domain/types').PersistedAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -223,7 +224,10 @@ export type ReminderDraft = Pick<
 export type ExpertiseDraft = Pick<
   ExpertiseReport,
   'reportDate' | 'companyName' | 'overallNote' | 'reportNumber' | 'attachmentPath'
->;
+> & {
+  attachmentPaths?: string[];
+  keepLegacyAttachment?: boolean;
+};
 export type NoteDraft = Pick<VehicleNote, 'title' | 'content'>;
 export type DocumentDraft = Pick<
   VehicleDocument,

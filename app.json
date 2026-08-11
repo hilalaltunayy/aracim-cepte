@@ -41,7 +41,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": false,
+          "cameraPermission": "Aracım Cepte, ekspertiz belgesi fotoğrafı çekebilmeniz için kamerayı kullanır.",
           "microphonePermission": false
         }
       ],

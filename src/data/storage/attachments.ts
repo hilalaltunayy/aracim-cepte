@@ -13,6 +13,10 @@ import {
   normalizeAttachmentMime,
 } from './attachmentRules';
 import { openPrivateAttachment } from './openAttachment';
+import type {
+  AttachmentParentType,
+  PendingAttachment,
+} from '@/features/attachments/domain/types';
 
 export interface PickedAttachment {
   uri: string;
@@ -118,6 +122,51 @@ export async function uploadAttachment(
     throw new AppError(getAttachmentErrorMessage('ATTACHMENT_UPLOAD_FAILED'));
   }
   return upload.path;
+}
+
+export async function uploadParentAttachment(
+  vehicleId: string,
+  parentType: AttachmentParentType,
+  parentId: string,
+  attachment: PendingAttachment,
+): Promise<{ path: string; attachmentId: string }> {
+  const client = getSupabaseClient();
+  const { data } = await client.auth.getUser();
+  if (!data.user) throw new AppError('Dosya yüklemek için oturum açmalısınız.');
+  const mimeType = normalizeAttachmentMime(attachment.mimeType);
+  if (!mimeType) throw new AppError(getAttachmentErrorMessage('ATTACHMENT_TYPE_NOT_ALLOWED'));
+  const response = await fetch(attachment.uri);
+  if (!response.ok) throw new AppError('Seçilen dosya okunamadı.');
+  const body = await response.arrayBuffer();
+  if (body.byteLength !== attachment.sizeBytes) {
+    throw new AppError(getAttachmentErrorMessage('ATTACHMENT_SIZE_MISMATCH'));
+  }
+  if (body.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new AppError(getAttachmentErrorMessage('ATTACHMENT_FILE_TOO_LARGE'));
+  }
+  const { data: upload, error } = await client.functions.invoke<{
+    path?: string;
+    attachmentId?: string;
+  }>('upload-attachment', {
+    body,
+    headers: {
+      'Content-Type': mimeType,
+      'x-vehicle-id': vehicleId,
+      'x-file-size': String(body.byteLength),
+      'x-upload-request-id': attachment.requestId,
+      'x-attachment-parent-type': parentType,
+      'x-attachment-parent-id': parentId,
+      'x-attachment-source': attachment.source,
+    },
+  });
+  if (error) {
+    const code = await getFunctionErrorCode(error);
+    throw new AppError(getAttachmentErrorMessage(code), code ?? 'ATTACHMENT_UPLOAD_FAILED');
+  }
+  if (!upload?.path || !upload.attachmentId) {
+    throw new AppError(getAttachmentErrorMessage('ATTACHMENT_UPLOAD_FAILED'));
+  }
+  return { path: upload.path, attachmentId: upload.attachmentId };
 }
 
 export async function deleteAttachment(path: string | null): Promise<void> {

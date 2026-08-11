@@ -205,6 +205,56 @@ export type Database = {
           },
         ];
       };
+      attachments: {
+        Row: {
+          created_at: string;
+          id: string;
+          mime_type: string;
+          original_filename: string;
+          owner_id: string;
+          parent_id: string;
+          parent_type: string;
+          size_bytes: number;
+          source: string;
+          storage_path: string;
+          vehicle_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id: string;
+          mime_type: string;
+          original_filename: string;
+          owner_id: string;
+          parent_id: string;
+          parent_type: string;
+          size_bytes: number;
+          source: string;
+          storage_path: string;
+          vehicle_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          mime_type?: string;
+          original_filename?: string;
+          owner_id?: string;
+          parent_id?: string;
+          parent_type?: string;
+          size_bytes?: number;
+          source?: string;
+          storage_path?: string;
+          vehicle_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'attachments_vehicle_id_fkey';
+            columns: ['vehicle_id'];
+            isOneToOne: false;
+            referencedRelation: 'vehicles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -640,11 +690,43 @@ export type Database = {
         };
         Returns: { object_path: string; reservation_id: string; reservation_status: string }[];
       };
+      reserve_attachment_upload_for_parent: {
+        Args: {
+          p_mime_type: string;
+          p_original_filename: string;
+          p_owner_id: string;
+          p_parent_id: string;
+          p_parent_type: string;
+          p_request_id: string;
+          p_size_bytes: number;
+          p_source: string;
+          p_vehicle_id: string;
+        };
+        Returns: {
+          attachment_id: string;
+          object_path: string;
+          reservation_id: string;
+          reservation_status: string;
+        }[];
+      };
       save_expertise_report_consistent: {
         Args: {
           p_attachment_path: string | null;
           p_company_name: string | null;
           p_id: string | null;
+          p_overall_note: string | null;
+          p_report_date: string | null;
+          p_report_number: string | null;
+          p_vehicle_id: string;
+        };
+        Returns: Database['public']['Tables']['expertise_reports']['Row'];
+      };
+      save_expertise_report_with_attachments: {
+        Args: {
+          p_attachment_paths: Json;
+          p_company_name: string | null;
+          p_id: string;
+          p_keep_legacy_attachment: boolean;
           p_overall_note: string | null;
           p_report_date: string | null;
           p_report_number: string | null;

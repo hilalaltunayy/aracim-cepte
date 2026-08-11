@@ -1,6 +1,7 @@
 import '@supabase/functions-js/edge-runtime.d.ts';
 import { withSupabase } from '@supabase/server';
 import { readBodyWithLimit, RequestBodyTooLargeError } from '../_shared/bodyReader.ts';
+import { safeStoredFilename } from '../_shared/attachmentMetadata.ts';
 import { MAX_ATTACHMENT_BYTES, validateAttachment } from '../_shared/fileValidation.ts';
 import { corsHeaders, jsonResponse } from '../_shared/http.ts';
 
@@ -30,6 +31,9 @@ function quotaErrorCode(message: string): string {
     'ATTACHMENT_FILE_TOO_LARGE',
     'ATTACHMENT_TYPE_NOT_ALLOWED',
     'ATTACHMENT_VEHICLE_FORBIDDEN',
+    'ATTACHMENT_PARENT_FORBIDDEN',
+    'ATTACHMENT_ENTITY_COUNT_EXCEEDED',
+    'ATTACHMENT_ENTITY_BYTES_EXCEEDED',
   ];
   return knownCodes.find((code) => message.includes(code)) ?? 'ATTACHMENT_UPLOAD_FAILED';
 }
@@ -44,6 +48,20 @@ export default {
     const requestId = request.headers.get('x-upload-request-id')?.trim();
     if (!requestId || !uuidPattern.test(requestId)) {
       return jsonResponse(400, { code: 'ATTACHMENT_REQUEST_ID_REQUIRED' });
+    }
+    const parentType = request.headers.get('x-attachment-parent-type')?.trim() ?? null;
+    const parentId = request.headers.get('x-attachment-parent-id')?.trim() ?? null;
+    const source = request.headers.get('x-attachment-source')?.trim() ?? null;
+    const parentUpload = Boolean(parentType || parentId || source);
+    if (
+      parentUpload &&
+      (parentType !== 'expertise_report' ||
+        !parentId ||
+        !uuidPattern.test(parentId) ||
+        !source ||
+        !['camera', 'gallery', 'document'].includes(source))
+    ) {
+      return jsonResponse(400, { code: 'ATTACHMENT_PARENT_REQUIRED' });
     }
 
     const declaredFileSize = Number(request.headers.get('x-file-size'));
@@ -77,15 +95,31 @@ export default {
     const validation = validateAttachment(bytes, request.headers.get('content-type'));
     if (!validation.ok) return jsonResponse(400, { code: validation.code });
 
+    const reservationRpc = parentUpload
+      ? 'reserve_attachment_upload_for_parent'
+      : 'reserve_attachment_upload';
+    const reservationArgs = parentUpload
+      ? {
+          p_owner_id: userData.user.id,
+          p_vehicle_id: vehicleId,
+          p_parent_type: parentType,
+          p_parent_id: parentId,
+          p_source: source,
+          p_original_filename: safeStoredFilename(source!, validation.mimeType),
+          p_size_bytes: bytes.byteLength,
+          p_mime_type: validation.mimeType,
+          p_request_id: requestId,
+        }
+      : {
+          p_owner_id: userData.user.id,
+          p_vehicle_id: vehicleId,
+          p_size_bytes: bytes.byteLength,
+          p_mime_type: validation.mimeType,
+          p_request_id: requestId,
+        };
     const { data: reservations, error: reservationError } = await context.supabaseAdmin.rpc(
-      'reserve_attachment_upload',
-      {
-        p_owner_id: userData.user.id,
-        p_vehicle_id: vehicleId,
-        p_size_bytes: bytes.byteLength,
-        p_mime_type: validation.mimeType,
-        p_request_id: requestId,
-      },
+      reservationRpc,
+      reservationArgs,
     );
 
     if (reservationError || !reservations?.[0]) {
@@ -96,6 +130,7 @@ export default {
 
     const reservation = reservations[0] as {
       reservation_id: string;
+      attachment_id?: string;
       object_path: string;
       reservation_status: 'reserved' | 'uploaded' | 'completed';
     };
@@ -104,7 +139,11 @@ export default {
       reservation.reservation_status !== 'reserved' &&
       (await objectExists(adminBucket, reservation.object_path))
     ) {
-      return jsonResponse(200, { path: reservation.object_path, idempotent: true });
+      return jsonResponse(200, {
+        path: reservation.object_path,
+        attachmentId: reservation.attachment_id,
+        idempotent: true,
+      });
     }
     const { error: uploadError } = await context.supabase.storage
       .from(bucketName)
@@ -150,6 +189,9 @@ export default {
       return jsonResponse(500, { code: 'ATTACHMENT_UPLOAD_FAILED' });
     }
 
-    return jsonResponse(201, { path: reservation.object_path });
+    return jsonResponse(201, {
+      path: reservation.object_path,
+      attachmentId: reservation.attachment_id,
+    });
   }),
 };

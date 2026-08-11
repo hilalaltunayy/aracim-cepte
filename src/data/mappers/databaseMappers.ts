@@ -14,6 +14,8 @@ import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { resolveLegacyVehicleColor } from '@/features/vehicles/config/vehicleColors';
 import { isFuelStationId } from '@/features/fuel/config/fuelStations';
 import { resolvePersistedBodyConditions } from '@/features/bodyCondition/domain/bodyConditionRules';
+import type { Attachment, PersistedAttachment } from '@/features/attachments/domain/types';
+import { normalizeAttachmentMime } from '@/features/attachments/domain/attachmentRules';
 
 type Tables = Database['public']['Tables'];
 
@@ -121,7 +123,43 @@ export const mapBodyCondition = (
   };
 };
 
-export const mapExpertise = (row: Tables['expertise_reports']['Row']): ExpertiseReport => ({
+export const mapAttachment = (row: Tables['attachments']['Row']): Attachment => ({
+  id: row.id,
+  ownerId: row.owner_id,
+  vehicleId: row.vehicle_id,
+  parentType: row.parent_type as Attachment['parentType'],
+  parentId: row.parent_id,
+  source: row.source as Attachment['source'],
+  originalName: row.original_filename,
+  storagePath: row.storage_path,
+  mimeType: normalizeAttachmentMime(row.mime_type) ?? 'application/pdf',
+  sizeBytes: row.size_bytes,
+  createdAt: row.created_at,
+});
+
+function legacyExpertiseAttachment(
+  row: Tables['expertise_reports']['Row'],
+): PersistedAttachment[] {
+  if (!row.attachment_path) return [];
+  const extension = row.attachment_path.split('.').at(-1)?.toLowerCase();
+  const mimeType = extension === 'png' ? 'image/png' : extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
+  return [
+    {
+      id: `legacy:${row.id}`,
+      storagePath: row.attachment_path,
+      originalName: `Mevcut ekspertiz eki.${extension === 'jpeg' ? 'jpg' : (extension ?? 'pdf')}`,
+      mimeType,
+      sizeBytes: null,
+      source: 'document',
+      legacy: true,
+    },
+  ];
+}
+
+export const mapExpertise = (
+  row: Tables['expertise_reports']['Row'],
+  storedAttachments: Tables['attachments']['Row'][] = [],
+): ExpertiseReport => ({
   id: row.id,
   vehicleId: row.vehicle_id,
   ownerId: row.owner_id,
@@ -130,6 +168,10 @@ export const mapExpertise = (row: Tables['expertise_reports']['Row']): Expertise
   overallNote: row.overall_note,
   reportNumber: row.report_number,
   attachmentPath: row.attachment_path,
+  attachments: [
+    ...legacyExpertiseAttachment(row),
+    ...storedAttachments.map(mapAttachment),
+  ],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

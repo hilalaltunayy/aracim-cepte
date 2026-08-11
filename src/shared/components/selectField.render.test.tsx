@@ -42,7 +42,7 @@ vi.mock('@/shared/theme', () => {
   };
 });
 
-import { SelectField, TimeField } from './ui';
+import { ActionSheet, SelectField, TimeField } from './ui';
 
 async function mount(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
@@ -83,6 +83,32 @@ describe('shared SelectField Android safe area', () => {
       Array.isArray(node.props.style),
     );
     expect(backdrop?.props.style).toContainEqual({ paddingTop: 24, paddingBottom: 48 });
+  });
+});
+
+describe('shared ActionSheet Android safe area', () => {
+  it('keeps unified attachment actions scrollable above the system bar', async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <ActionSheet
+          visible
+          title="Dosya ekle"
+          options={[
+            { value: 'camera', label: 'Fotoğraf çek' },
+            { value: 'gallery', label: 'Galeriden seç' },
+            { value: 'document', label: 'Dosya seç' },
+          ]}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+    });
+    const card = renderer!.root.findByProps({ testID: 'action-sheet-card' });
+    expect(card.props.style).toContainEqual({ maxHeight: 548 });
+    const list = renderer!.root.findByProps({ testID: 'action-sheet-options' });
+    expect(list.type).toBe('ScrollView');
+    expect(list.props.contentContainerStyle).toEqual({ paddingBottom: 48 });
   });
 });
 

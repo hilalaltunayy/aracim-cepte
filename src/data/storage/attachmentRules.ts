@@ -1,9 +1,7 @@
-export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-export const ALLOWED_ATTACHMENT_MIME_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-] as const;
+import { ATTACHMENT_CONFIG } from '@/features/attachments/config/attachmentConfig';
+
+export const MAX_ATTACHMENT_BYTES = ATTACHMENT_CONFIG.maxFileBytes;
+export const ALLOWED_ATTACHMENT_MIME_TYPES = ATTACHMENT_CONFIG.supportedMimeTypes;
 
 export type AllowedAttachmentMime = (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number];
 export type AttachmentPickerSource = 'image' | 'document';
@@ -36,6 +34,11 @@ export function getAttachmentErrorMessage(code: string | null): string {
       return 'Ücretsiz planda en fazla 10 belge yükleyebilirsiniz.';
     case 'ATTACHMENT_BYTES_QUOTA_EXCEEDED':
       return 'Ücretsiz belge alanınız 25 MB ile sınırlıdır.';
+    case 'ATTACHMENT_ENTITY_COUNT_EXCEEDED':
+      return 'Bu kayıt için ek dosya sınırına ulaştınız.';
+    case 'ATTACHMENT_ENTITY_BYTES_EXCEEDED':
+      return 'Bu kaydın ek dosyaları için toplam boyut sınırına ulaştınız.';
+    case 'ATTACHMENT_PARENT_FORBIDDEN':
     case 'ATTACHMENT_VEHICLE_FORBIDDEN':
       return 'Bu araç için dosya yükleme yetkiniz yok.';
     case 'AUTH_REQUIRED':

@@ -11,7 +11,9 @@
 - `body_part_conditions`: araç, gövde şeması ve parça için geriye uyumlu parent/representative
   durum ve not.
 - `body_part_condition_values`: bir parent gövde parçasına bağlı normalize edilmiş durum seti.
-- `expertise_reports`: rapor meta verisi ve isteğe bağlı özel ek yolu.
+- `expertise_reports`: rapor meta verisi ve geriye uyumlu isteğe bağlı tek-ek yolu.
+- `attachments`: kamera, galeri ve dosya seçiciden gelen ekler için ortak owner/vehicle/parent
+  scoped metadata.
 - `vehicle_notes`: araç özelinde düz metin notlar.
 - `vehicle_documents`: belge türü, tarihler, not ve özel ek yolu.
 
@@ -149,17 +151,38 @@ grant'leri daraltılmadan önce QA seed/bakım araçları RPC'ye taşınarak ayr
 
 `vehicle-attachments` bucket’ı özeldir, dosya başına 5 MB sınırı vardır ve yalnız JPEG, PNG ve PDF
 kabul eder. Yeni upload için servis tarafında kullanıcı başına en fazla 10 nesne ve toplam 25 MB
-kotası atomik rezervasyonla uygulanır. Nesne yolu:
+kotası atomik rezervasyonla uygulanır. TASK-022 ekspertiz entegrasyonu ayrıca parent başına ortak
+5 ek ve 15 MB sınırı uygular; kamera, galeri ve dosya kaynakları ayrı kota değildir. Merkezi mobil
+varsayılanlar `src/features/attachments/config/attachmentConfig.ts` içindedir.
+
+Legacy nesne yolu korunur:
 
 ```text
 <auth-user-id>/<vehicle-id>/<random-object-id>.<validated-extension>
+```
+
+Yeni parent-scoped nesne yolu:
+
+```text
+<auth-user-id>/<vehicle-id>/<parent-type>/<parent-id>/<random-attachment-id>.<validated-extension>
 ```
 
 Upload Edge Function dosya boyutunu ve PDF/JPEG/PNG magic byte'larını doğrular; service-role ile kota
 rezervasyonu alır, ancak Storage yüklemesini authenticated kullanıcı istemcisiyle yaparak `owner_id`
 ve INSERT RLS kontrolünü korur. Path orijinal dosya adı veya PII içermez. SELECT/DELETE politikaları
 ilk segmenti `auth.uid()` ve mevcut nesnenin `owner_id` değeriyle sınırlar; doğrudan UPDATE kapalıdır.
-Dosya açma işlemi owner kontrolü sonrasında 60 saniyelik imzalı URL üretir.
+Dosya açma işlemi owner kontrolü sonrasında 60 saniyelik imzalı URL üretir. Cihazın original dosya
+adı object path'e veya kalıcı metadata'ya taşınmaz; Edge Function kaynak/MIME üzerinden
+`kamera-fotografi.jpg`, `galeri-fotografi.png` veya `belge.pdf` gibi genel, PII-free görünür ad
+üretir.
+
+`attachments` doğrudan authenticated write grant'i vermez. Metadata seçimi owner + vehicle RLS ile
+sınırlıdır; parent-scoped reservation yalnız service role Edge Function tarafından çağrılır.
+`save_expertise_report_with_attachments` authenticated kullanıcının `auth.uid()` sahipliğini
+doğrular, rapor ve final ek listesini tek transaction içinde bağlar. Ekspertiz silme trigger/RPC'si
+metadata'yı kaldırıp Storage nesnelerini idempotent cleanup queue'ya alır. Eski
+`expertise_reports.attachment_path` satırları read-time mapper fallback'iyle açılabilir kalır; sahte
+metadata migration'ı yapılmaz.
 
 ## Migrasyon akışı
 
@@ -174,6 +197,7 @@ Migrasyonlar Supabase CLI’nin `migration new` komutuyla oluşturuldu:
 7. `20260811133756_feedback_stabilization_fuel_fields.sql`
 8. `20260811134804_reminder_due_time.sql`
 9. `20260811140844_body_condition_multiselect.sql`
+10. `20260811144343_unified_attachment_foundation.sql`
 
 Yerel doğrulama için `npx supabase db reset`; uzak bağlı proje için `npx supabase db push`
 kullanılır. Uzak çalıştırmadan önce proje referansı ve tarayıcı kimlik doğrulaması gerekir.

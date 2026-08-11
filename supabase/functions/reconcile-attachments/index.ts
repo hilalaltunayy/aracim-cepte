@@ -30,7 +30,8 @@ export default {
       return jsonResponse(500, { code: 'ATTACHMENT_RECONCILIATION_METADATA_FAILED' });
     }
 
-    const [operationsResult, queueResult, documentsResult, expertiseResult] = await Promise.all([
+    const [operationsResult, queueResult, documentsResult, expertiseResult, attachmentsResult] =
+      await Promise.all([
       context.supabaseAdmin
         .from('attachment_upload_reservations')
         .select('id, object_path, status, updated_at')
@@ -50,12 +51,17 @@ export default {
         .select('attachment_path')
         .eq('owner_id', ownerId)
         .not('attachment_path', 'is', null),
+      context.supabaseAdmin
+        .from('attachments')
+        .select('storage_path')
+        .eq('owner_id', ownerId),
     ]);
     if (
       operationsResult.error ||
       queueResult.error ||
       documentsResult.error ||
-      expertiseResult.error
+      expertiseResult.error ||
+      attachmentsResult.error
     ) {
       const code = operationsResult.error
         ? 'ATTACHMENT_RECONCILIATION_OPERATIONS_QUERY_FAILED'
@@ -63,7 +69,9 @@ export default {
           ? 'ATTACHMENT_RECONCILIATION_QUEUE_QUERY_FAILED'
           : documentsResult.error
             ? 'ATTACHMENT_RECONCILIATION_DOCUMENTS_QUERY_FAILED'
-            : 'ATTACHMENT_RECONCILIATION_EXPERTISE_QUERY_FAILED';
+            : expertiseResult.error
+              ? 'ATTACHMENT_RECONCILIATION_EXPERTISE_QUERY_FAILED'
+              : 'ATTACHMENT_RECONCILIATION_METADATA_QUERY_FAILED';
       return jsonResponse(500, { code });
     }
 
@@ -77,8 +85,11 @@ export default {
 
     const objectSet = new Set(objectPaths);
     const referenced = new Set(
-      [...(documentsResult.data ?? []), ...(expertiseResult.data ?? [])]
-        .map((row) => row.attachment_path)
+      [
+        ...(documentsResult.data ?? []).map((row) => row.attachment_path),
+        ...(expertiseResult.data ?? []).map((row) => row.attachment_path),
+        ...(attachmentsResult.data ?? []).map((row) => row.storage_path),
+      ]
         .filter((path): path is string => Boolean(path)),
     );
     const operations = (operationsResult.data ?? []) as UploadOperation[];

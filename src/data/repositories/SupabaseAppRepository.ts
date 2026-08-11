@@ -113,6 +113,7 @@ export class SupabaseAppRepository implements AppRepository {
       body,
       bodyValues,
       expertise,
+      attachments,
       notes,
       documents,
     ] = await Promise.all([
@@ -132,6 +133,12 @@ export class SupabaseAppRepository implements AppRepository {
         .eq('vehicle_id', vehicleId)
         .order('report_date', { ascending: false }),
       client
+        .from('attachments')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('parent_type', 'expertise_report')
+        .order('created_at'),
+      client
         .from('vehicle_notes')
         .select('*')
         .eq('vehicle_id', vehicleId)
@@ -146,6 +153,7 @@ export class SupabaseAppRepository implements AppRepository {
       body.error ??
       bodyValues.error ??
       expertise.error ??
+      attachments.error ??
       notes.error ??
       documents.error;
     if (error) throw error;
@@ -163,13 +171,21 @@ export class SupabaseAppRepository implements AppRepository {
       current.push(value);
       bodyValuesByParent.set(value.body_part_condition_id, current);
     }
+    const attachmentsByParent = new Map<string, NonNullable<typeof attachments.data>>();
+    for (const attachment of attachments.data ?? []) {
+      const current = attachmentsByParent.get(attachment.parent_id) ?? [];
+      current.push(attachment);
+      attachmentsByParent.set(attachment.parent_id, current);
+    }
     return {
       records: (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [])),
       reminders: mappedReminders,
       bodyConditions: (body.data ?? []).map((row) =>
         mapBodyCondition(row, bodyValuesByParent.get(row.id) ?? []),
       ),
-      expertiseReports: (expertise.data ?? []).map(mapExpertise),
+      expertiseReports: (expertise.data ?? []).map((row) =>
+        mapExpertise(row, attachmentsByParent.get(row.id) ?? []),
+      ),
       notes: (notes.data ?? []).map(mapNote),
       documents: (documents.data ?? []).map(mapDocument),
       maintenanceTemplates: (maintenanceTemplates.data ?? []).map(mapMaintenanceTemplate),
@@ -209,19 +225,34 @@ export class SupabaseAppRepository implements AppRepository {
     if (!allReminderIds.error) {
       await cancelUnknownReminderNotifications(new Set((allReminderIds.data ?? []).map((item) => item.id)));
     }
-    const [expertise, documents] = await Promise.all([
+    const [expertise, attachments, documents] = await Promise.all([
       client
         .from('expertise_reports')
         .select('*')
         .eq('vehicle_id', vehicleId)
         .order('report_date', { ascending: false }),
+      client
+        .from('attachments')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('parent_type', 'expertise_report')
+        .order('created_at'),
       client.from('vehicle_documents').select('*').eq('vehicle_id', vehicleId).order('expiry_date'),
     ]);
     if (expertise.error) throw expertise.error;
+    if (attachments.error) throw attachments.error;
     if (documents.error) throw documents.error;
+    const attachmentsByParent = new Map<string, NonNullable<typeof attachments.data>>();
+    for (const attachment of attachments.data ?? []) {
+      const current = attachmentsByParent.get(attachment.parent_id) ?? [];
+      current.push(attachment);
+      attachmentsByParent.set(attachment.parent_id, current);
+    }
     return {
       reminders: reconciledReminders,
-      expertiseReports: (expertise.data ?? []).map(mapExpertise),
+      expertiseReports: (expertise.data ?? []).map((row) =>
+        mapExpertise(row, attachmentsByParent.get(row.id) ?? []),
+      ),
       documents: (documents.data ?? []).map(mapDocument),
     };
   }
@@ -428,6 +459,24 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveExpertise(vehicleId: string, draft: ExpertiseDraft, id?: string) {
+    if (draft.attachmentPaths) {
+      if (!id) throw new AppError('Ekspertiz raporu kimliği oluşturulamadı.');
+      const { data, error } = await getSupabaseClient().rpc(
+        'save_expertise_report_with_attachments',
+        {
+          p_id: id,
+          p_vehicle_id: vehicleId,
+          p_report_date: draft.reportDate,
+          p_company_name: draft.companyName?.trim() || null,
+          p_overall_note: draft.overallNote?.trim() || null,
+          p_report_number: draft.reportNumber?.trim() || null,
+          p_keep_legacy_attachment: draft.keepLegacyAttachment ?? false,
+          p_attachment_paths: draft.attachmentPaths,
+        },
+      );
+      if (error) throw error;
+      return mapExpertise(required(data, 'Ekspertiz raporu kaydedilemedi.'));
+    }
     const { data, error } = await getSupabaseClient().rpc('save_expertise_report_consistent', {
       p_id: id ?? null,
       p_vehicle_id: vehicleId,
