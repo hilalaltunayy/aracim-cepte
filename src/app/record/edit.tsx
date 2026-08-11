@@ -508,6 +508,8 @@ export default function RecordEditScreen() {
           errors={submitted ? maintenanceValidation.errors : {}}
           attachments={attachments}
           disabled={loading || submitting}
+          total={amount}
+          recordDate={date}
           onToggle={() => setDetailsExpanded((current) => !current)}
           onChange={(key, value) => {
             setMaintenanceDetails((current) => ({ ...current, [key]: value }));
@@ -515,6 +517,17 @@ export default function RecordEditScreen() {
           }}
           onAttachmentsChange={setAttachments}
           onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+          onOcrApply={(patch) => {
+            setMaintenanceDetails((current) => ({
+              ...current,
+              ...(patch.serviceName !== undefined ? { serviceName: patch.serviceName } : {}),
+              ...(patch.partsCost !== undefined ? { partsCost: patch.partsCost } : {}),
+              ...(patch.laborCost !== undefined ? { laborCost: patch.laborCost } : {}),
+              ...(patch.invoiceNumber !== undefined ? { invoiceNumber: patch.invoiceNumber } : {}),
+            }));
+            if (patch.total !== undefined) setAmount(patch.total);
+            if (patch.recordDate !== undefined) setDate(patch.recordDate);
+          }}
         />
       ) : null}
       <AppButton title="Kaydet" loading={loading || submitting} onPress={submit} />

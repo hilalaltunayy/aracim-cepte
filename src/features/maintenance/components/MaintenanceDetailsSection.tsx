@@ -4,6 +4,7 @@ import type { AttachmentListItem, PersistedAttachment } from '@/features/attachm
 import { AppButton, AppInput, ErrorBanner, FormSection, SelectField } from '@/shared/components/ui';
 import { spacing } from '@/shared/theme';
 import { maintenanceServiceTypeOptions } from '../config/maintenanceServiceTypes';
+import { MaintenanceReceiptOcrSection, type MaintenanceReceiptPatch } from '../ocr/MaintenanceReceiptOcrSection';
 import type {
   MaintenanceDetailsErrorCode,
   MaintenanceDetailsField,
@@ -24,16 +25,21 @@ export function MaintenanceDetailsSection({
   errors,
   attachments,
   disabled,
+  total,
+  recordDate,
   onToggle,
   onChange,
   onAttachmentsChange,
   onOpenAttachment,
+  onOcrApply,
 }: {
   expanded: boolean;
   values: MaintenanceDetailsFormValues;
   errors: Partial<Record<MaintenanceDetailsField, MaintenanceDetailsErrorCode>>;
   attachments: AttachmentListItem[];
   disabled: boolean;
+  total: string;
+  recordDate: string;
   onToggle: () => void;
   onChange: <K extends MaintenanceDetailsField>(
     key: K,
@@ -41,6 +47,7 @@ export function MaintenanceDetailsSection({
   ) => void;
   onAttachmentsChange: (items: AttachmentListItem[]) => void;
   onOpenAttachment: (item: PersistedAttachment) => Promise<void> | void;
+  onOcrApply: (patch: MaintenanceReceiptPatch) => void;
 }) {
   return (
     <View style={{ gap: spacing.md }}>
@@ -105,6 +112,14 @@ export function MaintenanceDetailsSection({
             disabled={disabled}
             onChange={onAttachmentsChange}
             onOpen={onOpenAttachment}
+          />
+          <MaintenanceReceiptOcrSection
+            attachments={attachments}
+            details={values}
+            total={total}
+            recordDate={recordDate}
+            disabled={disabled}
+            onApply={onOcrApply}
           />
         </FormSection>
       ) : null}
