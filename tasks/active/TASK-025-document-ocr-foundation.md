@@ -82,8 +82,8 @@ sağlayıcı sınırı, deterministik parser ve review/apply deneyimini kurar.
 2. **Completed:** Provider/service/parser ve transient suggestion domaini oluşturuldu.
 3. **Completed:** Review/apply bileşeni document create/edit akışına bağlandı.
 4. **Completed:** Hedefli parser/provider/render testleri ve changed-file kontrolleri çalıştırıldı.
-5. **In progress:** Diff/security/privacy incelemesi, commit/push/PR ve güvenliyse develop merge
-   yapılıyor.
+5. **Completed:** Diff/security/privacy incelemesi, commit/push ve PR diff doğrulaması tamamlandı;
+   normal merge sonucu final raporda kaydedilir.
 
 ## Validation commands
 
