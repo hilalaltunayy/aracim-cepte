@@ -64,6 +64,11 @@ düzenlenebilir ve seçilidir; açık `Forma aktar` yalnız unsaved form state'i
 binary/device kabulü gereklidir; gelecekte cloud provider, raw output retention veya farklı bir veri
 akışı için ayrı privacy/security ve hukuk incelemesi gerekir.
 
+TASK-026 yakıt fişi OCR'ı aynı sınıra tabidir: fiş yalnız kullanıcının başlattığı yerel tarama
+girdisidir; raw text, istasyon/tutar/litre/tarih önerileri ve deterministic hesaplanan değerler
+Supabase'e, loglara veya analytics'e yazılmaz. Kullanıcı forma aktarıp ayrıca yakıt kaydını kaydetse
+bile, fiş attachment'ı bu görevde kalıcı olarak saklanmaz.
+
 ## Security/privacy regression kontrolü
 
 Her ilgili görevde completion report şu sorulara cevap verir:

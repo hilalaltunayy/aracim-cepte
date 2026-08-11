@@ -52,11 +52,15 @@ export function UnifiedAttachmentField({
   onChange,
   onOpen,
   disabled = false,
+  label = 'Ek dosyalar',
+  helper = 'Fotoğraf ve belgeler aynı dosya sınırını paylaşır.',
 }: {
   items: AttachmentListItem[];
   onChange: (items: AttachmentListItem[]) => void;
   onOpen?: (item: PersistedAttachment) => Promise<void> | void;
   disabled?: boolean;
+  label?: string;
+  helper?: string;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -105,8 +109,8 @@ export function UnifiedAttachmentField({
     <View style={styles.container}>
       <View style={styles.headingRow}>
         <View style={styles.headingText}>
-          <Text style={styles.label}>Ek dosyalar</Text>
-          <Text style={styles.helper}>Fotoğraf ve belgeler aynı dosya sınırını paylaşır.</Text>
+          <Text style={styles.label}>{label}</Text>
+          <Text style={styles.helper}>{helper}</Text>
         </View>
         <Text style={styles.count}>
           {items.length}/{ATTACHMENT_CONFIG.maxAttachmentsPerEntity}

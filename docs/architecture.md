@@ -35,6 +35,9 @@ limit kontrolü repository/entity kimlikleri değişmeden eklenebilir.
   tanıma kullanır; raw text transient kalır, parser yalnız öneri üretir ve mevcut formun açık
   `Kaydet` eylemi tek persistence kapısıdır. Gelecekte server/provider işleme ayrı privacy/security
   ve hukuk kararı gerektirir; mobil istemciye ayrıcalıklı anahtar verilmemelidir.
+- Yakıt fişi OCR'ı aynı on-device provider sınırından geçer; raw text, hesaplanan değerler ve
+  station/date önerileri geçicidir. Kullanıcı seçip `Forma aktar` demeden fuel form state'i, normal
+  `Kaydet` demeden de Supabase kaydı değişmez. Seçilen fiş bu akışta kalıcı attachment değildir.
 - Satış raporu: mevcut kaynak entity’lerden türetilir; hesaplanan toplamlar veritabanında
   yinelenmez.
 
