@@ -28,6 +28,8 @@ import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehicleProfile';
 import { Vehicle3DRegion } from '@/features/vehicle3d/Vehicle3DRegion';
 import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
+import { VehiclePhotoGallery } from '@/features/vehicles/components/VehiclePhotoGallery';
+import { VehiclePhotoImage } from '@/features/vehicles/components/VehiclePhotoImage';
 import {
   getVehicleCapacity,
   getVehicleLimitMessage,
@@ -70,9 +72,14 @@ export default function VehicleScreen() {
     expertiseReports,
     notes,
     documents,
+    vehiclePhotos,
     bootstrapped,
     entitlements,
     setActiveVehicle,
+    loading,
+    saveVehiclePhoto,
+    setVehiclePhotoPrimary,
+    deleteVehiclePhoto,
   } = useDataStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -100,9 +107,17 @@ export default function VehicleScreen() {
     <Screen>
       <AppHeader title="Aracım" subtitle="Kimlik, durum ve belgeler" />
       <Card style={styles.vehicleCard}>
-        <View style={styles.vehicleIcon}>
-          <Ionicons name="car-sport-outline" size={30} color={colors.primary} />
-        </View>
+        {vehicle.primaryPhoto ? (
+          <VehiclePhotoImage
+            storagePath={vehicle.primaryPhoto.storagePath}
+            accessibilityLabel={`${vehicle.brand} ${vehicle.model} profil fotoğrafı`}
+            style={styles.vehiclePhoto}
+          />
+        ) : (
+          <View style={styles.vehicleIcon}>
+            <Ionicons name="car-sport-outline" size={30} color={colors.primary} />
+          </View>
+        )}
         <View style={styles.vehicleInfo}>
           <Text style={styles.vehicleName}>
             {vehicle.brand} {vehicle.model}
@@ -152,6 +167,15 @@ export default function VehicleScreen() {
         <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
       </Pressable>
       <Vehicle3DRegion bodyType={vehicle.bodyType} colorId={vehicle.colorId} />
+      <VehiclePhotoGallery
+        vehicleName={`${vehicle.brand} ${vehicle.model}`}
+        photos={vehiclePhotos}
+        entitlements={entitlements}
+        busy={loading}
+        onSave={saveVehiclePhoto}
+        onSetPrimary={setVehiclePhotoPrimary}
+        onDelete={deleteVehiclePhoto}
+      />
       <Card style={styles.bodySummary}>
         <View>
           <Text style={styles.cardTitle}>Gövde özeti</Text>
@@ -232,6 +256,7 @@ const createStyles = ({ colors }: AppTheme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    vehiclePhoto: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.paleAqua },
     vehicleInfo: { flex: 1, gap: 3 },
     vehicleActions: { flexDirection: 'row', gap: spacing.xs },
     vehicleName: { color: colors.navy, ...typography.sectionTitle },

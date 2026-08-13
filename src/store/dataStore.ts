@@ -16,8 +16,10 @@ import {
   VehicleDocument,
   VehicleDraft,
   VehicleNote,
+  VehiclePhoto,
   VehicleRecord,
 } from '@/domain/entities';
+import type { PendingAttachment } from '@/features/attachments/domain/types';
 import { appRepository } from '@/data/repositories/SupabaseAppRepository';
 import { getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { createSafeStringStorage } from '@/data/storage/safeStorage';
@@ -43,6 +45,7 @@ interface DataState {
   notes: VehicleNote[];
   documents: VehicleDocument[];
   maintenanceTemplates: MaintenanceTemplate[];
+  vehiclePhotos: VehiclePhoto[];
   onboardingSeen: boolean;
   hydrated: boolean;
   bootstrapped: boolean;
@@ -61,6 +64,9 @@ interface DataState {
     options?: { allowMileageDecrease?: boolean },
   ) => Promise<boolean>;
   deleteVehicle: (id: string) => Promise<boolean>;
+  saveVehiclePhoto: (attachment: PendingAttachment, replacesPhotoId?: string) => Promise<boolean>;
+  setVehiclePhotoPrimary: (id: string) => Promise<boolean>;
+  deleteVehiclePhoto: (id: string) => Promise<boolean>;
   saveRecord: (draft: RecordDraft, id?: string, requestId?: string) => Promise<boolean>;
   deleteRecord: (id: string) => Promise<boolean>;
   saveMaintenanceTemplate: (draft: MaintenanceTemplateDraft, id?: string) => Promise<boolean>;
@@ -93,6 +99,7 @@ const emptyVehicleData = {
   notes: [],
   documents: [],
   maintenanceTemplates: [],
+  vehiclePhotos: [],
 };
 
 export const useDataStore = create<DataState>()(
@@ -126,6 +133,14 @@ export const useDataStore = create<DataState>()(
         set({ vehicles, activeVehicleId, entitlements, ...emptyVehicleData });
         if (activeVehicleId) await loadActiveData(activeVehicleId);
         else set(emptyVehicleData);
+      };
+      const reloadVehiclePhotos = async (vehicleId: string) => {
+        const [vehicles, vehiclePhotos] = await Promise.all([
+          appRepository.listVehicles(),
+          appRepository.listVehiclePhotos(vehicleId),
+        ]);
+        if (get().activeVehicleId === vehicleId) set({ vehicles, vehiclePhotos });
+        else set({ vehicles });
       };
       const mutate = async (operation: () => Promise<void>): Promise<boolean> => {
         if (!canStartMutation(get().loading)) return false;
@@ -234,6 +249,59 @@ export const useDataStore = create<DataState>()(
           mutate(async () => {
             await appRepository.deleteVehicle(id);
           }),
+
+        saveVehiclePhoto: async (attachment, replacesPhotoId) => {
+          const vehicleId = get().activeVehicleId;
+          if (!vehicleId || !canStartMutation(get().loading)) return false;
+          if (!replacesPhotoId && get().vehiclePhotos.length >= get().entitlements.maxVehiclePhotos) {
+            set({
+              error: `PlanÄ±nÄ±zda en fazla ${get().entitlements.maxVehiclePhotos} araÃ§ fotoÄŸrafÄ± ekleyebilirsiniz.`,
+            });
+            return false;
+          }
+          set({ loading: true, error: null });
+          try {
+            await appRepository.saveVehiclePhoto(vehicleId, attachment, replacesPhotoId);
+            await reloadVehiclePhotos(vehicleId);
+            set({ loading: false });
+            return true;
+          } catch (error) {
+            set({ loading: false, error: handleError(error) });
+            return false;
+          }
+        },
+
+        setVehiclePhotoPrimary: async (id) => {
+          if (!canStartMutation(get().loading)) return false;
+          const photo = get().vehiclePhotos.find((item) => item.id === id);
+          if (!photo) return false;
+          set({ loading: true, error: null });
+          try {
+            await appRepository.setVehiclePhotoPrimary(id);
+            await reloadVehiclePhotos(photo.vehicleId);
+            set({ loading: false });
+            return true;
+          } catch (error) {
+            set({ loading: false, error: handleError(error) });
+            return false;
+          }
+        },
+
+        deleteVehiclePhoto: async (id) => {
+          if (!canStartMutation(get().loading)) return false;
+          const photo = get().vehiclePhotos.find((item) => item.id === id);
+          if (!photo) return false;
+          set({ loading: true, error: null });
+          try {
+            const deleted = await appRepository.deleteVehiclePhoto(id);
+            if (deleted) await reloadVehiclePhotos(photo.vehicleId);
+            set({ loading: false });
+            return deleted;
+          } catch (error) {
+            set({ loading: false, error: handleError(error) });
+            return false;
+          }
+        },
 
         saveRecord: (draft, id, requestId) => {
           const vehicle = activeVehicle();

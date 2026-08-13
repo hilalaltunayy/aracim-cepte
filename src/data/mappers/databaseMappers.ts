@@ -6,6 +6,7 @@ import {
   Reminder,
   Vehicle,
   VehicleDocument,
+  VehiclePhoto,
   VehicleNote,
   VehicleRecord,
 } from '@/domain/entities';
@@ -143,6 +144,22 @@ export const mapAttachment = (row: Tables['attachments']['Row']): Attachment => 
   mimeType: normalizeAttachmentMime(row.mime_type) ?? 'application/pdf',
   sizeBytes: row.size_bytes,
   createdAt: row.created_at,
+});
+
+export const mapVehiclePhoto = (
+  row: Tables['vehicle_photos']['Row'],
+  attachment: Attachment,
+): VehiclePhoto => ({
+  id: row.id,
+  ownerId: row.owner_id,
+  vehicleId: row.vehicle_id,
+  attachmentId: row.attachment_id,
+  storagePath: attachment.storagePath,
+  isPrimary: row.is_primary,
+  sortOrder: row.sort_order,
+  attachment,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
 });
 
 function legacyExpertiseAttachment(row: Tables['expertise_reports']['Row']): PersistedAttachment[] {

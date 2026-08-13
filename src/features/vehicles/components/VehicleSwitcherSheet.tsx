@@ -8,6 +8,7 @@ import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehiclePro
 import { fontFamilies, radii, spacing, typography, useAppTheme, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { getSelectionAccessibilityState } from '@/shared/utils/accessibility';
 import { getSelectionModalLayout } from '@/shared/utils/selectionModalLayout';
+import { VehiclePhotoImage } from './VehiclePhotoImage';
 
 export function VehicleSwitcherSheet({
   visible,
@@ -88,7 +89,15 @@ export function VehicleSwitcherSheet({
                   onPress={() => onSelect(vehicle.id)}
                 >
                   <View style={styles.colorMark} accessible={false}>
-                    <Ionicons name="car-sport-outline" size={20} color={colors.primary} accessible={false} />
+                    {vehicle.primaryPhoto ? (
+                      <VehiclePhotoImage
+                        storagePath={vehicle.primaryPhoto.storagePath}
+                        accessibilityLabel={`${getVehicleDisplayName(vehicle)} profil fotoğrafı`}
+                        style={styles.photoThumbnail}
+                      />
+                    ) : (
+                      <Ionicons name="car-sport-outline" size={20} color={colors.primary} accessible={false} />
+                    )}
                     <View style={[styles.colorDot, { backgroundColor: color }]} />
                   </View>
                   <View style={styles.vehicleText}>
@@ -133,6 +142,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     vehicleRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, backgroundColor: colors.cardBackground },
     vehicleRowSelected: { borderColor: colors.primary, backgroundColor: colors.paleAqua },
     colorMark: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paleAqua },
+    photoThumbnail: { width: 42, height: 42, borderRadius: radii.md, backgroundColor: colors.paleAqua },
     colorDot: { position: 'absolute', right: 4, bottom: 4, width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: colors.cardBackground },
     vehicleText: { flex: 1, minWidth: 0 },
     vehicleName: { color: colors.navy, ...typography.cardTitle },

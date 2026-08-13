@@ -34,6 +34,8 @@ function quotaErrorCode(message: string): string {
     'ATTACHMENT_PARENT_FORBIDDEN',
     'ATTACHMENT_ENTITY_COUNT_EXCEEDED',
     'ATTACHMENT_ENTITY_BYTES_EXCEEDED',
+    'VEHICLE_PHOTO_LIMIT_REACHED',
+    'VEHICLE_PHOTO_REPLACEMENT_NOT_FOUND',
   ];
   return knownCodes.find((code) => message.includes(code)) ?? 'ATTACHMENT_UPLOAD_FAILED';
 }
@@ -52,6 +54,7 @@ export default {
     const parentType = request.headers.get('x-attachment-parent-type')?.trim() ?? null;
     const parentId = request.headers.get('x-attachment-parent-id')?.trim() ?? null;
     const source = request.headers.get('x-attachment-source')?.trim() ?? null;
+    const replacedPhotoId = request.headers.get('x-vehicle-photo-replaces')?.trim() ?? null;
     const parentUpload = Boolean(parentType || parentId || source);
     if (
       parentUpload &&
@@ -60,6 +63,12 @@ export default {
         !uuidPattern.test(parentId) ||
         !source ||
         !['camera', 'gallery', 'document'].includes(source))
+    ) {
+      return jsonResponse(400, { code: 'ATTACHMENT_PARENT_REQUIRED' });
+    }
+    if (
+      replacedPhotoId &&
+      (parentType !== 'vehicle_photo' || !uuidPattern.test(replacedPhotoId))
     ) {
       return jsonResponse(400, { code: 'ATTACHMENT_PARENT_REQUIRED' });
     }
@@ -95,10 +104,25 @@ export default {
     const validation = validateAttachment(bytes, request.headers.get('content-type'));
     if (!validation.ok) return jsonResponse(400, { code: validation.code });
 
-    const reservationRpc = parentUpload
-      ? 'reserve_attachment_upload_for_parent'
-      : 'reserve_attachment_upload';
-    const reservationArgs = parentUpload
+    const vehiclePhotoUpload = parentType === 'vehicle_photo';
+    const reservationRpc = vehiclePhotoUpload
+      ? 'reserve_vehicle_photo_upload'
+      : parentUpload
+        ? 'reserve_attachment_upload_for_parent'
+        : 'reserve_attachment_upload';
+    const reservationArgs = vehiclePhotoUpload
+      ? {
+          p_owner_id: userData.user.id,
+          p_vehicle_id: vehicleId,
+          p_photo_id: parentId,
+          p_source: source,
+          p_original_filename: safeStoredFilename(source!, validation.mimeType),
+          p_size_bytes: bytes.byteLength,
+          p_mime_type: validation.mimeType,
+          p_request_id: requestId,
+          p_replaced_photo_id: replacedPhotoId,
+        }
+      : parentUpload
       ? {
           p_owner_id: userData.user.id,
           p_vehicle_id: vehicleId,

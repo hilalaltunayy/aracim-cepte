@@ -548,6 +548,54 @@ export type Database = {
           },
         ];
       };
+      vehicle_photos: {
+        Row: {
+          attachment_id: string;
+          created_at: string;
+          id: string;
+          is_primary: boolean;
+          owner_id: string;
+          sort_order: number;
+          updated_at: string;
+          vehicle_id: string;
+        };
+        Insert: {
+          attachment_id: string;
+          created_at?: string;
+          id: string;
+          is_primary?: boolean;
+          owner_id: string;
+          sort_order: number;
+          updated_at?: string;
+          vehicle_id: string;
+        };
+        Update: {
+          attachment_id?: string;
+          created_at?: string;
+          id?: string;
+          is_primary?: boolean;
+          owner_id?: string;
+          sort_order?: number;
+          updated_at?: string;
+          vehicle_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'vehicle_photos_attachment_id_fkey';
+            columns: ['attachment_id'];
+            isOneToOne: true;
+            referencedRelation: 'attachments';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'vehicle_photos_vehicle_id_fkey';
+            columns: ['vehicle_id'];
+            isOneToOne: false;
+            referencedRelation: 'vehicles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       maintenance_items: {
         Row: {
           cost: number | null;
@@ -759,6 +807,10 @@ export type Database = {
         Args: { p_vehicle_id: string };
         Returns: boolean;
       };
+      delete_vehicle_photo: {
+        Args: { p_photo_id: string };
+        Returns: boolean;
+      };
       reconcile_my_attachment_metadata: { Args: Record<PropertyKey, never>; Returns: number };
       request_attachment_cleanup: { Args: { p_object_path: string }; Returns: boolean };
       reserve_attachment_upload: {
@@ -801,6 +853,14 @@ export type Database = {
           p_vehicle_id: string;
         };
         Returns: Database['public']['Tables']['expertise_reports']['Row'];
+      };
+      save_vehicle_photo: {
+        Args: { p_attachment_path: string; p_photo_id: string; p_vehicle_id: string };
+        Returns: Database['public']['Tables']['vehicle_photos']['Row'];
+      };
+      set_vehicle_photo_primary: {
+        Args: { p_photo_id: string };
+        Returns: Database['public']['Tables']['vehicle_photos']['Row'];
       };
       save_expertise_report_with_attachments: {
         Args: {

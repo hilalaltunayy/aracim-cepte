@@ -16,6 +16,10 @@ vi.mock('@expo/vector-icons', async () => {
   return { Ionicons: (props: object) => React.createElement('Ionicons', props) };
 });
 vi.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 24 }) }));
+vi.mock('./VehiclePhotoImage', async () => {
+  const React = await import('react');
+  return { VehiclePhotoImage: (props: object) => React.createElement('VehiclePhotoImage', props) };
+});
 vi.mock('@/shared/theme', () => {
   const colors = new Proxy({}, { get: (_target, key) => String(key) });
   const values = new Proxy({}, { get: () => 12 });
