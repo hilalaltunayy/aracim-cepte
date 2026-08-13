@@ -12,6 +12,6 @@ test('allows only implemented unified attachment parent types', () => {
   assert.equal(isSupportedAttachmentParent('expertise_report'), true);
   assert.equal(isSupportedAttachmentParent('vehicle_document'), true);
   assert.equal(isSupportedAttachmentParent('maintenance_record'), true);
-  assert.equal(isSupportedAttachmentParent('vehicle_photo'), false);
+  assert.equal(isSupportedAttachmentParent('vehicle_photo'), true);
   assert.equal(isSupportedAttachmentParent(null), false);
 });

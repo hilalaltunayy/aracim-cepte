@@ -11,6 +11,7 @@ import {
   ReminderDraft,
   Vehicle,
   VehicleDocument,
+  VehiclePhoto,
   VehicleDraft,
   VehicleNote,
   VehicleRecord,
@@ -24,12 +25,21 @@ export interface VehicleDataBundle {
   notes: VehicleNote[];
   documents: VehicleDocument[];
   maintenanceTemplates: MaintenanceTemplate[];
+  vehiclePhotos: VehiclePhoto[];
 }
 
 export interface AppRepository {
   listVehicles(): Promise<Vehicle[]>;
   saveVehicle(draft: VehicleDraft, id?: string): Promise<Vehicle>;
   deleteVehicle(id: string): Promise<void>;
+  listVehiclePhotos(vehicleId: string): Promise<VehiclePhoto[]>;
+  saveVehiclePhoto(
+    vehicleId: string,
+    attachment: import('@/features/attachments/domain/types').PendingAttachment,
+    replacesPhotoId?: string,
+  ): Promise<VehiclePhoto>;
+  setVehiclePhotoPrimary(id: string): Promise<VehiclePhoto>;
+  deleteVehiclePhoto(id: string): Promise<boolean>;
   loadVehicleData(vehicleId: string): Promise<VehicleDataBundle>;
   reconcileVehicleData(
     vehicleId: string,

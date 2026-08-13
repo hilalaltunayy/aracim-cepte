@@ -9,11 +9,13 @@ import {
   ReminderDraft,
   Vehicle,
   VehicleDraft,
+  VehiclePhoto,
 } from '@/domain/entities';
 import { AppRepository, VehicleDataBundle } from '@/domain/repositories/AppRepository';
 import { getSupabaseClient } from '@/data/supabase/client';
 import {
   mapBodyCondition,
+  mapAttachment,
   mapDocument,
   mapExpertise,
   mapMaintenanceItem,
@@ -22,6 +24,7 @@ import {
   mapRecord,
   mapReminder,
   mapVehicle,
+  mapVehiclePhoto,
 } from '@/data/mappers/databaseMappers';
 import { AppError } from '@/shared/utils/errors';
 import {
@@ -37,7 +40,8 @@ import {
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomyPersistenceFields } from '@/features/vehicles/services/vehiclePersistence';
 import { createRequestId } from '@/shared/utils/requestId';
-import { reconcileAttachments } from '@/data/storage/attachments';
+import { reconcileAttachments, uploadParentAttachment } from '@/data/storage/attachments';
+import type { Attachment, PendingAttachment } from '@/features/attachments/domain/types';
 import {
   removeNotificationPreferences,
   setNotificationLeadDays,
@@ -58,13 +62,42 @@ function required<T>(value: T | null, message: string): T {
 
 export class SupabaseAppRepository implements AppRepository {
   async listVehicles() {
-    const { data, error } = await getSupabaseClient()
+    const client = getSupabaseClient();
+    const { data, error } = await client
       .from('vehicles')
       .select('*')
       .is('archived_at', null)
       .order('created_at');
     if (error) throw error;
-    return (data ?? []).map(mapVehicle);
+    const vehicleRows = data ?? [];
+    if (!vehicleRows.length) return [];
+    const vehicleIds = vehicleRows.map((vehicle) => vehicle.id);
+    const [photoResult, attachmentResult] = await Promise.all([
+      client
+        .from('vehicle_photos')
+        .select('*')
+        .in('vehicle_id', vehicleIds)
+        .eq('is_primary', true),
+      client
+        .from('attachments')
+        .select('*')
+        .in('vehicle_id', vehicleIds)
+        .eq('parent_type', 'vehicle_photo'),
+    ]);
+    if (photoResult.error) throw photoResult.error;
+    if (attachmentResult.error) throw attachmentResult.error;
+    const attachmentById = new Map(
+      (attachmentResult.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
+    );
+    const primaryByVehicle = new Map<string, NonNullable<Vehicle['primaryPhoto']>>();
+    for (const photo of photoResult.data ?? []) {
+      const attachment = attachmentById.get(photo.attachment_id);
+      if (attachment) primaryByVehicle.set(photo.vehicle_id, { id: photo.id, storagePath: attachment.storagePath });
+    }
+    return vehicleRows.map((vehicle) => ({
+      ...mapVehicle(vehicle),
+      primaryPhoto: primaryByVehicle.get(vehicle.id) ?? null,
+    }));
   }
 
   async saveVehicle(draft: VehicleDraft, id?: string) {
@@ -118,6 +151,71 @@ export class SupabaseAppRepository implements AppRepository {
     void reconcileAttachments().catch(() => undefined);
   }
 
+  async listVehiclePhotos(vehicleId: string): Promise<VehiclePhoto[]> {
+    const client = getSupabaseClient();
+    const [photos, attachments] = await Promise.all([
+      client
+        .from('vehicle_photos')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('is_primary', { ascending: false })
+        .order('sort_order')
+        .order('created_at'),
+      client
+        .from('attachments')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('parent_type', 'vehicle_photo'),
+    ]);
+    if (photos.error) throw photos.error;
+    if (attachments.error) throw attachments.error;
+    const attachmentById = new Map<string, Attachment>(
+      (attachments.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
+    );
+    return (photos.data ?? []).flatMap((photo) => {
+      const attachment = attachmentById.get(photo.attachment_id);
+      return attachment ? [mapVehiclePhoto(photo, attachment)] : [];
+    });
+  }
+
+  async saveVehiclePhoto(
+    vehicleId: string,
+    attachment: PendingAttachment,
+    replacesPhotoId?: string,
+  ): Promise<VehiclePhoto> {
+    const uploaded = await uploadParentAttachment(vehicleId, 'vehicle_photo', attachment.id, attachment, {
+      replacesPhotoId,
+    });
+    const { error } = await getSupabaseClient().rpc('save_vehicle_photo', {
+      p_vehicle_id: vehicleId,
+      p_photo_id: attachment.id,
+      p_attachment_path: uploaded.path,
+    });
+    if (error) throw error;
+    const saved = (await this.listVehiclePhotos(vehicleId)).find((photo) => photo.id === attachment.id);
+    if (!saved) throw new AppError('Araç fotoğrafı kaydedilemedi.');
+    return saved;
+  }
+
+  async setVehiclePhotoPrimary(id: string): Promise<VehiclePhoto> {
+    const { data, error } = await getSupabaseClient().rpc('set_vehicle_photo_primary', {
+      p_photo_id: id,
+    });
+    if (error) throw error;
+    const row = required(data, 'Araç profil fotoğrafı güncellenemedi.');
+    const photos = await this.listVehiclePhotos(row.vehicle_id);
+    const saved = photos.find((photo) => photo.id === row.id);
+    if (!saved) throw new AppError('Araç profil fotoğrafı güncellenemedi.');
+    return saved;
+  }
+
+  async deleteVehiclePhoto(id: string): Promise<boolean> {
+    const { data, error } = await getSupabaseClient().rpc('delete_vehicle_photo', { p_photo_id: id });
+    if (error) throw error;
+    if (data) void reconcileAttachments().catch(() => undefined);
+    return Boolean(data);
+  }
+
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
     const client = getSupabaseClient();
     const [
@@ -128,6 +226,7 @@ export class SupabaseAppRepository implements AppRepository {
       body,
       bodyValues,
       expertise,
+      vehiclePhotos,
       attachments,
       notes,
       documents,
@@ -148,10 +247,17 @@ export class SupabaseAppRepository implements AppRepository {
         .eq('vehicle_id', vehicleId)
         .order('report_date', { ascending: false }),
       client
+        .from('vehicle_photos')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('is_primary', { ascending: false })
+        .order('sort_order')
+        .order('created_at'),
+      client
         .from('attachments')
         .select('*')
         .eq('vehicle_id', vehicleId)
-        .in('parent_type', ['expertise_report', 'vehicle_document', 'maintenance_record'])
+        .in('parent_type', ['expertise_report', 'vehicle_document', 'maintenance_record', 'vehicle_photo'])
         .order('created_at'),
       client
         .from('vehicle_notes')
@@ -168,6 +274,7 @@ export class SupabaseAppRepository implements AppRepository {
       body.error ??
       bodyValues.error ??
       expertise.error ??
+      vehiclePhotos.error ??
       attachments.error ??
       notes.error ??
       documents.error;
@@ -193,6 +300,9 @@ export class SupabaseAppRepository implements AppRepository {
       current.push(attachment);
       attachmentsByParent.set(key, current);
     }
+    const attachmentById = new Map<string, Attachment>(
+      (attachments.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
+    );
     return {
       records: (records.data ?? []).map((row) =>
         mapRecord(
@@ -213,6 +323,10 @@ export class SupabaseAppRepository implements AppRepository {
         mapDocument(row, attachmentsByParent.get(`vehicle_document:${row.id}`) ?? []),
       ),
       maintenanceTemplates: (maintenanceTemplates.data ?? []).map(mapMaintenanceTemplate),
+      vehiclePhotos: (vehiclePhotos.data ?? []).flatMap((photo) => {
+        const attachment = attachmentById.get(photo.attachment_id);
+        return attachment ? [mapVehiclePhoto(photo, attachment)] : [];
+      }),
     };
   }
 

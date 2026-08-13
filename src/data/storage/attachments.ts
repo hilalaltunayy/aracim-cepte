@@ -129,6 +129,7 @@ export async function uploadParentAttachment(
   parentType: AttachmentParentType,
   parentId: string,
   attachment: PendingAttachment,
+  options?: { replacesPhotoId?: string },
 ): Promise<{ path: string; attachmentId: string }> {
   const client = getSupabaseClient();
   const { data } = await client.auth.getUser();
@@ -157,6 +158,9 @@ export async function uploadParentAttachment(
       'x-attachment-parent-type': parentType,
       'x-attachment-parent-id': parentId,
       'x-attachment-source': attachment.source,
+      ...(parentType === 'vehicle_photo' && options?.replacesPhotoId
+        ? { 'x-vehicle-photo-replaces': options.replacesPhotoId }
+        : {}),
     },
   });
   if (error) {
@@ -194,4 +198,13 @@ export async function openAttachment(path: string): Promise<void> {
     canOpenUrl: (url) => Linking.canOpenURL(url),
     openUrl: (url) => Linking.openURL(url),
   });
+}
+
+/** A short-lived private image URL for in-app rendering; never persisted or logged. */
+export async function createPrivateAttachmentUrl(path: string): Promise<string | null> {
+  const { data, error } = await getSupabaseClient()
+    .storage
+    .from('vehicle-attachments')
+    .createSignedUrl(path, 60);
+  return error ? null : (data?.signedUrl ?? null);
 }

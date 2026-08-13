@@ -72,6 +72,24 @@ export interface Vehicle {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Lightweight private attachment reference for vehicle-switcher presentation. */
+  primaryPhoto?: VehiclePhotoPreview | null;
+}
+
+export interface VehiclePhotoPreview {
+  id: string;
+  storagePath: string;
+}
+
+export interface VehiclePhoto extends VehiclePhotoPreview {
+  ownerId: string;
+  vehicleId: string;
+  attachmentId: string;
+  isPrimary: boolean;
+  sortOrder: number;
+  attachment: import('@/features/attachments/domain/types').Attachment;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface VehicleRecord {
