@@ -81,6 +81,13 @@ vi.mock('@/features/vehicle3d/Vehicle3DRegion', async () => {
       React.createElement('Vehicle3DRegion', { ...props, testID: 'vehicle-3d-profile-region' }),
   };
 });
+vi.mock('@/features/vehicles/components/VehicleSwitcherSheet', async () => {
+  const React = await import('react');
+  return {
+    VehicleSwitcherSheet: (props: object) =>
+      React.createElement('VehicleSwitcherSheet', { ...props, testID: 'vehicle-switcher-sheet' }),
+  };
+});
 
 import VehicleScreen from '@/app/(tabs)/vehicle';
 
@@ -105,5 +112,22 @@ describe('vehicle profile 3D integration', () => {
     const region = renderer.root.findByProps({ testID: 'vehicle-3d-profile-region' });
     expect(region.props.bodyType).toBe('sedan');
     expect(region.props.colorId).toBe('red');
+    expect(
+      renderer.root.findAll((node) => node.props.accessibilityLabel === 'Yeni araç ekle'),
+    ).toHaveLength(1);
+  });
+
+  it('adds a compact switch affordance only when multiple owned vehicles exist', async () => {
+    storeState.vehicles.push({
+      ...storeState.vehicles[0],
+      id: 'vehicle-b',
+      brand: 'Toyota',
+      model: 'Corolla',
+      plate: null,
+    });
+    const renderer = await mount();
+    expect(
+      renderer.root.findAll((node) => node.props.accessibilityLabel === 'Aktif aracı değiştir'),
+    ).toHaveLength(1);
   });
 });

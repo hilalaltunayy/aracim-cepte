@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,12 +38,27 @@ import { formatCurrency, formatNumber } from '@/shared/utils/format';
 import { getDashboardShortcutAccessibilityLabel } from '@/shared/utils/accessibility';
 import { createRecordHref, editRecordHref } from '@/shared/utils/routeParams';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
+import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
+import {
+  getVehicleCapacity,
+  getVehicleLimitMessage,
+} from '@/features/vehicles/domain/multiVehicle';
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const { vehicles, activeVehicleId, records, reminders, error, refresh, bootstrapped } =
-    useDataStore();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const {
+    vehicles,
+    activeVehicleId,
+    records,
+    reminders,
+    error,
+    refresh,
+    bootstrapped,
+    entitlements,
+    setActiveVehicle,
+  } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const vehicleState = resolveVehicleScreenState({
     bootstrapped,
@@ -64,6 +80,15 @@ export default function DashboardScreen() {
   const fuelLiters = getTotalFuelLiters(records);
   const recent = sortRecords(records).slice(0, 4);
   const activeReminderCount = reminders.filter((reminder) => !reminder.completed).length;
+  const capacity = getVehicleCapacity(vehicles.length, entitlements);
+  const requestAddVehicle = () => {
+    if (capacity.canAdd) {
+      setSwitcherOpen(false);
+      router.navigate('/vehicle/edit');
+      return;
+    }
+    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity));
+  };
   const actions = [
     { label: 'Yakıt', icon: 'water-outline', type: 'fuel' },
     { label: 'Bakım', icon: 'construct-outline', type: 'maintenance' },
@@ -76,14 +101,20 @@ export default function DashboardScreen() {
         title="Merhaba"
         subtitle={`${vehicle.brand} ${vehicle.model} bugün nasıl?`}
         action={
-          <View style={styles.headerIcon}>
+          <Pressable
+            accessibilityRole={vehicles.length > 1 ? 'button' : undefined}
+            accessibilityLabel={vehicles.length > 1 ? 'Aktif aracı değiştir' : undefined}
+            style={({ pressed }) => [styles.headerIcon, pressed && vehicles.length > 1 && styles.headerPressed]}
+            disabled={vehicles.length <= 1}
+            onPress={() => setSwitcherOpen(true)}
+          >
             <Ionicons
               name="car-sport-outline"
               size={24}
               color={colors.primary}
               accessible={false}
             />
-          </View>
+          </Pressable>
         }
       />
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
@@ -194,6 +225,18 @@ export default function DashboardScreen() {
           icon="receipt-outline"
         />
       )}
+      <VehicleSwitcherSheet
+        visible={switcherOpen}
+        vehicles={vehicles}
+        activeVehicleId={activeVehicleId}
+        capacityLabel={`${capacity.current} / ${capacity.maximum} araç`}
+        onSelect={(vehicleId) => {
+          setSwitcherOpen(false);
+          void setActiveVehicle(vehicleId);
+        }}
+        onAddVehicle={requestAddVehicle}
+        onClose={() => setSwitcherOpen(false)}
+      />
     </Screen>
   );
 }
@@ -208,6 +251,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    headerPressed: { opacity: 0.72 },
     hero: {
       width: '100%',
       minHeight: 214,

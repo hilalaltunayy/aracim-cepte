@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -26,6 +27,11 @@ import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehicleProfile';
 import { Vehicle3DRegion } from '@/features/vehicle3d/Vehicle3DRegion';
+import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
+import {
+  getVehicleCapacity,
+  getVehicleLimitMessage,
+} from '@/features/vehicles/domain/multiVehicle';
 
 const sections = [
   {
@@ -65,7 +71,10 @@ export default function VehicleScreen() {
     notes,
     documents,
     bootstrapped,
+    entitlements,
+    setActiveVehicle,
   } = useDataStore();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
   if (vehicleState === 'loading') return <LoadingScreen />;
@@ -78,6 +87,15 @@ export default function VehicleScreen() {
     );
   }
   const summary = getBodyConditionSummary(bodyConditions);
+  const capacity = getVehicleCapacity(vehicles.length, entitlements);
+  const requestAddVehicle = () => {
+    if (capacity.canAdd) {
+      setSwitcherOpen(false);
+      router.navigate('/vehicle/edit');
+      return;
+    }
+    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity));
+  };
   return (
     <Screen>
       <AppHeader title="Aracım" subtitle="Kimlik, durum ve belgeler" />
@@ -97,15 +115,42 @@ export default function VehicleScreen() {
           <Text style={styles.meta}>{getVehicleTaxonomySummary(vehicle)}</Text>
           <Text style={styles.km}>{formatNumber(vehicle.currentKm)} km</Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Araç bilgilerini düzenle"
-          style={({ pressed }) => [styles.edit, pressed && styles.pressed]}
-          onPress={() => router.push({ pathname: '/vehicle/edit', params: { id: vehicle.id } })}
-        >
-          <Ionicons name="pencil-outline" size={20} color={colors.primary} />
-        </Pressable>
+        <View style={styles.vehicleActions}>
+          {vehicles.length > 1 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Aktif aracı değiştir"
+              style={({ pressed }) => [styles.edit, pressed && styles.pressed]}
+              onPress={() => setSwitcherOpen(true)}
+            >
+              <Ionicons name="car-outline" size={20} color={colors.primary} accessible={false} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Araç bilgilerini düzenle"
+            style={({ pressed }) => [styles.edit, pressed && styles.pressed]}
+            onPress={() => router.push({ pathname: '/vehicle/edit', params: { id: vehicle.id } })}
+          >
+            <Ionicons name="pencil-outline" size={20} color={colors.primary} accessible={false} />
+          </Pressable>
+        </View>
       </Card>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Yeni araç ekle"
+        style={({ pressed }) => [styles.capacityCard, pressed && styles.pressed]}
+        onPress={requestAddVehicle}
+      >
+        <View style={styles.capacityIcon}>
+          <Ionicons name="add" size={20} color={colors.primary} accessible={false} />
+        </View>
+        <View style={styles.vehicleInfo}>
+          <Text style={styles.cardTitle}>Araç ekle</Text>
+          <Text style={styles.meta}>{capacity.current} / {capacity.maximum} araç</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
+      </Pressable>
       <Vehicle3DRegion bodyType={vehicle.bodyType} colorId={vehicle.colorId} />
       <Card style={styles.bodySummary}>
         <View>
@@ -160,6 +205,18 @@ export default function VehicleScreen() {
           );
         })}
       </View>
+      <VehicleSwitcherSheet
+        visible={switcherOpen}
+        vehicles={vehicles}
+        activeVehicleId={activeVehicleId}
+        capacityLabel={`${capacity.current} / ${capacity.maximum} araç`}
+        onSelect={(vehicleId) => {
+          setSwitcherOpen(false);
+          void setActiveVehicle(vehicleId);
+        }}
+        onAddVehicle={requestAddVehicle}
+        onClose={() => setSwitcherOpen(false)}
+      />
     </Screen>
   );
 }
@@ -176,10 +233,29 @@ const createStyles = ({ colors }: AppTheme) =>
       justifyContent: 'center',
     },
     vehicleInfo: { flex: 1, gap: 3 },
+    vehicleActions: { flexDirection: 'row', gap: spacing.xs },
     vehicleName: { color: colors.navy, ...typography.sectionTitle },
     meta: { color: colors.muted, fontSize: 12, lineHeight: 18 },
     km: { color: colors.primary, fontFamily: fontFamilies.bold, marginTop: spacing.xs },
     edit: {
+      width: 42,
+      height: 42,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    capacityCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      backgroundColor: colors.cardBackground,
+    },
+    capacityIcon: {
       width: 42,
       height: 42,
       borderRadius: radii.md,
