@@ -1,5 +1,9 @@
 # Monetization ve kota ilkeleri
 
+Uygulama tarafındaki merkezi, fail-closed entitlement sözleşmesi için
+[Free / Premium entitlement foundation](free-premium-entitlements.md) belgesi source-of-truth'tur.
+Bu V1 dokümanı mevcut server-side belge güvenlik sınırlarını değiştirmez.
+
 Bu belge nihai fiyat veya satın alma ürünü tanımlamaz. Paket sınırları maliyet ölçümü, kullanıcı
 araştırması, mağaza kuralları, vergi ve hukuki değerlendirmeden sonra yapılandırılmalıdır. Billing
 V1'e açık insan onayı olmadan eklenemez.

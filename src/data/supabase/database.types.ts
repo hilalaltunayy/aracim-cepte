@@ -276,6 +276,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_entitlements: {
+        Row: {
+          created_at: string;
+          plan_id: 'free' | 'premium';
+          source: 'billing' | 'support' | 'migration';
+          updated_at: string;
+          user_id: string;
+          valid_until: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          plan_id?: 'free' | 'premium';
+          source?: 'billing' | 'support' | 'migration';
+          updated_at?: string;
+          user_id: string;
+          valid_until?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          plan_id?: 'free' | 'premium';
+          source?: 'billing' | 'support' | 'migration';
+          updated_at?: string;
+          user_id?: string;
+          valid_until?: string | null;
+        };
+        Relationships: [];
+      };
       reminders: {
         Row: {
           completed: boolean;

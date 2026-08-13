@@ -1,5 +1,6 @@
 import {
   ATTACHMENT_CONFIG,
+  getAttachmentLimits,
   type SupportedAttachmentMime,
 } from '../config/attachmentConfig';
 import type { AttachmentListItem, PendingAttachment } from './types';
@@ -32,13 +33,14 @@ export function validateAttachmentCandidate(
   candidate: Pick<PendingAttachment, 'uri' | 'mimeType' | 'sizeBytes'>,
   current: readonly AttachmentListItem[],
 ): AttachmentValidationResult {
+  const limits = getAttachmentLimits();
   if (!normalizeAttachmentMime(candidate.mimeType)) {
     return { valid: false, code: 'ATTACHMENT_TYPE_NOT_ALLOWED' };
   }
   if (candidate.sizeBytes < 1 || candidate.sizeBytes > ATTACHMENT_CONFIG.maxFileBytes) {
     return { valid: false, code: 'ATTACHMENT_FILE_TOO_LARGE' };
   }
-  if (current.length >= ATTACHMENT_CONFIG.maxAttachmentsPerEntity) {
+  if (current.length >= limits.maxAttachmentsPerEntity) {
     return { valid: false, code: 'ATTACHMENT_COUNT_LIMIT_REACHED' };
   }
   if (current.some((item) => 'uri' in item && item.uri === candidate.uri)) {
@@ -46,7 +48,7 @@ export function validateAttachmentCandidate(
   }
   if (
     attachmentBytes(current) + candidate.sizeBytes >
-    ATTACHMENT_CONFIG.maxTotalBytesPerEntity
+    limits.maxTotalBytesPerEntity
   ) {
     return { valid: false, code: 'ATTACHMENT_ENTITY_BYTES_LIMIT_REACHED' };
   }
