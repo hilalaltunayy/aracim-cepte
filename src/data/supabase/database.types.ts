@@ -706,6 +706,33 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      create_vehicle_with_limit: {
+        Args: {
+          p_body_type: Database['public']['Enums']['body_type'];
+          p_brand: string;
+          p_color: string | null;
+          p_color_id:
+            | 'white'
+            | 'black'
+            | 'gray'
+            | 'silver'
+            | 'red'
+            | 'blue'
+            | 'green'
+            | 'brown'
+            | 'beige'
+            | 'gold'
+            | 'yellow'
+            | 'orange'
+            | null;
+          p_current_km: number;
+          p_fuel_type: Database['public']['Enums']['fuel_type'];
+          p_model: string;
+          p_plate: string | null;
+          p_year: number | null;
+        };
+        Returns: Database['public']['Tables']['vehicles']['Row'];
+      };
       save_body_part_conditions_atomic: {
         Args: {
           p_conditions: Database['public']['Enums']['body_condition'][];

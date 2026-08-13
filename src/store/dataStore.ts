@@ -28,10 +28,14 @@ import {
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useAuthStore } from '@/store/authStore';
 import { resolveActiveVehicleId } from '@/shared/utils/vehicleState';
+import { FREE_ENTITLEMENTS, type PlanEntitlements } from '@/features/entitlements/domain/entitlements';
+import { loadCurrentEntitlements } from '@/features/entitlements/services/entitlementService';
+import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
 
 interface DataState {
   vehicles: Vehicle[];
   activeVehicleId: string | null;
+  entitlements: Readonly<PlanEntitlements>;
   records: VehicleRecord[];
   reminders: Reminder[];
   bodyConditions: BodyPartCondition[];
@@ -94,24 +98,32 @@ const emptyVehicleData = {
 export const useDataStore = create<DataState>()(
   persist(
     (set, get) => {
+      let vehicleLoadSequence = 0;
       const handleError = (error: unknown) => {
         if (isSessionExpiredError(error)) useAuthStore.getState().markSessionExpired();
         return getFriendlyError(error);
       };
       const loadActiveData = async (vehicleId: string) => {
+        const loadSequence = ++vehicleLoadSequence;
         const bundle = await appRepository.loadVehicleData(vehicleId);
+        if (!canApplyVehicleData(get().activeVehicleId, vehicleId, loadSequence, vehicleLoadSequence))
+          return;
         set(bundle);
         void appRepository
           .reconcileVehicleData(vehicleId, bundle.reminders)
           .then((reconciled) => {
-            if (get().activeVehicleId === vehicleId) set(reconciled);
+            if (canApplyVehicleData(get().activeVehicleId, vehicleId, loadSequence, vehicleLoadSequence))
+              set(reconciled);
           })
           .catch(() => undefined);
       };
       const reloadAvailableData = async () => {
-        const vehicles = await appRepository.listVehicles();
+        const [vehicles, entitlements] = await Promise.all([
+          appRepository.listVehicles(),
+          loadCurrentEntitlements(),
+        ]);
         const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
-        set({ vehicles, activeVehicleId });
+        set({ vehicles, activeVehicleId, entitlements, ...emptyVehicleData });
         if (activeVehicleId) await loadActiveData(activeVehicleId);
         else set(emptyVehicleData);
       };
@@ -134,6 +146,7 @@ export const useDataStore = create<DataState>()(
       return {
         vehicles: [],
         activeVehicleId: null,
+        entitlements: FREE_ENTITLEMENTS,
         ...emptyVehicleData,
         onboardingSeen: false,
         hydrated: false,
@@ -152,7 +165,7 @@ export const useDataStore = create<DataState>()(
             set({ activeVehicleId: null, ...emptyVehicleData });
             return;
           }
-          set({ activeVehicleId: nextId, loading: true, error: null });
+          set({ activeVehicleId: nextId, loading: true, error: null, ...emptyVehicleData });
           try {
             await loadActiveData(nextId);
             set({ loading: false });
@@ -165,9 +178,12 @@ export const useDataStore = create<DataState>()(
           const startedAt = Date.now();
           set({ loading: true, error: null, bootstrapError: null, bootstrapped: false });
           try {
-            const vehicles = await appRepository.listVehicles();
+            const [vehicles, entitlements] = await Promise.all([
+              appRepository.listVehicles(),
+              loadCurrentEntitlements(),
+            ]);
             const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
-            set({ vehicles, activeVehicleId });
+            set({ vehicles, activeVehicleId, entitlements, ...emptyVehicleData });
             if (activeVehicleId) await loadActiveData(activeVehicleId);
             else set(emptyVehicleData);
             set({
@@ -194,6 +210,12 @@ export const useDataStore = create<DataState>()(
 
         saveVehicle: (draft, id, options) => {
           const existing = id ? get().vehicles.find((vehicle) => vehicle.id === id) : null;
+          if (!id && get().vehicles.length >= get().entitlements.maxVehicles) {
+            set({
+              error: `Planınızda en fazla ${get().entitlements.maxVehicles} araç ekleyebilirsiniz.`,
+            });
+            return Promise.resolve(false);
+          }
           if (
             existing &&
             requiresVehicleMileageCorrection(existing.currentKm, draft.currentKm) &&

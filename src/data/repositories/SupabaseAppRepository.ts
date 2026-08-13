@@ -69,7 +69,6 @@ export class SupabaseAppRepository implements AppRepository {
 
   async saveVehicle(draft: VehicleDraft, id?: string) {
     const payload = {
-      owner_id: await ownerId(),
       brand: draft.brand.trim(),
       model: draft.model.trim(),
       year: draft.year,
@@ -79,10 +78,26 @@ export class SupabaseAppRepository implements AppRepository {
       ...getVehicleTaxonomyPersistenceFields(draft),
       archived_at: null,
     };
-    const query = id
-      ? getSupabaseClient().from('vehicles').update(payload).eq('id', id)
-      : getSupabaseClient().from('vehicles').insert(payload);
-    const { data, error } = await query.select('*').single();
+    const client = getSupabaseClient();
+    const result = id
+      ? await client
+          .from('vehicles')
+          .update({ ...payload, owner_id: await ownerId() })
+          .eq('id', id)
+          .select('*')
+          .single()
+      : await client.rpc('create_vehicle_with_limit', {
+          p_brand: payload.brand,
+          p_model: payload.model,
+          p_year: payload.year,
+          p_plate: payload.plate,
+          p_current_km: payload.current_km,
+          p_fuel_type: payload.fuel_type,
+          p_body_type: payload.body_type,
+          p_color: payload.color,
+          p_color_id: payload.color_id,
+        });
+    const { data, error } = result;
     if (error) throw error;
     return mapVehicle(required(data, 'Araç kaydedilemedi.'));
   }
