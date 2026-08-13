@@ -26,6 +26,13 @@ vi.mock('@/features/attachments/components/UnifiedAttachmentField', async () => 
       React.createElement('UnifiedAttachmentField', props),
   };
 });
+vi.mock('../ocr/MaintenanceReceiptOcrSection', async () => {
+  const React = await import('react');
+  return {
+    MaintenanceReceiptOcrSection: (props: Record<string, unknown>) =>
+      React.createElement('MaintenanceReceiptOcrSection', props),
+  };
+});
 
 import { MaintenanceDetailsSection } from './MaintenanceDetailsSection';
 
@@ -48,10 +55,13 @@ async function mount(expanded: boolean): Promise<ReactTestRenderer> {
         errors={{}}
         attachments={[]}
         disabled={false}
+        total=""
+        recordDate="2026-08-11"
         onToggle={vi.fn()}
         onChange={vi.fn()}
         onAttachmentsChange={vi.fn()}
         onOpenAttachment={vi.fn()}
+        onOcrApply={vi.fn()}
       />,
     );
   });

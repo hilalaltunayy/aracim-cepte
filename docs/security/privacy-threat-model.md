@@ -69,6 +69,10 @@ girdisidir; raw text, istasyon/tutar/litre/tarih önerileri ve deterministic hes
 Supabase'e, loglara veya analytics'e yazılmaz. Kullanıcı forma aktarıp ayrıca yakıt kaydını kaydetse
 bile, fiş attachment'ı bu görevde kalıcı olarak saklanmaz.
 
+TASK-027 bakım fişi/fatura OCR'ı da yalnız cihazda çalışır. Ham metin ile servis, fiş no ve maliyet
+önerileri transient kalır; log, analytics, Supabase veya yeni bir üçüncü taraf sağlayıcıya yazılmaz.
+Kullanıcı öneriyi seçip mevcut bakım formunu ayrıca kaydetmeden kalıcı bakım event'i değişmez.
+
 ## Security/privacy regression kontrolü
 
 Her ilgili görevde completion report şu sorulara cevap verir:

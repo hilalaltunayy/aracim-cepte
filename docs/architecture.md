@@ -38,6 +38,9 @@ limit kontrolü repository/entity kimlikleri değişmeden eklenebilir.
 - Yakıt fişi OCR'ı aynı on-device provider sınırından geçer; raw text, hesaplanan değerler ve
   station/date önerileri geçicidir. Kullanıcı seçip `Forma aktar` demeden fuel form state'i, normal
   `Kaydet` demeden de Supabase kaydı değişmez. Seçilen fiş bu akışta kalıcı attachment değildir.
+- Bakım fişi/fatura OCR'ı da aynı provider'ı kullanır; servis adı, tarih, fiş no, parça, işçilik ve
+  toplam önerileri mevcut bakım event formuna yalnız kullanıcının seçtiği `Forma aktar` eylemiyle
+  kopyalanır. Normal bakım `Kaydet` ve mevcut private attachment hattı tek persistence kapısıdır.
 - Satış raporu: mevcut kaynak entity’lerden türetilir; hesaplanan toplamlar veritabanında
   yinelenmez.
 
