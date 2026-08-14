@@ -16,14 +16,15 @@ sonucuna güvenmez; planı server-side `private.effective_plan_for_user` ile yen
 `isPremium` koşulları eklemez; capability kullanır. `canCreateVehicle` yeni araç aksiyonlarının,
 `getOcrInvocationPolicy` ise TASK-031 OCR kullanım sayımının merkezi hook'udur.
 
-| Capability | Free | Premium |
-| --- | ---: | ---: |
-| Yeni araç | 1 | 3 |
-| OCR aylık bütçe (henüz enforce edilmez) | 3 | 30 |
-| Kayıt başına ek dosya / byte | 5 / 15 MB | 10 / 30 MB |
-| Kullanıcı Storage bütçesi | 25 MB | 100 MB |
-| Araç fotoğrafı | 1 | 5 |
-| Gelişmiş rapor, yakıt fiyat uyarısı, gelişmiş bildirim/rota | Hayır | Özellik uygulandığında |
+| Capability                                                  |        Free |                Premium |
+| ----------------------------------------------------------- | ----------: | ---------------------: |
+| Yeni araç                                                   |           1 |                      3 |
+| OCR aylık bütçe (henüz enforce edilmez)                     |           3 |                     30 |
+| Kayıt başına ek dosya / byte                                |   5 / 15 MB |             10 / 30 MB |
+| Kullanıcı Storage bütçesi                                   |       25 MB |                 100 MB |
+| Araç fotoğrafı                                              |           1 |                      5 |
+| Gelişmiş rapor, yakıt fiyat uyarısı, gelişmiş bildirim/rota |       Hayır | Özellik uygulandığında |
+| Yeni hatırlatıcı için özel bildirim saati                   | 09:00 sabit |                    Var |
 
 AI, mechanic sharing, OBD ve bağlı araç capability'leri yalnız future-ready tanımdır; TASK-028
 bunları veya Premium UI'ı uygulamaz. Değerler konservatif başlangıç yapılandırmasıdır, nihai ticari

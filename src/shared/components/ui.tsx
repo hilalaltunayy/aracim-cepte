@@ -352,6 +352,57 @@ export interface ActionSheetOption<T extends string> {
   icon?: keyof typeof Ionicons.glyphMap;
 }
 
+/** Shared safe-area modal surface for compact, feature-specific picker content. */
+export function BottomSheet({
+  visible,
+  title,
+  children,
+  onClose,
+}: PropsWithChildren<{
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+}>) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const modalLayout = getSelectionModalLayout(windowHeight, insets);
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={[
+          styles.modalBackdrop,
+          { paddingTop: modalLayout.paddingTop, paddingBottom: modalLayout.paddingBottom },
+        ]}
+        onPress={onClose}
+      >
+        <Pressable
+          accessibilityViewIsModal
+          accessibilityLabel={title}
+          style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
+          onPress={(event) => event.stopPropagation()}
+        >
+          <View style={styles.bottomSheetHeading}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Kapat"
+              hitSlop={8}
+              onPress={onClose}
+            >
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingBottom: modalLayout.listPaddingBottom }}>
+            {children}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function ActionSheet<T extends string>({
   visible,
   title,
@@ -403,11 +454,21 @@ export function ActionSheet<T extends string>({
               >
                 <View style={styles.selectValue}>
                   {option.icon ? (
-                    <Ionicons name={option.icon} size={22} color={colors.primary} accessible={false} />
+                    <Ionicons
+                      name={option.icon}
+                      size={22}
+                      color={colors.primary}
+                      accessible={false}
+                    />
                   ) : null}
                   <Text style={styles.optionText}>{option.label}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.muted}
+                  accessible={false}
+                />
               </Pressable>
             ))}
           </ScrollView>
@@ -941,6 +1002,12 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       gap: spacing.md,
     },
     modalTitle: { color: colors.textPrimary, ...typography.sectionTitle },
+    bottomSheetHeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
     optionList: { flexShrink: 1 },
     option: {
       minHeight: 52,

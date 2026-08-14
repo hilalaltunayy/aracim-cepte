@@ -18,25 +18,30 @@ function collectTsxFiles(directory: string): string[] {
 
 describe('selection surface inventory', () => {
   it.each([
-    ['src/app/reminder/edit.tsx', 'reminder type and lead-time'],
-    ['src/app/vehicle/edit.tsx', 'vehicle body and fuel type'],
-    ['src/app/record/edit.tsx', 'record and expense categories'],
-    ['src/app/documents/edit.tsx', 'document category'],
-    ['src/app/body-condition/index.tsx', 'body status'],
-  ])('routes %s through the shared safe-area SelectField (%s)', (path) => {
-    expect(source(path)).toContain('<SelectField');
+    ['src/app/reminder/edit.tsx', '<SelectField', 'reminder type and lead-time'],
+    ['src/app/vehicle/edit.tsx', '<SelectField', 'vehicle body and fuel type'],
+    ['src/app/record/edit.tsx', '<SelectField', 'record and expense categories'],
+    ['src/app/documents/edit.tsx', '<SelectField', 'document category'],
+    ['src/app/body-condition/index.tsx', '<BodyConditionSelector', 'body status'],
+  ])('routes %s through the intended selection surface (%s)', (path, marker) => {
+    expect(source(path)).toContain(marker);
   });
 
   it('keeps the only custom runtime Modal in the shared UI component', () => {
     const modalFiles = collectTsxFiles(join(repositoryRoot, 'src'))
       .filter((path) => source(relative(repositoryRoot, path)).includes('<Modal'))
       .map((path) => relative(repositoryRoot, path).replaceAll('\\', '/'));
-    expect(modalFiles).toEqual(['src/shared/components/ui.tsx']);
+    expect(modalFiles).toEqual([
+      'src/features/vehicles/components/VehiclePhotoGallery.tsx',
+      'src/features/vehicles/components/VehicleSwitcherSheet.tsx',
+      'src/shared/components/ui.tsx',
+    ]);
   });
 
-  it('keeps date/time selection on the existing native picker instead of a second unsafe sheet', () => {
+  it('keeps native time selection and routes reminder calendar content through the shared sheet', () => {
     const ui = source('src/shared/components/ui.tsx');
     expect(ui).toContain('<DateTimePicker');
-    expect(source('src/app/reminder/edit.tsx')).toContain('<DateField');
+    expect(ui).toContain('export function BottomSheet');
+    expect(source('src/app/reminder/edit.tsx')).toContain('<ReminderScheduleFields');
   });
 });
