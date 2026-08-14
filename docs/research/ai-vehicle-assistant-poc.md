@@ -5,7 +5,7 @@
 
 ## Canlı çalıştırma sonucu
 
-`GEMINI_API_KEY` ve `GROQ_API_KEY` yerel ortamda yoktu. Bu nedenle canlı çağrı sayısı **0**, model kalite/latency/structured-output başarı oranı ölçümü **yok**. Harness canlı örneği 6 context × 3 soru × 2 sağlayıcı = 36 çağrıyla sınırlıdır; her istek için en fazla bir retry vardır. Anahtarlar sağlandığında yalnızca `node scripts/poc/aiVehicleAssistantPoc.mjs --live` ile çalıştırılmalıdır.
+Canlı devam çalışmasında `node scripts/poc/aiVehicleAssistantPoc.mjs --live` çalıştırıldı; bu işlem sırasında mevcut process environment içinde `GEMINI_API_KEY` ve `GROQ_API_KEY` bulunamadı. Harness güvenli biçimde durdu: canlı çağrı sayısı **0**, model kalite/latency/structured-output başarı oranı ölçümü **yok**. Harness canlı örneği 6 context × 3 soru × 2 sağlayıcı = 36 çağrıyla sınırlıdır; her istek için en fazla bir retry vardır. Anahtarlar, komutu çalıştıran aynı process environment’a sağlandığında yeniden çalıştırılmalıdır.
 
 Harness şunları sabitler:
 

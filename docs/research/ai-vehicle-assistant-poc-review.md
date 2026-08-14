@@ -1,6 +1,6 @@
 # AI Vehicle Assistant POC — Human Review
 
-Generated: 2026-08-14T23:10:23.183Z
+Generated: 2026-08-14T23:40:36.613Z
 Live API execution: **NO**
 
 Synthetic cases: 6; questions: 21; default live sample: 3 questions × 6 cases × 2 providers (36 calls).
