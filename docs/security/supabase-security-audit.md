@@ -1,6 +1,6 @@
 # Supabase client secrets, RLS and privileged-access audit
 
-**Date:** 2026-08-14  
+**Date:** 2026-08-14
 **Scope:** SECURITY-AUDIT-001; repository source, current local Supabase schema and narrowly scoped
 negative fixtures. No production mutation, remote migration deployment or credential rotation was performed.
 
