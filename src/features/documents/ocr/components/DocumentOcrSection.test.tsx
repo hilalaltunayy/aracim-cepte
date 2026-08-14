@@ -11,6 +11,11 @@ vi.mock('react-native', () => ({
   View: 'View',
 }));
 vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
+vi.mock('@/features/entitlements/services/ocrUsageQuota', () => ({
+  reserveOcrUsage: vi.fn().mockResolvedValue({ operationId: 'ocr-op', usage: { usedCount: 0, monthlyQuota: 3, periodStart: '2026-08-01' } }),
+  commitOcrUsage: vi.fn().mockResolvedValue({ usedCount: 1, monthlyQuota: 3, periodStart: '2026-08-01' }),
+  releaseOcrUsage: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/shared/theme', () => ({
   radii: { lg: 20 },
   spacing: { xs: 4, sm: 8, md: 12 },

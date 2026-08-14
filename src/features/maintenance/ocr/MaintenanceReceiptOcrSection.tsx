@@ -4,6 +4,7 @@ import type { AttachmentListItem, PendingAttachment } from '@/features/attachmen
 import { isPendingAttachment } from '@/features/attachments/domain/types';
 import { AppButton, AppInput, ErrorBanner } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
 import type { MaintenanceDetailsFormValues } from '../domain/maintenanceDetails';
 import {
   analyzeMaintenanceReceiptAttachment,
@@ -93,6 +94,7 @@ export function MaintenanceReceiptOcrSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
+  const [usage, setUsage] = useState<OcrUsage | null>(null);
 
   const start = async () => {
     if (disabled || analyzing) return;
@@ -104,15 +106,21 @@ export function MaintenanceReceiptOcrSection({
       setError('Fiş tarama için JPG veya PNG biçiminde bir görüntü ekleyin.');
       return;
     }
+    let operationId: string;
+    try { ({ operationId } = await reserveOcrUsage('maintenance_receipt')); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.'); return; }
     setAnalyzing(true);
     setError(null);
     setSuggestions([]);
     const result = await analyze(attachment).catch(() => ({ status: 'error' as const, code: 'failed' as const }));
     setAnalyzing(false);
     if (result.status === 'error') {
+      void releaseOcrUsage(operationId);
       setError(errorMessage(result.code));
       return;
     }
+    try { setUsage(await commitOcrUsage(operationId)); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.'); return; }
     setSuggestions(prepareMaintenanceReceiptReviewSuggestions(result.result.suggestions, details, total, recordDate));
   };
 
@@ -120,6 +128,7 @@ export function MaintenanceReceiptOcrSection({
     <View style={styles.container}>
       <Text style={styles.title}>Bakım fişi tarama</Text>
       <Text style={styles.helper}>Bulunan bilgiler öneridir; onaylamadan forma aktarılmaz veya kaydedilmez.</Text>
+      {usage ? <Text style={styles.helper}>{usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı</Text> : null}
       {error ? <ErrorBanner message={error} /> : null}
       {suggestions.length ? (
         <View style={styles.review} testID="maintenance-receipt-ocr-review">

@@ -187,7 +187,8 @@ begin
       (select user_a from qa_rls_context),
       (select vehicle_a from qa_rls_context),
       100,
-      'application/pdf'
+      'application/pdf',
+      pg_catalog.gen_random_uuid()
     );
     raise exception 'authenticated user could call service-only reservation function';
   exception
@@ -242,9 +243,14 @@ begin
     raise exception 'user B could read user A attachment metadata';
   end if;
 
-  delete from storage.objects
-  where name = (select object_a from qa_rls_context);
-  get diagnostics affected = row_count;
+  begin
+    delete from storage.objects
+    where name = (select object_a from qa_rls_context);
+    get diagnostics affected = row_count;
+  exception
+    when insufficient_privilege then affected := 0;
+    when raise_exception then affected := 0;
+  end;
   if affected <> 0 then
     raise exception 'user B could delete user A attachment metadata';
   end if;

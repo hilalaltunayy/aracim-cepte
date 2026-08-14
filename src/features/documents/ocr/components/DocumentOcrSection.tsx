@@ -11,6 +11,7 @@ import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/th
 import type { DocumentFormValues } from '../../domain/documentValidation';
 import type { DocumentOcrAnalysisResult, DocumentOcrFormPatch } from '../domain/documentOcrTypes';
 import { analyzeDocumentAttachment, getDocumentOcrMessage } from '../services/documentOcrService';
+import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
 import {
   DocumentOcrReviewPanel,
   prepareReviewSuggestions,
@@ -42,6 +43,7 @@ export function DocumentOcrSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewableDocumentOcrSuggestion[]>([]);
+  const [usage, setUsage] = useState<OcrUsage | null>(null);
 
   useEffect(
     () => () => {
@@ -62,6 +64,13 @@ export function DocumentOcrSection({
       return;
     }
     const currentRequestId = ++requestId.current;
+    let operationId: string;
+    try {
+      ({ operationId } = await reserveOcrUsage('document'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.');
+      return;
+    }
     setError(null);
     setSuggestions([]);
     setAnalyzing(true);
@@ -71,11 +80,15 @@ export function DocumentOcrSection({
     } catch {
       result = { status: 'error', code: 'failed' };
     }
-    if (currentRequestId !== requestId.current) return;
+    if (currentRequestId !== requestId.current) { void releaseOcrUsage(operationId); return; }
     setAnalyzing(false);
     if (result.status !== 'success') {
+      void releaseOcrUsage(operationId);
       setError(getDocumentOcrMessage(result));
       return;
+    }
+    try { setUsage(await commitOcrUsage(operationId)); } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.'); return;
     }
     setSuggestions(prepareReviewSuggestions(result.suggestions, currentValues));
   };
@@ -102,6 +115,7 @@ export function DocumentOcrSection({
         </Text>
       </View>
       {error ? <ErrorBanner message={error} /> : null}
+      {usage ? <Text style={styles.helper}>{usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı</Text> : null}
       {suggestions.length ? (
         <DocumentOcrReviewPanel
           documentType={documentType}

@@ -31,9 +31,9 @@ export function getAttachmentErrorMessage(code: string | null): string {
     case 'ATTACHMENT_CONTENT_MISMATCH':
       return 'Yalnızca PDF, JPG, JPEG ve PNG dosyalarını yükleyebilirsiniz.';
     case 'ATTACHMENT_COUNT_QUOTA_EXCEEDED':
-      return 'Ücretsiz planda en fazla 10 belge yükleyebilirsiniz.';
+      return 'Dosya sınırına ulaştınız.';
     case 'ATTACHMENT_BYTES_QUOTA_EXCEEDED':
-      return 'Ücretsiz belge alanınız 25 MB ile sınırlıdır.';
+      return 'Depolama alanı sınırınıza ulaştınız.';
     case 'ATTACHMENT_ENTITY_COUNT_EXCEEDED':
       return 'Bu kayıt için ek dosya sınırına ulaştınız.';
     case 'ATTACHMENT_ENTITY_BYTES_EXCEEDED':
