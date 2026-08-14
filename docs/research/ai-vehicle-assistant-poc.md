@@ -7,6 +7,18 @@
 
 Canlı devam çalışmasında `node scripts/poc/aiVehicleAssistantPoc.mjs --live` çalıştırıldı; bu işlem sırasında mevcut process environment içinde `GEMINI_API_KEY` ve `GROQ_API_KEY` bulunamadı. Harness güvenli biçimde durdu: canlı çağrı sayısı **0**, model kalite/latency/structured-output başarı oranı ölçümü **yok**. Harness canlı örneği 6 context × 3 soru × 2 sağlayıcı = 36 çağrıyla sınırlıdır; her istek için en fazla bir retry vardır. Anahtarlar, komutu çalıştıran aynı process environment’a sağlandığında yeniden çalıştırılmalıdır.
 
+## Harness düzeltmesi (POC-004 FIX)
+
+İlk canlı denemede Gemini’nin 400 yanıtları sonuç artifact’ında yalnızca genel hata olarak tutulduğu için gövde kanıtı yoktu. İstek, güncel Generate Content structured-output sözleşmesine göre düzeltildi: API anahtarı `x-goog-api-key` header’ında, schema `generationConfig.responseJsonSchema` alanında ve Gemini’nin desteklediği JSON Schema alt kümesine çevrilerek gönderiliyor. Bu, eski `responseSchema` alanına bağımlılığı kaldırır; ortak yerel response contract değişmez. [Gemini Generate Content API](https://ai.google.dev/api/generate-content) ve [structured output](https://ai.google.dev/gemini-api/docs/generate-content/structured-output) referans alınmıştır.
+
+Evidence artık JSON string aramasıyla değil, context’ten üretilen canonical allowlist ile doğrulanır (`facts.*`, `trends.*`, `dataQuality.*`, `signals.<code>`). Groq strict JSON Schema korunmuştur. İstekler sağlayıcı bazında sıralı ve aralıklı gönderilir; 429’da `retry-after` + 500 ms tamponu ile en fazla bir retry yapılır ([Groq rate limits](https://console.groq.com/docs/rate-limits)). Sonuç durumları HTTP failure, rate limit, invalid JSON, schema failure ve evidence-grounding failure olarak ayrılır.
+
+Yerel self-check: **9 passed** (canonical evidence, fabricated ID rejection, provider schema envelopes, retry-after parsing, failure classification, secret-safe output). Canlı rerun komutu:
+
+```powershell
+node scripts/poc/aiVehicleAssistantPoc.mjs --live
+```
+
 Harness şunları sabitler:
 
 - Aynı Türkçe system instruction ve TASK-034 benzeri context.

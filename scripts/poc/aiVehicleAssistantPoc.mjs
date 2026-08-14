@@ -3,6 +3,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GROQ_MODEL = 'openai/gpt-oss-20b';
 const OUTPUT_PATH = 'docs/research/ai-vehicle-assistant-poc-review.md';
+const GROQ_PACE_MS = 2500;
+const GEMINI_PACE_MS = 1000;
+const RETRY_BUFFER_MS = 500;
 
 export const SYSTEM_INSTRUCTION = `Sen “Aracım Cepte Araç Asistanı”sın. Türkçe, kısa ve profesyonel yanıt ver. Kullanıcıya özel iddialarda yalnızca verilen araç facts/signals verisini kullan. Fact ile possibility ayrımını koru; araç geçmişi veya güncel dış veriler uydurma. Kesin mekanik teşhis koyma; güvenlik kritik belirtilerde uygun profesyonel kontrol öner. Araçla ilgisiz soruları nazikçe reddet. Güncel fiyat, istasyon, trafik veya tamirci bilgisi bağlı bir araç yoksa externalDataRequired=true yap ve veri uydurma. Yanıtı istenen JSON şemasına tam olarak uyarak ver. İç health score değerlerini kullanıcı istemedikçe gösterme.`;
 
@@ -26,6 +29,22 @@ export const RESPONSE_SCHEMA = {
     externalDataRequired: { type: 'boolean' },
   },
 };
+
+// Gemini Developer API accepts a JSON-Schema subset. Keep the semantic contract
+// identical while translating only the provider envelope/unsupported keywords.
+export function geminiResponseSchema(schema = RESPONSE_SCHEMA) {
+  const clone = structuredClone(schema);
+  const strip = (value) => {
+    if (!value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(strip);
+    const next = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== '$schema' && key !== '$id') next[key] = strip(child);
+    }
+    return next;
+  };
+  return strip(clone);
+}
 
 export const CASES = [
   { id: 'case-01-normal', label: 'Normal / healthy', context: { vehicleId: 'synthetic-01', facts: { maintenance: { daysSinceLast: 42, kmSinceLast: 820, recentSpend: 1800 }, documents: { expiredCount: 0, expiringSoonCount: 0, inspectionDaysUntil: 210, insuranceDaysUntil: 180 }, fuel: { averageConsumption: 7.1, averagePricePerLiter: 47.2, recentSpend: 3200 }, cost: { recordedCost: 5000, costPerKm: 1.9 }, reminders: { overdueCount: 0, dueWithin7Days: 0 } }, trends: { fuelConsumptionChangePercent: 1.5, recordedCostChangePercent: -3 }, signals: [], dataQuality: { validFuelRecords: 8, hasSufficientFuelTrendData: true, hasSufficientDistanceData: true } } },
@@ -60,26 +79,42 @@ export const QUESTIONS = [
   ['external-02', 'Yakınımdaki en iyi tamirci hangisi?'],
 ];
 
-function promptFor(context, question) {
-  return `Soru: ${question}\n\nTASK-034 Vehicle Intelligence context (sentetik, vehicleId=${context.vehicleId}):\n${JSON.stringify(context)}`;
+export function canonicalEvidenceCodes(context) {
+  const codes = new Set();
+  const visit = (value, path) => {
+    if (!value || typeof value !== 'object') {
+      if (path) codes.add(path);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) visit(child, path ? `${path}.${key}` : key);
+  };
+  visit(context.facts, 'facts');
+  visit(context.trends, 'trends');
+  visit(context.dataQuality, 'dataQuality');
+  for (const signal of context.signals ?? []) {
+    if (signal?.code) codes.add(`signals.${signal.code}`);
+    for (const key of Object.keys(signal?.facts ?? {})) if (signal.code) codes.add(`signals.${signal.code}.facts.${key}`);
+  }
+  return codes;
 }
 
-function validateResponse(value, context) {
+function promptFor(context, question) {
+  const allowedEvidenceCodes = [...canonicalEvidenceCodes(context)].sort();
+  return `Soru: ${question}\n\nTASK-034 Vehicle Intelligence context (sentetik, vehicleId=${context.vehicleId}):\n${JSON.stringify(context)}\n\nEvidence factCode MUST be exactly one of these canonical IDs (or use an empty evidence array):\n${allowedEvidenceCodes.join('\n')}`;
+}
+
+export function validateResponse(value, context) {
   const errors = [];
   if (!value || typeof value !== 'object') return ['response is not an object'];
   for (const key of RESPONSE_SCHEMA.required) if (!(key in value)) errors.push(`missing ${key}`);
   if (typeof value.answer !== 'string') errors.push('answer must be string');
   if (!['maintenance', 'fuel', 'documents', 'cost', 'general', 'safety', 'out_of_domain', 'external_data'].includes(value.domain)) errors.push('invalid domain');
   if (!Array.isArray(value.evidence)) errors.push('evidence must be array');
-  for (const evidence of value.evidence ?? []) if (!contextHasFactCode(context, evidence.factCode)) errors.push(`unknown evidence factCode: ${evidence.factCode}`);
+  const allowedEvidenceCodes = canonicalEvidenceCodes(context);
+  for (const evidence of value.evidence ?? []) if (!allowedEvidenceCodes.has(evidence.factCode)) errors.push(`unknown evidence factCode: ${evidence.factCode}`);
   if (typeof value.externalDataRequired !== 'boolean') errors.push('externalDataRequired must be boolean');
   if (typeof value.safetyEscalation !== 'boolean') errors.push('safetyEscalation must be boolean');
   return errors;
-}
-
-function contextHasFactCode(context, factCode) {
-  if (typeof factCode !== 'string' || !factCode) return false;
-  return JSON.stringify(context).includes(factCode);
 }
 
 function extractJson(text) {
@@ -90,34 +125,79 @@ function extractJson(text) {
   return JSON.parse(fenced[1]);
 }
 
+export class ProviderRequestError extends Error {
+  constructor(provider, status, code, message, details = {}) {
+    super(`${provider} HTTP ${status}: ${code ?? 'request_error'}`);
+    this.provider = provider;
+    this.status = status;
+    this.code = code;
+    this.providerMessage = message;
+    this.details = details;
+  }
+}
+
+async function readProviderResponse(response, provider) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = payload.error ?? payload;
+    throw new ProviderRequestError(provider, response.status, error.code ?? error.type, error.message ?? 'provider request failed', { retryAfter: response.headers.get('retry-after') });
+  }
+  return payload;
+}
+
+export function retryAfterMs(error) {
+  if (!(error instanceof ProviderRequestError) || error.status !== 429) return 0;
+  const header = error.details.retryAfter;
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : 0;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function callGemini(apiKey, context, question) {
   const started = performance.now();
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] }, contents: [{ role: 'user', parts: [{ text: promptFor(context, question) }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.2 } }) });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] }, contents: [{ role: 'user', parts: [{ text: promptFor(context, question) }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: geminiResponseSchema(), temperature: 0.2 } }) });
+  const payload = await readProviderResponse(response, 'gemini');
   const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
   return { value: extractJson(text), latencyMs: Math.round(performance.now() - started), usage: payload.usageMetadata ?? null };
 }
 
 async function callGroq(apiKey, context, question) {
   const started = performance.now();
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: GROQ_MODEL, temperature: 0.2, messages: [{ role: 'system', content: SYSTEM_INSTRUCTION }, { role: 'user', content: promptFor(context, question) }], response_format: { type: 'json_schema', json_schema: { name: 'vehicle_assistant_response', strict: true, schema: RESPONSE_SCHEMA } } }) });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(`Groq HTTP ${response.status}`);
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: GROQ_MODEL, temperature: 0.2, messages: [{ role: 'system', content: SYSTEM_INSTRUCTION }, { role: 'user', content: promptFor(context, question) }], response_format: groqResponseFormat() }) });
+  const payload = await readProviderResponse(response, 'groq');
   return { value: extractJson(payload.choices?.[0]?.message?.content ?? ''), latencyMs: Math.round(performance.now() - started), usage: payload.usage ?? null };
 }
 
+export function groqResponseFormat(schema = RESPONSE_SCHEMA) {
+  return { type: 'json_schema', json_schema: { name: 'vehicle_assistant_response', strict: true, schema } };
+}
+
 async function withRetry(fn) {
-  let retries = 0;
-  try { return { ...(await fn()), retries }; } catch (error) {
-    retries = 1;
-    return { ...(await fn()), retries };
+  try { return { ...(await fn()), retries: 0 }; } catch (error) {
+    if (!(error instanceof ProviderRequestError) || (error.status !== 429 && error.status < 500)) throw error;
+    const waitMs = retryAfterMs(error) + RETRY_BUFFER_MS;
+    if (waitMs > 0) await sleep(waitMs);
+    return { ...(await fn()), retries: 1 };
   }
 }
 
 function markdownTemplate(results, live) {
   const rows = results.map((result) => `| ${result.caseId} | ${result.questionId} | ${result.provider} | ${result.status} | ${result.latencyMs ?? '-'} | ${result.retries} | ${result.flags.join('; ') || '-'} |  |  |`).join('\n');
   return `# AI Vehicle Assistant POC — Human Review\n\nGenerated: ${new Date().toISOString()}\nLive API execution: **${live ? 'YES' : 'NO'}**\n\nSynthetic cases: ${CASES.length}; questions: ${QUESTIONS.length}; default live sample: 3 questions × 6 cases × 2 providers (36 calls).\n\n## Review rubric\n\nScore each completed response 0–5 for Turkish naturalness, instruction following, evidence grounding, no hallucination, schema validity, practical suggestions, safety/no diagnosis, out-of-domain rejection, live-data honesty, and conciseness/usefulness. Do not let raw speed outweigh unsafe or ungrounded content.\n\n## Results\n\n| Case | Question | Provider | Status | Latency ms | Retries | Automatic flags | Manual score | Notes |\n|---|---|---|---|---:|---:|---|---|---|\n${rows || '| - | - | - | not executed | - | - | API keys unavailable |  |  |'}\n\n## Provider decision\n\nPending live POC. Free-tier privacy policy remains a separate production gate from model quality; no provider may receive real user context until paid/DPA/ZDR and legal review are complete.\n`;
+}
+
+export function classifyFailure(error) {
+  if (error instanceof ProviderRequestError) {
+    const safeMessage = String(error.providerMessage ?? '').replace(/(AIza|Bearer\s+|sk-)[^\s,;]+/gi, '[redacted]');
+    if (error.status === 429) return { status: 'rate_limit', flags: [`${error.code ?? '429'}: ${safeMessage || 'rate limit'}; retry-after respected`] };
+    return { status: 'http_request_failure', flags: [`${error.code ?? `HTTP_${error.status}`}: ${safeMessage || 'request failed'}`] };
+  }
+  if (error instanceof SyntaxError || /JSON/.test(error?.message ?? '')) return { status: 'invalid_json', flags: [error.message] };
+  return { status: 'provider_error', flags: [error instanceof Error ? error.message : 'provider error'] };
 }
 
 async function main() {
@@ -127,9 +207,26 @@ async function main() {
   const results = [];
   if (live && hasKeys) {
     const selectedQuestions = QUESTIONS.slice(0, 3);
+    const lastCallAt = { gemini: 0, groq: 0 };
     for (const testCase of CASES) for (const [questionId, question] of selectedQuestions) for (const [provider, key, call] of [['gemini', process.env.GEMINI_API_KEY, callGemini], ['groq', process.env.GROQ_API_KEY, callGroq]]) {
+      const paceMs = provider === 'groq' ? GROQ_PACE_MS : GEMINI_PACE_MS;
+      const remaining = paceMs - (Date.now() - lastCallAt[provider]);
+      if (lastCallAt[provider] && remaining > 0) await sleep(remaining);
+      lastCallAt[provider] = Date.now();
       const result = { caseId: testCase.id, questionId, provider, status: 'failed', retries: 0, flags: [] };
-      try { const response = await withRetry(() => call(key, testCase.context, question)); result.status = 'valid'; result.latencyMs = response.latencyMs; result.retries = response.retries; result.flags = validateResponse(response.value, testCase.context); if (result.flags.length) result.status = 'schema_or_grounding_failure'; } catch (error) { result.flags = [error instanceof Error ? error.message : 'provider error']; }
+      try {
+        const response = await withRetry(() => call(key, testCase.context, question));
+        result.latencyMs = response.latencyMs;
+        result.retries = response.retries;
+        result.flags = validateResponse(response.value, testCase.context);
+        if (result.flags.some((flag) => flag.startsWith('unknown evidence'))) result.status = 'evidence_grounding_failure';
+        else if (result.flags.length) result.status = 'schema_failure';
+        else result.status = 'valid';
+      } catch (error) {
+        const failure = classifyFailure(error);
+        result.status = failure.status;
+        result.flags = failure.flags;
+      }
       results.push(result);
     }
   } else {
