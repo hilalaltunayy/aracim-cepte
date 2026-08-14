@@ -163,6 +163,22 @@ Uygulama ayrıntıları için [veri sınıflandırması](docs/security/data-clas
 sunulan hukuk metinlerinin kanonik kaynakları ve üretim akışı için
 [hukuk içeriği dizinini](docs/legal/README.md) izleyin.
 
+## Supabase Security Guardrails
+
+- Expo/React Native/browser koduna veya `EXPO_PUBLIC_*` değişkenlerine Supabase secret/service-role,
+  admin tokenı ya da veritabanı credential'ı konmaz; mobil istemci yalnız publishable/anon anahtar ve RLS kullanır.
+- Privileged anahtarlar yalnız gerçekten gerekli, güvenilir server/Edge Function ortamında tutulur; tam değerler
+  log, test snapshot'ı, doküman, PR veya completion report'a yazılmaz. Sızıntı şüphesinde durun, değeri redakte edin
+  ve manuel rotation/revocation gereğini bildirin.
+- Yeni user-owned tablo RLS etkin, owner-isolated ve negatif erişim testiyle gelir. RLS, bir özelliği çalıştırmak
+  için zayıflatılamaz; istemci `user_id`, plan, entitlement, kota veya sahiplik beyanına güvenilmez.
+- `SECURITY DEFINER` fonksiyonları sabit güvenli `search_path` kullanır, `auth.uid()` ve sahiplik doğrulaması yapar,
+  yalnız gerekli role dar grant verir; privileged RPC'lere `PUBLIC`/anon execute verilmez.
+- Entitlement, kota ve diğer hassas limitler server-authoritative uygulanır; downgrade/kota enforcement kullanıcı
+  verisini otomatik silmez. Private Storage owner-scoped kalır ve mobil istemciden privileged Storage erişimi yapılmaz.
+- Supabase'e dokunan görevler yeni erişim yolu eklemeden önce mevcut RLS/RPC mimarisini inceler; güvenlik duyarlı
+  migration'lar additive olur, RLS/RPC fixture testi ve forward-recovery notu içerir.
+
 ## Gizlilik kuralları
 
 - Amaçla sınırlılık ve veri minimizasyonu varsayılan davranıştır; "ileride gerekebilir" gerekçesiyle
