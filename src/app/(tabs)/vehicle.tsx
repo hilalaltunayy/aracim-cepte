@@ -37,6 +37,12 @@ import {
 
 const sections = [
   {
+    title: 'Raporlar',
+    message: 'Gider, yakıt ve bakım görünümü',
+    icon: 'bar-chart-outline',
+    route: '/reports',
+  },
+  {
     title: 'Gövde durumu',
     message: 'Parça bazında boya ve değişim bilgileri',
     icon: 'scan-outline',
@@ -212,7 +218,7 @@ export default function VehicleScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${section.title} ekranını aç`}
               style={({ pressed }) => pressed && styles.pressed}
-              onPress={() => router.navigate(section.route)}
+              onPress={() => router.navigate(section.route as never)}
             >
               <Card style={styles.sectionCard}>
                 <View style={styles.sectionIcon}>
