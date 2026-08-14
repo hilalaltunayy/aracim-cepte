@@ -4,14 +4,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import {
   AppButton,
   AppInput,
-  DateField,
   ErrorBanner,
   FormSection,
   LoadingScreen,
   NoVehicleState,
   Screen,
   SelectField,
-  TimeField,
   confirmAction,
 } from '@/shared/components/ui';
 import { ReminderType } from '@/domain/entities';
@@ -31,6 +29,8 @@ import {
 import { getNotificationLeadDays } from '@/features/reminders/notificationPreferences';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
 import { validateReminderDateTime } from '@/features/reminders/reminderDateTimeValidation';
+import { ReminderScheduleFields } from '@/features/reminders/ReminderScheduleFields';
+import { resolveReminderTimeForForm } from '@/features/reminders/reminderSchedulePreferences';
 
 export default function ReminderEditScreen() {
   const params = useLocalSearchParams<{
@@ -50,6 +50,7 @@ export default function ReminderEditScreen() {
     loading,
     error,
     bootstrapped,
+    entitlements,
   } = useDataStore();
   const activeVehicle = vehicles.find((vehicle) => vehicle.id === activeVehicleId);
   const existing = useMemo(
@@ -61,7 +62,10 @@ export default function ReminderEditScreen() {
     existing?.title ?? requestedTitle ?? reminderTypeLabels.periodic_maintenance,
   );
   const [date, setDate] = useState<string | null>(existing?.dueDate ?? requestedDate ?? null);
-  const [time, setTime] = useState(existing?.dueTime ?? '09:00');
+  const canCustomizeTime = entitlements.customReminderTime;
+  const [time, setTime] = useState(() =>
+    resolveReminderTimeForForm(existing?.dueTime, canCustomizeTime),
+  );
   const [km, setKm] = useState(existing?.dueKilometer?.toString() ?? '');
   const [leadChoice, setLeadChoice] = useState('1');
   const [customLeadDays, setCustomLeadDays] = useState('2');
@@ -85,9 +89,7 @@ export default function ReminderEditScreen() {
   }, [existing]);
   const parsedCustomLead = customLeadDays ? parseDecimal(customLeadDays) : null;
   const selectedLeadDays =
-    leadChoice === 'custom' && parsedCustomLead !== null
-      ? parsedCustomLead
-      : Number(leadChoice);
+    leadChoice === 'custom' && parsedCustomLead !== null ? parsedCustomLead : Number(leadChoice);
   const leadDaysValid =
     Number.isInteger(selectedLeadDays) && selectedLeadDays >= 0 && selectedLeadDays <= 365;
   const isDirty = haveFormValuesChanged(
@@ -95,7 +97,7 @@ export default function ReminderEditScreen() {
       type: existing?.reminderType ?? 'periodic_maintenance',
       title: existing?.title ?? requestedTitle ?? reminderTypeLabels.periodic_maintenance,
       date: existing?.dueDate ?? requestedDate ?? null,
-      time: existing?.dueTime ?? '09:00',
+      time: resolveReminderTimeForForm(existing?.dueTime, canCustomizeTime),
       km: existing?.dueKilometer?.toString() ?? '',
       notificationLeadDays: initialLeadDays,
     },
@@ -130,9 +132,10 @@ export default function ReminderEditScreen() {
       leaveWithoutPrompt(() => {
         Alert.alert(
           'Hatırlatıcı kaydedildi',
-          notificationNotice ?? (date
-            ? 'Bildirim izni varsa cihazınızda yerel bildirim planlandı.'
-            : 'Kilometreye dayalı plan kaydedildi.'),
+          notificationNotice ??
+            (date
+              ? 'Bildirim izni varsa cihazınızda yerel bildirim planlandı.'
+              : 'Kilometreye dayalı plan kaydedildi.'),
         );
         goBackOr('/(tabs)/reminders');
       });
@@ -179,7 +182,13 @@ export default function ReminderEditScreen() {
           onChangeText={setTitle}
           error={submitted && !title.trim() ? 'Başlık gereklidir.' : null}
         />
-        <DateField label="Tarih" value={date} onChange={setDate} optional />
+        <ReminderScheduleFields
+          date={date}
+          time={time}
+          onDateChange={setDate}
+          onTimeChange={setTime}
+          canCustomizeTime={canCustomizeTime}
+        />
         {date ? (
           <>
             <SelectField
@@ -195,13 +204,10 @@ export default function ReminderEditScreen() {
                 onChangeText={setCustomLeadDays}
                 keyboardType="number-pad"
                 error={
-                  submitted && !leadDaysValid
-                    ? '0 ile 365 arasında tam gün sayısı girin.'
-                    : null
+                  submitted && !leadDaysValid ? '0 ile 365 arasında tam gün sayısı girin.' : null
                 }
               />
             ) : null}
-            <TimeField label="Hatırlatma saati" value={time} onChange={setTime} />
           </>
         ) : null}
         <AppInput
