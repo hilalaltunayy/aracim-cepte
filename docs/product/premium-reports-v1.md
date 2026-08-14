@@ -15,6 +15,17 @@ Grafik sözlüğü bilinçli olarak iki yüzeyle sınırlıdır: dönemsel topla
 kategoriler için yatay oran çubukları. İlk ekranda sürekli animasyon yoktur; mevcut kısa ekran geçişi
 dışında hareket bilgiye erişimi geciktirmez.
 
+## TASK-032B completion
+
+- Seçili araç için mevcut store verisi kullanılır; Premium çoklu araç karşılaştırması ise en fazla iki
+  ek sahip olunan araç için repository üzerinden ayrı owner-scoped okuma yapar. Sonuçlar araç bazında
+  kayıtlı maliyet, yakıt, bakım, mesafe ve km maliyetini karşılaştırır.
+- Ana maliyet trendine ek olarak yakıt ve bakım harcaması için ayrı, seçili döneme bağlı trend yüzeyleri
+  vardır. Kaydedilmiş istasyon ve bakım kalemi verisi varsa oran çubuklarıyla gösterilir.
+- KPI değerleri kısa count-up, çizgi/alanlar soldan sağa reveal, oran çubukları sıfırdan giriş ve dönem
+  değişimi tek seferlik fade/transition kullanır. Tüm grafik bucket'ları dönem uzunluğuyla sınırlıdır;
+  süreklilik gösteren timer veya loop yoktur.
+
 ## Data-quality rules
 
 - Yalnız seçili dönem ve aktif araç kayıtları hesaba katılır; başka aracın kaydı rapora giremez.

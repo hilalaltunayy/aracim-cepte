@@ -10,6 +10,7 @@ import {
   Vehicle,
   VehicleDraft,
   VehiclePhoto,
+  VehicleRecord,
 } from '@/domain/entities';
 import { AppRepository, VehicleDataBundle } from '@/domain/repositories/AppRepository';
 import { getSupabaseClient } from '@/data/supabase/client';
@@ -214,6 +215,23 @@ export class SupabaseAppRepository implements AppRepository {
     if (error) throw error;
     if (data) void reconcileAttachments().catch(() => undefined);
     return Boolean(data);
+  }
+
+  async loadVehicleReportRecords(vehicleId: string): Promise<VehicleRecord[]> {
+    const client = getSupabaseClient();
+    const [records, maintenanceItems] = await Promise.all([
+      client.from('vehicle_records').select('*').eq('vehicle_id', vehicleId).order('record_date', { ascending: false }),
+      client.from('maintenance_items').select('*').eq('vehicle_id', vehicleId),
+    ]);
+    if (records.error ?? maintenanceItems.error) throw records.error ?? maintenanceItems.error;
+    const mappedItems = (maintenanceItems.data ?? []).map(mapMaintenanceItem);
+    const itemsByRecord = new Map<string, typeof mappedItems>();
+    for (const item of mappedItems) {
+      const current = itemsByRecord.get(item.maintenanceRecordId) ?? [];
+      current.push(item);
+      itemsByRecord.set(item.maintenanceRecordId, current);
+    }
+    return (records.data ?? []).map((row) => mapRecord(row, itemsByRecord.get(row.id) ?? [], []));
   }
 
   async loadVehicleData(vehicleId: string): Promise<VehicleDataBundle> {
