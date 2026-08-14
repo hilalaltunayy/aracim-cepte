@@ -40,6 +40,7 @@ export interface AppRepository {
   ): Promise<VehiclePhoto>;
   setVehiclePhotoPrimary(id: string): Promise<VehiclePhoto>;
   deleteVehiclePhoto(id: string): Promise<boolean>;
+  loadVehicleReportRecords(vehicleId: string): Promise<VehicleRecord[]>;
   loadVehicleData(vehicleId: string): Promise<VehicleDataBundle>;
   reconcileVehicleData(
     vehicleId: string,

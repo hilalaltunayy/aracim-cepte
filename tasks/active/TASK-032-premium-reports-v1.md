@@ -38,6 +38,14 @@ Aktif araç için, mevcut Aracım Cepte görsel dilini koruyan, Premium yetkisiy
 - Bilinmeyen kilometre/litre sıfırmış gibi gösterilmez; mesafe, tüketim, km başı maliyet ve önceki dönem oranı yalnız yeterli veriyle hesaplanır.
 - Rapor yalnız mevcut store'un owner-scoped aktif araç verisini kullanır. Premium görünümü merkezi entitlement'ın fail-closed sonucuna göre kapalıdır; yeni RLS, secret veya kullanıcı verisi aktarımı yoktur.
 
+## TASK-032B completion (2026-08-14)
+
+- Hesaplamalar `vehicleReports` domain katmanında tutulur; ekran yalnız sunum modelini kullanır.
+- Premium kullanıcıda seçili aracın mevcut verisi, diğer en fazla iki sahip olunan araç için repository üzerinden ayrı owner-scoped okumalarla birleştirilir. Karşılaştırma; kayıtlı maliyet, yakıt, bakım, mesafe ve km maliyetini yalnız yeterli veri olduğunda gösterir.
+- Yakıt ve bakım trendleri aynı seçili dönemin sınırlı aylık bucket'larından üretilir. İstasyon ve bakım kalemi dağılımları kaydedilmiş normalleştirilmiş alanlara dayanır; eksik veri tahmin edilmez.
+- Motion: KPI count-up, çizgi/alan soldan sağa reveal, oran çubuklarının sıfırdan giriş animasyonu ve dönem değişiminde tek seferlik fade/transition uygulanır. Döngüsel animasyon veya timer yoktur.
+- Home, navigation, RLS, Storage ve şema değiştirilmez; migration gerekmez.
+
 ## Validation
 
 ```powershell
@@ -57,10 +65,11 @@ Bu görev yalnız additive istemci route/domain/belge değişikliğidir; commit 
 
 ## Validation evidence
 
-- 2026-08-14 / yerel: `npx vitest run src/features/reports/domain/vehicleReports.test.ts src/features/reports/components/VehicleReportsScreen.test.tsx` → 2 dosya / 5 test geçti.
+- 2026-08-14 / yerel: `npx vitest run src/features/reports/domain/vehicleReports.test.ts src/features/reports/services/vehicleReportLoader.test.ts src/features/reports/components/VehicleReportsScreen.test.tsx` → 3 dosya / 28 test geçti.
 - 2026-08-14 / yerel: değişen dosyalara yönelik ESLint ve `git diff --check` geçti.
 - `npx tsc --noEmit`, TASK-032 kaynak hatası vermedi; önceden var olan `authEmailConfirmation` ve `legalLinks` render-test tip hataları nedeniyle sıfır olmayan çıkış koduyla bitti.
 
 ## Manual Android acceptance
 
 - Free locked; Premium dolu/yakıt-only/bakım-only/seyrek/boş veri; dönem değiştirme; açık/koyu tema; küçük/geniş telefon; A→B aktif araç verisi ve geri navigasyon kontrol edilmelidir.
+- Screenshot tabanlı görsel QA, Codex in-app browser yerel Expo önizlemesine erişemediği için bu çalışma ortamında kanıtlanamadı. Android fiziksel kabulü sırasında küçük/normal/geniş telefon ve tablet genişliğinde özellikle grafik etiketleri, uzun TRY tutarları, dönem geçişi ve dört motion davranışı doğrulanmalıdır.
