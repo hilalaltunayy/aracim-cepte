@@ -253,6 +253,7 @@ function RootNavigator() {
         <Stack.Screen name="notes/edit" options={detailOptions('Not')} />
         <Stack.Screen name="documents/index" options={detailOptions('Belgeler')} />
         <Stack.Screen name="documents/edit" options={detailOptions('Belge')} />
+        <Stack.Screen name="reports" options={detailOptions('Raporlar')} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </GestureHandlerRootView>
