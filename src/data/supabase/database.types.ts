@@ -811,6 +811,19 @@ export type Database = {
         Args: { p_photo_id: string };
         Returns: boolean;
       };
+      reserve_ocr_usage: {
+        Args: { p_operation_id: string; p_purpose: string };
+        Returns: { operation_id: string; used_count: number; monthly_quota: number; period_start: string }[];
+      };
+      commit_ocr_usage: {
+        Args: { p_operation_id: string };
+        Returns: { used_count: number; monthly_quota: number; period_start: string }[];
+      };
+      release_ocr_usage: { Args: { p_operation_id: string }; Returns: boolean };
+      get_my_ocr_usage: {
+        Args: Record<PropertyKey, never>;
+        Returns: { used_count: number; monthly_quota: number; period_start: string }[];
+      };
       reconcile_my_attachment_metadata: { Args: Record<PropertyKey, never>; Returns: number };
       request_attachment_cleanup: { Args: { p_object_path: string }; Returns: boolean };
       reserve_attachment_upload: {

@@ -6,6 +6,7 @@ import { isPendingAttachment, type AttachmentListItem, type PendingAttachment } 
 import { AppButton, AppInput, ErrorBanner, SelectField } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { FUEL_STATIONS } from '../config/fuelStations';
+import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
 import type { FuelEntryState } from '../domain/fuelEntry';
 import {
   analyzeFuelReceiptAttachment,
@@ -94,6 +95,7 @@ export function FuelReceiptOcrSection({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
+  const [usage, setUsage] = useState<OcrUsage | null>(null);
 
   const start = async () => {
     const attachment = attachments.find(
@@ -105,6 +107,9 @@ export function FuelReceiptOcrSection({
       return;
     }
 
+    let operationId: string;
+    try { ({ operationId } = await reserveOcrUsage('fuel_receipt')); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.'); return; }
     setBusy(true);
     setError(null);
     setWarning(null);
@@ -112,9 +117,12 @@ export function FuelReceiptOcrSection({
     try {
       const result = await analyze(attachment);
       if (result.status === 'error') {
+        void releaseOcrUsage(operationId);
         setError(message(result.code));
         return;
       }
+      try { setUsage(await commitOcrUsage(operationId)); }
+      catch (caught) { setError(caught instanceof Error ? caught.message : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.'); return; }
       setWarning(
         result.result.inconsistent
           ? 'Fişteki tutarlar birbiriyle uyumlu görünmüyor. Kaydetmeden önce kontrol edin.'
@@ -124,6 +132,7 @@ export function FuelReceiptOcrSection({
         prepareFuelReceiptReviewSuggestions(result.result.suggestions, fuelEntry, stationBrand, recordDate),
       );
     } catch {
+      void releaseOcrUsage(operationId);
       setError('Fiş taranamadı. Bilgileri manuel girebilirsiniz.');
     } finally {
       setBusy(false);
@@ -150,6 +159,7 @@ export function FuelReceiptOcrSection({
         helper="Kamera, galeri veya dosyadan seçin. JPG ve PNG taranabilir."
       />
       {error ? <ErrorBanner message={error} /> : null}
+      {usage ? <Text style={styles.helper}>{usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı</Text> : null}
       {warning ? <Text style={styles.warning}>{warning}</Text> : null}
       {suggestions.length ? (
         <View style={styles.review} testID="fuel-receipt-ocr-review">

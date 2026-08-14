@@ -25,10 +25,10 @@ describe('attachment upload rules', () => {
       'Dosya en fazla 5 MB olabilir.',
     );
     expect(getAttachmentErrorMessage('ATTACHMENT_COUNT_QUOTA_EXCEEDED')).toBe(
-      'Ücretsiz planda en fazla 10 belge yükleyebilirsiniz.',
+      'Dosya sınırına ulaştınız.',
     );
     expect(getAttachmentErrorMessage('ATTACHMENT_BYTES_QUOTA_EXCEEDED')).toBe(
-      'Ücretsiz belge alanınız 25 MB ile sınırlıdır.',
+      'Depolama alanı sınırınıza ulaştınız.',
     );
     expect(getAttachmentErrorMessage('unknown')).toBe('Dosya yüklenemedi. Lütfen tekrar deneyin.');
   });
