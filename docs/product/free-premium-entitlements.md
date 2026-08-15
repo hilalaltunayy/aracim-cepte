@@ -1,7 +1,8 @@
 # Free / Premium entitlement foundation
 
 Bu belge TASK-028 entitlement sözleşmesinin source-of-truth belgesidir; fiyat, billing veya görünür
-paket ekranı değildir.
+paket ekranı değildir. TASK-036 ile RevenueCat satın alma/subscription kaynağı olarak eklenmiştir;
+hangi feature ve limitin açılacağını yine yalnız bu merkezi entitlement sözleşmesi belirler.
 
 ## Güvenilir plan kaynağı
 
@@ -9,6 +10,9 @@ paket ekranı değildir.
 Authenticated mobil istemci yalnız kendi satırını okuyabilir. Satır yoksa, geçersizse, süresi bittiyse
 veya okuma başarısızsa sonuç **Free** olur. Kota/Storage gibi güvenlik duyarlı server işlemleri client
 sonucuna güvenmez; planı server-side `private.effective_plan_for_user` ile yeniden çözer.
+RevenueCat CustomerInfo mobilde capability yetkisi vermez. Trusted webhook, backend-only kimlik
+doğrulamasından sonra service-role-only RPC ile bu satırı idempotent biçimde günceller. Client
+satın alma sonucu veya `isPremium` boolean'ı server kotasını değiştiremez.
 
 ## Merkezi capability sözleşmesi
 
@@ -32,3 +36,6 @@ Mechanic sharing, OBD ve bağlı araç capability'leri yalnız future-ready tan�
 TASK-035'te server-authoritative kota ve fail-closed provider gate ile etkinleştirilmiştir. Değerler
 konservatif başlangıç yapılandırmasıdır, nihai ticari
 karar değildir. Downgrade veri silmez; yalnız gelecekte limit üstü yeni aksiyonları engeller.
+
+RevenueCat kurulumu, public/secret anahtar sınırı ve post-freeze store/deployment işleri için
+[billing foundation belgesine](../billing/revenuecat-premium-foundation.md) bakın.

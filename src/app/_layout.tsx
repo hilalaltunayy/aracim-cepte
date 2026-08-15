@@ -26,6 +26,7 @@ import { useDataStore } from '@/store/dataStore';
 import { shouldRedirectExpiredSession } from '@/features/auth/sessionRouting';
 import { getReminderNotificationDestination } from '@/features/reminders/notificationRouting';
 import { AppErrorBoundary } from '@/shared/components/AppErrorBoundary';
+import { useBillingStore } from '@/features/billing/store/billingStore';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -78,6 +79,8 @@ function RootNavigator() {
   const clear = useDataStore((state) => state.clear);
   const bootstrapped = useDataStore((state) => state.bootstrapped);
   const reminders = useDataStore((state) => state.reminders);
+  const syncBillingUser = useBillingStore((state) => state.syncUser);
+  const clearBillingUser = useBillingStore((state) => state.clearUser);
   const segments = useSegments();
   const [pendingNotificationId, setPendingNotificationId] = useState<string | null>(null);
   const processingNotification = useRef(false);
@@ -94,6 +97,11 @@ function RootNavigator() {
     if (session?.user.id) void bootstrap();
     else clear();
   }, [session?.user.id, bootstrap, clear]);
+
+  useEffect(() => {
+    if (session?.user.id) void syncBillingUser(session.user.id);
+    else void clearBillingUser();
+  }, [session?.user.id, syncBillingUser, clearBillingUser]);
 
   useEffect(() => {
     if (
@@ -254,6 +262,7 @@ function RootNavigator() {
         <Stack.Screen name="documents/index" options={detailOptions('Belgeler')} />
         <Stack.Screen name="documents/edit" options={detailOptions('Belge')} />
         <Stack.Screen name="reports" options={detailOptions('Raporlar')} />
+        <Stack.Screen name="premium" options={detailOptions('Aracım Cepte Premium')} />
         <Stack.Screen name="vehicle-assistant" options={detailOptions('Araç Asistanı')} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>

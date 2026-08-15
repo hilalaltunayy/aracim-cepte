@@ -315,10 +315,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      billing_webhook_events: {
+        Row: {
+          environment: 'SANDBOX' | 'PRODUCTION' | 'UNKNOWN';
+          event_at: string;
+          event_id: string;
+          event_type: string;
+          processed_at: string;
+          product_id: string | null;
+          provider_status: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free';
+          user_id: string;
+        };
+        Insert: {
+          environment: 'SANDBOX' | 'PRODUCTION' | 'UNKNOWN';
+          event_at: string;
+          event_id: string;
+          event_type: string;
+          processed_at?: string;
+          product_id?: string | null;
+          provider_status: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free';
+          user_id: string;
+        };
+        Update: {
+          environment?: 'SANDBOX' | 'PRODUCTION' | 'UNKNOWN';
+          event_at?: string;
+          event_id?: string;
+          event_type?: string;
+          processed_at?: string;
+          product_id?: string | null;
+          provider_status?: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free';
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_entitlements: {
         Row: {
           created_at: string;
           plan_id: 'free' | 'premium';
+          provider: 'revenuecat' | null;
+          provider_event_at: string | null;
+          provider_expires_at: string | null;
+          provider_product_id: string | null;
+          provider_status: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free' | null;
+          provider_will_renew: boolean | null;
           source: 'billing' | 'support' | 'migration';
           updated_at: string;
           user_id: string;
@@ -327,6 +366,12 @@ export type Database = {
         Insert: {
           created_at?: string;
           plan_id?: 'free' | 'premium';
+          provider?: 'revenuecat' | null;
+          provider_event_at?: string | null;
+          provider_expires_at?: string | null;
+          provider_product_id?: string | null;
+          provider_status?: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free' | null;
+          provider_will_renew?: boolean | null;
           source?: 'billing' | 'support' | 'migration';
           updated_at?: string;
           user_id: string;
@@ -335,6 +380,12 @@ export type Database = {
         Update: {
           created_at?: string;
           plan_id?: 'free' | 'premium';
+          provider?: 'revenuecat' | null;
+          provider_event_at?: string | null;
+          provider_expires_at?: string | null;
+          provider_product_id?: string | null;
+          provider_status?: 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free' | null;
+          provider_will_renew?: boolean | null;
           source?: 'billing' | 'support' | 'migration';
           updated_at?: string;
           user_id?: string;
@@ -793,6 +844,20 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      process_revenuecat_subscription_event: {
+        Args: {
+          p_environment: string;
+          p_event_at: string;
+          p_event_id: string;
+          p_event_type: string;
+          p_expires_at: string | null;
+          p_product_id: string | null;
+          p_status: string;
+          p_user_id: string;
+          p_will_renew: boolean | null;
+        };
+        Returns: string;
+      };
       create_vehicle_with_limit: {
         Args: {
           p_body_type: Database['public']['Enums']['body_type'];
