@@ -93,6 +93,12 @@ planlı deployment penceresinde ayrıca uygulanacaktır. Ayrıntılı sıra
 Bu backlog mevcut 12 kullanıcılı tester ortamının, yayınlanmış AAB'nin veya Supabase remote
 durumunun TASK-036 sırasında değiştiği anlamına gelmez.
 
+EPDK fuel-price foundation da kaynakta fail-closed durumdadır. Resmi XML kaynaklarının şema ve
+ticari yeniden kullanım/atıf/cache koşulları yazılı olarak onaylanmadan canlı trafik, trusted cache
+veya Edge lookup etkinleştirilmeyecektir. TASK-039 bu nedenle mevcut tester ortamını, yayınlanmış
+AAB'yi veya remote EPDK/Supabase durumunu değiştirmez. Ayrıntı
+[EPDK fuel-price foundation](product/epdk-fuel-price-foundation.md) belgesindedir.
+
 ## Sonraki kontrollü adım
 
 Closed Testing build 2 için Android acceptance kanıtını tamamla; auth callback ve kritik V1
