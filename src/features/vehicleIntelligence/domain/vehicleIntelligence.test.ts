@@ -252,6 +252,9 @@ describe('vehicle intelligence foundation', () => {
     const result = snapshot({ records: [record({ description: 'private note that must not leave the domain' })], documents: [document({ note: 'private document note' })] });
     const context = buildVehicleAssistantContext(result);
     expect(context.highPrioritySignals).toEqual(result.signals.slice(0, 5));
+    expect(context.vehicle.currentOdometer).toBe(result.facts.currentOdometer);
+    expect(context.trends).toEqual(result.trends);
+    expect(context.dataQuality.availableScoreDomains).toBe(result.dataQuality.availableScoreDomains.join(','));
     expect(context).not.toHaveProperty('records');
     expect(JSON.stringify(context)).not.toContain('private note');
     expect(JSON.stringify(context)).not.toContain('attachments');

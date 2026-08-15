@@ -37,34 +37,46 @@ import {
 
 const sections = [
   {
+    title: 'Araç Asistanı',
+    message: 'Araç verilerinize dayalı sorular ve açıklamalar',
+    icon: 'sparkles-outline',
+    route: '/vehicle-assistant',
+    showCount: false,
+  },
+  {
     title: 'Raporlar',
     message: 'Gider, yakıt ve bakım görünümü',
     icon: 'bar-chart-outline',
     route: '/reports',
+    showCount: true,
   },
   {
     title: 'Gövde durumu',
     message: 'Parça bazında boya ve değişim bilgileri',
     icon: 'scan-outline',
     route: '/body-condition',
+    showCount: true,
   },
   {
     title: 'Ekspertiz raporları',
     message: 'Raporlar ve güvenli ekleri',
     icon: 'clipboard-outline',
     route: '/expertise',
+    showCount: true,
   },
   {
     title: 'Araç notları',
     message: 'Aracınıza özel sade notlar',
     icon: 'create-outline',
     route: '/notes',
+    showCount: true,
   },
   {
     title: 'Belgeler',
     message: 'Poliçe, muayene ve evrak planı',
     icon: 'documents-outline',
     route: '/documents',
+    showCount: true,
   },
 ] as const;
 
@@ -168,7 +180,9 @@ export default function VehicleScreen() {
         </View>
         <View style={styles.vehicleInfo}>
           <Text style={styles.cardTitle}>Araç ekle</Text>
-          <Text style={styles.meta}>{capacity.current} / {capacity.maximum} araç</Text>
+          <Text style={styles.meta}>
+            {capacity.current} / {capacity.maximum} araç
+          </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
       </Pressable>
@@ -228,7 +242,7 @@ export default function VehicleScreen() {
                   <Text style={styles.cardTitle}>{section.title}</Text>
                   <Text style={styles.meta}>{section.message}</Text>
                 </View>
-                <Text style={styles.count}>{count}</Text>
+                {section.showCount ? <Text style={styles.count}>{count}</Text> : null}
                 <Ionicons name="chevron-forward" size={20} color={colors.muted} />
               </Card>
             </Pressable>

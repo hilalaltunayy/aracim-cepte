@@ -38,7 +38,7 @@ export const PLAN_ENTITLEMENTS: Readonly<Record<PlanId, Readonly<PlanEntitlement
     maxStorageBytesPerUser: 25 * 1024 * 1024,
     maxVehiclePhotos: 1,
     advancedReports: false,
-    aiMonthlyQuota: 0,
+    aiMonthlyQuota: 3,
     fuelPriceAlerts: false,
     advancedNotifications: false,
     customReminderTime: false,
@@ -56,7 +56,7 @@ export const PLAN_ENTITLEMENTS: Readonly<Record<PlanId, Readonly<PlanEntitlement
     maxStorageBytesPerUser: 100 * 1024 * 1024,
     maxVehiclePhotos: 5,
     advancedReports: true,
-    aiMonthlyQuota: 30,
+    aiMonthlyQuota: 50,
     fuelPriceAlerts: true,
     advancedNotifications: true,
     customReminderTime: true,
@@ -105,4 +105,15 @@ export function getOcrInvocationPolicy(
   entitlements: Pick<PlanEntitlements, 'planId' | 'ocrMonthlyQuota'> = FREE_ENTITLEMENTS,
 ) {
   return { planId: entitlements.planId, monthlyQuota: entitlements.ocrMonthlyQuota } as const;
+}
+
+/** Display-only policy. The Edge Function and database remain the authorization boundary. */
+export function getAiAssistantPolicy(
+  entitlements: Pick<PlanEntitlements, 'planId' | 'aiMonthlyQuota'> = FREE_ENTITLEMENTS,
+) {
+  return {
+    planId: entitlements.planId,
+    monthlyQuota: entitlements.aiMonthlyQuota,
+    enabled: entitlements.aiMonthlyQuota > 0,
+  } as const;
 }

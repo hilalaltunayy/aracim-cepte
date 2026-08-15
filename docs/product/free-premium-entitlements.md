@@ -14,18 +14,21 @@ sonucuna güvenmez; planı server-side `private.effective_plan_for_user` ile yen
 
 `src/features/entitlements/domain/entitlements.ts` tek kaynaktır. Gelecek ekranlar dağınık
 `isPremium` koşulları eklemez; capability kullanır. `canCreateVehicle` yeni araç aksiyonlarının,
-`getOcrInvocationPolicy` ise TASK-031 OCR kullanım sayımının merkezi hook'udur.
+`getOcrInvocationPolicy` TASK-031 OCR, `getAiAssistantPolicy` ise TASK-035 AI kullanımının merkezi
+istemci görünüm hook'udur. Gerçek enforcement server-side plan resolver ile yapılır.
 
 | Capability                                                  |        Free |                Premium |
 | ----------------------------------------------------------- | ----------: | ---------------------: |
 | Yeni araç                                                   |           1 |                      3 |
-| OCR aylık bütçe (henüz enforce edilmez)                     |           3 |                     30 |
+| OCR aylık başarılı tarama                                   |           3 |                     30 |
 | Kayıt başına ek dosya / byte                                |   5 / 15 MB |             10 / 30 MB |
 | Kullanıcı Storage bütçesi                                   |       25 MB |                 100 MB |
 | Araç fotoğrafı                                              |           1 |                      5 |
 | Gelişmiş rapor, yakıt fiyat uyarısı, gelişmiş bildirim/rota |       Hayır | Özellik uygulandığında |
 | Yeni hatırlatıcı için özel bildirim saati                   | 09:00 sabit |                    Var |
+| Araç Asistanı aylık başarılı yanıt                          |           3 |                     50 |
 
-AI, mechanic sharing, OBD ve bağlı araç capability'leri yalnız future-ready tanımdır; TASK-028
-bunları veya Premium UI'ı uygulamaz. Değerler konservatif başlangıç yapılandırmasıdır, nihai ticari
+Mechanic sharing, OBD ve bağlı araç capability'leri yalnız future-ready tanımdır. AI capability'si
+TASK-035'te server-authoritative kota ve fail-closed provider gate ile etkinleştirilmiştir. Değerler
+konservatif başlangıç yapılandırmasıdır, nihai ticari
 karar değildir. Downgrade veri silmez; yalnız gelecekte limit üstü yeni aksiyonları engeller.

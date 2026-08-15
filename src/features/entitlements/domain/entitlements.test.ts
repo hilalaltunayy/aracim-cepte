@@ -3,6 +3,7 @@ import {
   FREE_ENTITLEMENTS,
   PLAN_ENTITLEMENTS,
   canCreateVehicle,
+  getAiAssistantPolicy,
   getEntitlements,
   getOcrInvocationPolicy,
   loadEntitlementsWithFallback,
@@ -56,6 +57,14 @@ describe('premium entitlement foundation', () => {
     expect(getOcrInvocationPolicy(PLAN_ENTITLEMENTS.premium)).toEqual({
       planId: 'premium',
       monthlyQuota: 30,
+    });
+  });
+  it('exposes centralized AI quotas without becoming the server authority', () => {
+    expect(getAiAssistantPolicy()).toEqual({ planId: 'free', monthlyQuota: 3, enabled: true });
+    expect(getAiAssistantPolicy(PLAN_ENTITLEMENTS.premium)).toEqual({
+      planId: 'premium',
+      monthlyQuota: 50,
+      enabled: true,
     });
   });
   it('fails closed when loading plan truth fails', async () => {
