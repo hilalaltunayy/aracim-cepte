@@ -23,9 +23,9 @@ Harness şunları sabitler:
 
 - Aynı Türkçe system instruction ve TASK-034 benzeri context.
 - Aynı JSON Schema: `answer`, `domain`, `severity`, `evidence`, `suggestions`, `safetyEscalation`, `externalDataRequired`.
-- Gemini `gemini-2.5-flash` REST structured output.
+- Gemini `gemini-3.6-flash` Interactions API (`store=false`, response_format JSON Schema).
 - Groq `openai/gpt-oss-20b` strict JSON Schema.
-- Latency, usage, retry, HTTP hata ve schema/grounding flag’leri.
+- Sekiz eşleştirilmiş temsilî test (genel, bakım, yakıt, kanıt, güvenlik, araç-dışı ve canlı-veri); sağlayıcı başına 8 test / toplam 16 çağrı hedefi. Latency, usage, retry, HTTP hata ve schema/grounding flag’leri.
 - Evidence `factCode`’larının verilen sentetik context içinde bulunması.
 
 ## Sentetik kapsam

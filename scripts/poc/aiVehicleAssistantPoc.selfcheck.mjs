@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   CASES,
+  REPRESENTATIVE_TESTS,
   RESPONSE_SCHEMA,
   ProviderRequestError,
   canonicalEvidenceCodes,
   classifyFailure,
   geminiResponseSchema,
+  geminiInteractionRequest,
+  parseGeminiInteractionResponse,
   groqResponseFormat,
   retryAfterMs,
   validateResponse,
+  summarizeResults,
 } from './aiVehicleAssistantPoc.mjs';
 
 const context = CASES[1].context;
@@ -20,11 +24,19 @@ assert.equal(validateResponse({ answer: 'Bakım yaklaşıyor.', domain: 'mainten
 assert(validateResponse({ answer: 'Uydurma.', domain: 'maintenance', severity: 'low', evidence: [{ factCode: 'facts.engine.failure', label: 'X', value: '1' }], suggestions: [], safetyEscalation: false, externalDataRequired: false }, context).some((error) => error.includes('unknown evidence')));
 assert.deepEqual(geminiResponseSchema().required, RESPONSE_SCHEMA.required);
 assert.equal(geminiResponseSchema().additionalProperties, false);
+const geminiRequest = geminiInteractionRequest(context, 'Sentetik soru');
+assert.equal(geminiRequest.model, 'gemini-3.6-flash');
+assert.equal(geminiRequest.store, false);
+assert.equal(geminiRequest.response_format.type, 'text');
+assert(!('temperature' in geminiRequest.generation_config));
+assert.equal(parseGeminiInteractionResponse({ output_text: JSON.stringify({ answer: 'x' }) }).answer, 'x');
 assert.equal(groqResponseFormat().json_schema.strict, true);
 const rateError = new ProviderRequestError('groq', 429, 'rate_limit', 'slow down', { retryAfter: '2' });
 assert.equal(retryAfterMs(rateError), 2000);
 assert.equal(classifyFailure(rateError).status, 'rate_limit');
 assert.equal(classifyFailure(new SyntaxError('invalid JSON')).status, 'invalid_json');
+assert.equal(REPRESENTATIVE_TESTS.length, 14);
+assert.equal(summarizeResults([]).gemini.attempted, 0);
 const artifact = await readFile('docs/research/ai-vehicle-assistant-poc-review.md', 'utf8');
 assert(!/AIza|Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]/i.test(artifact));
 console.log('POC self-check: 9 passed');
