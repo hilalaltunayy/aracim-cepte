@@ -34,7 +34,7 @@ not fetch on render, auto-save, or create an elevated price dashboard.
 1. **Completed:** Inspect Smart Fuel, entitlement/feature-flag conventions and official EPDK source catalog.
 2. **Completed:** Implemented isolated normalized contracts, EPDK parsing/normalization, bounded cache and explicit Smart Fuel suggestion behavior.
 3. **Completed:** Added targeted fixture/render tests and technical decision documentation.
-4. **In progress:** Complete the final scoped validation review, then commit, push, PR and safe merge to `develop`.
+4. **Completed:** Scoped validation, final diff/privacy review, commit, PR and safe merge to `develop` completed.
 
 ## Risks and mitigations
 
