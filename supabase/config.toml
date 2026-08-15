@@ -446,3 +446,10 @@ entrypoint = "./functions/reconcile-attachments/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/delete-account/*.html" ]
+
+[functions.vehicle-ai-assistant]
+enabled = true
+# The current Edge wrapper validates the user token and creates an RLS-scoped client.
+verify_jwt = false
+import_map = "./functions/vehicle-ai-assistant/deno.json"
+entrypoint = "./functions/vehicle-ai-assistant/index.ts"

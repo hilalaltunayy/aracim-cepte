@@ -76,6 +76,45 @@ export type Database = {
           },
         ];
       };
+      ai_usage_reservations: {
+        Row: {
+          created_at: string;
+          expires_at: string;
+          id: string;
+          operation_id: string;
+          period_start: string;
+          responded_at: string | null;
+          status: string;
+          updated_at: string;
+          user_id: string;
+          vehicle_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at: string;
+          id?: string;
+          operation_id: string;
+          period_start: string;
+          responded_at?: string | null;
+          status: string;
+          updated_at?: string;
+          user_id: string;
+          vehicle_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string;
+          id?: string;
+          operation_id?: string;
+          period_start?: string;
+          responded_at?: string | null;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+          vehicle_id?: string;
+        };
+        Relationships: [];
+      };
       body_part_condition_values: {
         Row: {
           body_part_condition_id: string;
@@ -813,7 +852,12 @@ export type Database = {
       };
       reserve_ocr_usage: {
         Args: { p_operation_id: string; p_purpose: string };
-        Returns: { operation_id: string; used_count: number; monthly_quota: number; period_start: string }[];
+        Returns: {
+          operation_id: string;
+          used_count: number;
+          monthly_quota: number;
+          period_start: string;
+        }[];
       };
       commit_ocr_usage: {
         Args: { p_operation_id: string };
@@ -821,6 +865,24 @@ export type Database = {
       };
       release_ocr_usage: { Args: { p_operation_id: string }; Returns: boolean };
       get_my_ocr_usage: {
+        Args: Record<PropertyKey, never>;
+        Returns: { used_count: number; monthly_quota: number; period_start: string }[];
+      };
+      reserve_ai_usage: {
+        Args: { p_operation_id: string; p_vehicle_id: string };
+        Returns: {
+          operation_id: string;
+          used_count: number;
+          monthly_quota: number;
+          period_start: string;
+        }[];
+      };
+      commit_ai_usage: {
+        Args: { p_operation_id: string };
+        Returns: { used_count: number; monthly_quota: number; period_start: string }[];
+      };
+      release_ai_usage: { Args: { p_operation_id: string }; Returns: boolean };
+      get_my_ai_usage: {
         Args: Record<PropertyKey, never>;
         Returns: { used_count: number; monthly_quota: number; period_start: string }[];
       };
