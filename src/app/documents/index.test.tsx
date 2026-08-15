@@ -21,6 +21,7 @@ vi.mock('@/shared/theme', () => {
   const theme = { colors };
   return {
     spacing: new Proxy({}, { get: () => 8 }),
+    radii: new Proxy({}, { get: () => 12 }),
     typography: new Proxy({}, { get: () => ({}) }),
     useThemedStyles: (factory: (value: typeof theme) => unknown) => factory(theme),
   };

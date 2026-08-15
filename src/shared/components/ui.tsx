@@ -24,6 +24,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   fontFamilies,
   getButtonLoadingIndicatorColor,
+  layout,
   radii,
   spacing,
   typography,
@@ -110,8 +111,8 @@ export function FadeIn({ children }: PropsWithChildren) {
   const [translateY] = useState(() => new Animated.Value(10));
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 260, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
   }, [opacity, translateY]);
   return (
@@ -192,10 +193,10 @@ export function AppButton({
       disabled={disabled || loading}
       onPress={onPress}
       onPressIn={() =>
-        Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, speed: 30 }).start()
+        Animated.timing(scale, { toValue: 0.98, duration: 90, useNativeDriver: true }).start()
       }
       onPressOut={() =>
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30 }).start()
+        Animated.timing(scale, { toValue: 1, duration: 130, useNativeDriver: true }).start()
       }
       accessibilityRole="button"
       accessibilityLabel={accessibility.label}
@@ -383,6 +384,7 @@ export function BottomSheet({
           style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
           onPress={(event) => event.stopPropagation()}
         >
+          <View style={styles.modalHandle} accessible={false} />
           <View style={styles.bottomSheetHeading}>
             <Text style={styles.modalTitle}>{title}</Text>
             <Pressable
@@ -435,6 +437,7 @@ export function ActionSheet<T extends string>({
           accessibilityViewIsModal
           style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
         >
+          <View style={styles.modalHandle} accessible={false} />
           <Text style={styles.modalTitle}>{title}</Text>
           <ScrollView
             testID="action-sheet-options"
@@ -530,6 +533,7 @@ export function SelectField<T extends string>({
             accessibilityViewIsModal
             style={[styles.modalCard, { maxHeight: modalLayout.maxHeight }]}
           >
+            <View style={styles.modalHandle} accessible={false} />
             <Text style={styles.modalTitle}>{visibleLabel}</Text>
             <ScrollView
               testID="selection-modal-options"
@@ -774,10 +778,14 @@ export function EmptyState({
   title,
   message,
   icon = 'leaf-outline',
+  actionLabel,
+  onAction,
 }: {
   title: string;
   message: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  actionLabel?: string;
+  onAction?: () => void;
 }) {
   const { colors } = useAppTheme();
   const styles = useStyles();
@@ -788,6 +796,9 @@ export function EmptyState({
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyMessage}>{message}</Text>
+      {actionLabel && onAction ? (
+        <AppButton title={actionLabel} variant="secondary" compact onPress={onAction} />
+      ) : null}
     </Card>
   );
 }
@@ -807,12 +818,21 @@ export function NoVehicleState({ onCreate }: { onCreate: () => void }) {
 }
 
 export function LoadingScreen() {
-  const { colors } = useAppTheme();
   const styles = useStyles();
   return (
-    <SafeAreaView style={styles.loading}>
-      <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.loadingText}>Aracınız hazırlanıyor…</Text>
+    <SafeAreaView
+      accessibilityRole="progressbar"
+      accessibilityLabel="Yükleniyor"
+      style={styles.loading}
+    >
+      <View style={styles.loadingHeader} />
+      <View style={styles.loadingHero} />
+      <View style={styles.loadingLineShort} />
+      <View style={styles.loadingRow}>
+        <View style={styles.loadingTile} />
+        <View style={styles.loadingTile} />
+      </View>
+      <Text style={styles.loadingText}>İçerik hazırlanıyor…</Text>
     </SafeAreaView>
   );
 }
@@ -825,7 +845,13 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
       <Ionicons name="alert-circle-outline" size={20} color={colors.danger} accessible={false} />
       <Text style={styles.errorBannerText}>{message}</Text>
       {onRetry ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Tekrar dene" onPress={onRetry}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tekrar dene"
+          hitSlop={8}
+          style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+          onPress={onRetry}
+        >
           <Text style={styles.retry}>Tekrar dene</Text>
         </Pressable>
       ) : null}
@@ -891,9 +917,9 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       maxWidth: 720,
       boxSizing: 'border-box',
       alignSelf: 'center',
-      paddingHorizontal: 20,
+      paddingHorizontal: layout.screenGutter,
       paddingTop: spacing.lg,
-      gap: 20,
+      gap: layout.sectionGap,
     },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerText: { flex: 1, gap: spacing.xs },
@@ -904,7 +930,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       borderRadius: radii.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 18,
+      padding: layout.cardPadding,
       ...shadows.card,
     },
     formSection: { gap: 18 },
@@ -912,7 +938,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     formSectionTitle: { color: colors.textPrimary, ...typography.cardTitle },
     formSectionDescription: { color: colors.textSecondary, ...typography.caption },
     buttonWrap: { minHeight: 52, width: '100%' },
-    buttonWrapCompact: { width: 'auto', minHeight: 42 },
+    buttonWrapCompact: { width: 'auto', minHeight: layout.minimumTouchTarget },
     button: {
       minHeight: 52,
       paddingHorizontal: spacing.xl,
@@ -922,7 +948,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       flexDirection: 'row',
       gap: spacing.sm,
     },
-    buttonCompact: { minHeight: 42, paddingHorizontal: spacing.md },
+    buttonCompact: { minHeight: layout.minimumTouchTarget, paddingHorizontal: spacing.md },
     pressed: { opacity: 0.78 },
     disabled: { backgroundColor: colors.disabledSurface },
     button_primary: { backgroundColor: colors.primaryAction },
@@ -1000,6 +1026,17 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       borderRadius: radii.xl,
       padding: spacing.lg,
       gap: spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      ...shadows.card,
+    },
+    modalHandle: {
+      alignSelf: 'center',
+      width: 38,
+      height: 4,
+      borderRadius: radii.pill,
+      backgroundColor: colors.borderStrong,
+      marginBottom: spacing.xs,
     },
     modalTitle: { color: colors.textPrimary, ...typography.sectionTitle },
     bottomSheetHeading: {
@@ -1076,11 +1113,36 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     loading: {
       flex: 1,
       backgroundColor: colors.screenBackground,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.md,
+      paddingHorizontal: layout.screenGutter,
+      paddingTop: spacing.xxl,
+      gap: spacing.lg,
     },
-    loadingText: { color: colors.textSecondary, ...typography.bodyMedium },
+    loadingHeader: {
+      width: '42%',
+      height: 26,
+      borderRadius: radii.sm,
+      backgroundColor: colors.neutralSurface,
+    },
+    loadingHero: {
+      width: '100%',
+      height: 180,
+      borderRadius: radii.xl,
+      backgroundColor: colors.neutralSurface,
+    },
+    loadingLineShort: {
+      width: '58%',
+      height: 18,
+      borderRadius: radii.sm,
+      backgroundColor: colors.neutralSurface,
+    },
+    loadingRow: { flexDirection: 'row', gap: spacing.sm },
+    loadingTile: {
+      flex: 1,
+      height: 92,
+      borderRadius: radii.lg,
+      backgroundColor: colors.neutralSurface,
+    },
+    loadingText: { color: colors.textSecondary, ...typography.caption },
     errorBanner: {
       backgroundColor: colors.errorSurface,
       borderRadius: radii.md,
@@ -1090,6 +1152,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       gap: spacing.sm,
     },
     errorBannerText: { color: colors.textPrimary, flex: 1, ...typography.caption },
+    retryButton: { minHeight: 36, justifyContent: 'center' },
     retry: { color: colors.error, ...typography.label },
     badge: {
       alignSelf: 'flex-start',

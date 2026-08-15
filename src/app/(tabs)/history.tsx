@@ -67,19 +67,24 @@ export default function HistoryScreen() {
 
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
-    filters: { flexDirection: 'row', gap: spacing.sm },
-    pill: {
-      flex: 1,
-      minHeight: 42,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: radii.pill,
+    filters: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      padding: spacing.xs,
+      borderRadius: radii.lg,
       backgroundColor: colors.cardBackground,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
-    pillSelected: { backgroundColor: colors.primaryAction, borderColor: colors.primaryAction },
+    pill: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.md,
+    },
+    pillSelected: { backgroundColor: colors.paleAqua },
     pillText: { color: colors.muted, fontFamily: fontFamilies.semibold, fontSize: 12 },
-    pillTextSelected: { color: colors.onPrimary },
+    pillTextSelected: { color: colors.primaryAction },
     list: { gap: spacing.md },
   });

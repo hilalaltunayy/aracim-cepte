@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { router, type Href } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
@@ -39,6 +47,7 @@ function SettingsRow({
   danger,
   disabled = false,
   loading = false,
+  last = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
@@ -47,6 +56,7 @@ function SettingsRow({
   danger?: boolean;
   disabled?: boolean;
   loading?: boolean;
+  last?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
@@ -55,7 +65,11 @@ function SettingsRow({
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={onPress ? title : undefined}
       accessibilityState={onPress ? { disabled, busy: loading } : undefined}
-      style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        !last && styles.rowDivider,
+        pressed && onPress && styles.rowPressed,
+      ]}
       onPress={onPress}
       disabled={!onPress || disabled}
     >
@@ -86,7 +100,13 @@ const themeIcons: Record<ThemePreference, keyof typeof Ionicons.glyphMap> = {
   dark: 'moon-outline',
 };
 
-function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) {
+function ThemeOptionRow({
+  option,
+  last = false,
+}: {
+  option: (typeof THEME_OPTIONS)[number];
+  last?: boolean;
+}) {
   const { colors, preference, setPreference } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const selected = preference === option.value;
@@ -100,6 +120,7 @@ function ThemeOptionRow({ option }: { option: (typeof THEME_OPTIONS)[number] }) 
       onPress={() => void setPreference(option.value)}
       style={({ pressed }) => [
         styles.row,
+        !last && styles.rowDivider,
         selected && styles.themeRowSelected,
         pressed && styles.rowPressed,
       ]}
@@ -143,11 +164,14 @@ export default function SettingsScreen() {
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const [permission, setPermission] = useState('unknown');
   const previousPermission = useRef('unknown');
-  const applyPermission = useCallback((status: string) => {
-    if (status === 'granted' && previousPermission.current === 'denied') void refresh();
-    previousPermission.current = status;
-    setPermission(status);
-  }, [refresh]);
+  const applyPermission = useCallback(
+    (status: string) => {
+      if (status === 'granted' && previousPermission.current === 'denied') void refresh();
+      previousPermission.current = status;
+      setPermission(status);
+    },
+    [refresh],
+  );
   const updatePermission = useCallback(async () => {
     const status = (await Notifications.getPermissionsAsync()).status;
     applyPermission(status);
@@ -198,8 +222,12 @@ export default function SettingsScreen() {
       <SectionHeader title="Görünüm" />
       <View accessibilityRole="radiogroup">
         <Card style={styles.card}>
-          {THEME_OPTIONS.map((option) => (
-            <ThemeOptionRow key={option.value} option={option} />
+          {THEME_OPTIONS.map((option, index) => (
+            <ThemeOptionRow
+              key={option.value}
+              option={option}
+              last={index === THEME_OPTIONS.length - 1}
+            />
           ))}
         </Card>
       </View>
@@ -235,6 +263,7 @@ export default function SettingsScreen() {
           onPress={removeAccount}
           disabled={busy}
           loading={busy}
+          last
         />
       </Card>
       <SectionHeader title="Araç" />
@@ -248,6 +277,7 @@ export default function SettingsScreen() {
               ? () => router.push({ pathname: '/vehicle/edit', params: { id: vehicle.id } })
               : undefined
           }
+          last
         />
       </Card>
       <SectionHeader title="Bildirimler" />
@@ -269,6 +299,7 @@ export default function SettingsScreen() {
                 ? () => void openNotificationSettings()
                 : undefined
           }
+          last
         />
       </Card>
       <SectionHeader title="Veri yönetimi" />
@@ -304,6 +335,7 @@ export default function SettingsScreen() {
           onPress={() => clearData('documents', 'Tüm belgeleri sil')}
           disabled={loading}
           loading={loading}
+          last={!vehicle}
         />
         {vehicle ? (
           <SettingsRow
@@ -325,6 +357,7 @@ export default function SettingsScreen() {
             }
             disabled={loading}
             loading={loading}
+            last
           />
         ) : null}
       </Card>
@@ -340,6 +373,7 @@ export default function SettingsScreen() {
           icon="code-slash-outline"
           title={DEVELOPER_INFO.title}
           subtitle={DEVELOPER_INFO.name}
+          last
         />
       </Card>
       <Card style={styles.about}>
@@ -367,6 +401,8 @@ const createStyles = ({ colors }: AppTheme) =>
       alignItems: 'center',
       gap: spacing.md,
       paddingHorizontal: spacing.md,
+    },
+    rowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },

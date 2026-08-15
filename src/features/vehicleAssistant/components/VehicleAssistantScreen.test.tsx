@@ -37,6 +37,7 @@ vi.mock('@/shared/components/ui', async () => {
     Card: host('Card'),
     Screen: host('Screen'),
     SectionHeader: host('SectionHeader'),
+    StatusBadge: host('StatusBadge'),
   };
 });
 
@@ -104,16 +105,25 @@ describe('VehicleAssistantScreen', () => {
     expect(onAsk).toHaveBeenCalledWith('Bakım durumum nedir?');
     expect(texts(renderer)).toContain(success.response.answer);
     expect(texts(renderer)).toContain('Bu ay 2 / 3 soru kaldı');
+    expect(renderer.root.find((node) => String(node.type) === 'StatusBadge').props.label).toBe(
+      'Dikkat gerektirir',
+    );
   });
 
-  it('renders human-readable evidence and suggestions instead of raw JSON', async () => {
+  it('discloses human-readable evidence on demand and keeps suggestions out of raw JSON', async () => {
     const renderer = await mount({ ...base, initialQuota: success.quota });
     const input = renderer.root.find((node) => String(node.type) === 'AppInput');
     await act(async () => input.props.onChangeText('Bunu neye göre söyledin?'));
     await act(async () =>
       renderer.root.find((node) => String(node.type) === 'AppButton').props.onPress(),
     );
-    expect(texts(renderer)).toContain('Kullanılan araç verileri');
+    expect(texts(renderer)).toContain('Bu cevabı neye göre verdim?');
+    expect(texts(renderer)).not.toContain('Son bakımdan beri');
+    await act(async () =>
+      renderer.root
+        .find((node) => node.props.accessibilityLabel === 'Bu cevabı neye göre verdim?')
+        .props.onPress(),
+    );
     expect(texts(renderer)).toContain('Son bakımdan beri');
     expect(texts(renderer)).toContain('Önerilen sonraki adımlar');
   });

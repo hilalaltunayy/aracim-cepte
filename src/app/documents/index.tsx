@@ -9,7 +9,7 @@ import {
   getDocumentArchiveCounts,
   type DocumentArchiveFilter,
 } from '@/features/documents/domain/documentArchive';
-import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import { radii, spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 
 const FILTERS: readonly { value: DocumentArchiveFilter; label: string }[] = [
   { value: 'active', label: 'Aktif' },
@@ -109,7 +109,7 @@ const createStyles = ({ colors }: AppTheme) =>
       flexDirection: 'row',
       gap: spacing.xs,
       padding: spacing.xs,
-      borderRadius: 14,
+      borderRadius: radii.lg,
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
@@ -118,7 +118,7 @@ const createStyles = ({ colors }: AppTheme) =>
       flex: 1,
       minHeight: 48,
       paddingHorizontal: spacing.xs,
-      borderRadius: 10,
+      borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 4,
