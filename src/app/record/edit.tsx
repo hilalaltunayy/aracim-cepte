@@ -42,6 +42,7 @@ import {
   validateFuelEntry,
 } from '@/features/fuel/domain/fuelEntry';
 import { FUEL_STATIONS, type FuelStationId } from '@/features/fuel/config/fuelStations';
+import { FuelPriceReferenceSection } from '@/features/fuelPrice/components/FuelPriceReferenceSection';
 import { FuelReceiptOcrSection } from '@/features/fuel/ocr/FuelReceiptOcrSection';
 import { MaintenanceDetailsSection } from '@/features/maintenance/components/MaintenanceDetailsSection';
 import {
@@ -461,6 +462,13 @@ export default function RecordEditScreen() {
                 ...FUEL_STATIONS.map(({ id, label }) => ({ value: id, label })),
               ]}
             />
+            <FuelPriceReferenceSection
+              vehicleFuelType={vehicle.fuelType}
+              stationBrand={stationBrand}
+              fuelEntry={fuelEntry}
+              onFuelEntryChange={setFuelEntry}
+              disabled={loading || submitting}
+            />
             <FuelReceiptOcrSection
               fuelEntry={fuelEntry}
               stationBrand={stationBrand}
@@ -470,7 +478,8 @@ export default function RecordEditScreen() {
                 setFuelEntry((current) => {
                   let next = current;
                   if (patch.total !== undefined) next = updateFuelEntry(next, 'total', patch.total);
-                  if (patch.liters !== undefined) next = updateFuelEntry(next, 'liters', patch.liters);
+                  if (patch.liters !== undefined)
+                    next = updateFuelEntry(next, 'liters', patch.liters);
                   if (patch.pricePerLiter !== undefined) {
                     next = updateFuelEntry(next, 'pricePerLiter', patch.pricePerLiter);
                   }
