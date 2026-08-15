@@ -12,7 +12,7 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatCurrency, formatDate, formatNumber } from '@/shared/utils/format';
-import { getReminderDisplay, getReminderKilometerProgress } from '@/shared/utils/analytics';
+import { getReminderDisplay } from '@/shared/utils/analytics';
 import { Card, StatusBadge } from './ui';
 import { getRecordPresentation } from '@/features/records/recordPresentation';
 import { getDocumentStatus } from '@/features/documents/domain/documentStatus';
@@ -36,7 +36,9 @@ export function RecordCard({ record, onPress }: { record: VehicleRecord; onPress
         <View style={styles.content}>
           <View style={styles.between}>
             <Text style={styles.rowTitle}>{presentation.title}</Text>
-            <Text style={styles.amount}>{formatCurrency(record.amount)}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.amount}>
+              {formatCurrency(record.amount)}
+            </Text>
           </View>
           <Text style={styles.meta}>
             {presentation.typeLabel} · {formatDate(record.recordDate)}
@@ -85,10 +87,6 @@ export function ReminderCard({
   const styles = useThemedStyles(createStyles);
   const display = getReminderDisplay(reminder, currentKm);
   const [label, tone] = reminderLabels[display.status];
-  const kilometerProgress =
-    reminder.dueKilometer === null
-      ? null
-      : getReminderKilometerProgress(reminder.dueKilometer, currentKm);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -129,20 +127,11 @@ export function ReminderCard({
               .filter(Boolean)
               .join(' · ')}
           </Text>
-          {kilometerProgress
-            ? display.reasons.map((reason) => (
-                <Text key={reason} style={styles.meta}>
-                  {reason}
-                </Text>
-              ))
-            : null}
-          {!kilometerProgress
-            ? display.reasons.map((reason) => (
-                <Text key={reason} style={styles.meta}>
-                  {reason}
-                </Text>
-              ))
-            : null}
+          {display.reasons.map((reason) => (
+            <Text key={reason} style={styles.meta}>
+              {reason}
+            </Text>
+          ))}
         </View>
       </Card>
     </Pressable>
@@ -167,10 +156,15 @@ export function DocumentCard({
   const styles = useThemedStyles(createStyles);
   const status = getDocumentStatus(document.expiryDate);
   const [label, tone] = documentLabels[status];
+  const hasAttachment = Boolean(document.attachmentPath || document.attachments?.length);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={onPress ? `${document.title} belgesini aç` : undefined}
+      accessibilityLabel={
+        onPress
+          ? `${document.title} belgesini aç${hasAttachment ? ', ekli dosya var' : ''}`
+          : undefined
+      }
       style={({ pressed }) => pressed && onPress && styles.cardPressed}
       onPress={onPress}
       disabled={!onPress}
@@ -189,7 +183,20 @@ export function DocumentCard({
             <Text style={styles.rowTitle}>{document.title}</Text>
             <StatusBadge label={label} tone={tone} />
           </View>
-          <Text style={styles.meta}>{documentTypeLabels[document.documentType]}</Text>
+          <View style={styles.documentMetaRow}>
+            <Text numberOfLines={1} style={[styles.meta, styles.documentMeta]}>
+              {documentTypeLabels[document.documentType]}
+              {document.issuerName ? ` · ${document.issuerName}` : ''}
+            </Text>
+            {hasAttachment ? (
+              <Ionicons
+                name="attach-outline"
+                size={16}
+                color={colors.textSecondary}
+                accessible={false}
+              />
+            ) : null}
+          </View>
           {document.expiryDate ? (
             <Text style={styles.meta}>Bitiş: {formatDate(document.expiryDate)}</Text>
           ) : null}
@@ -225,7 +232,15 @@ const createStyles = ({ colors }: AppTheme) =>
       fontFamily: fontFamilies.semibold,
       flex: 1,
     },
-    amount: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 14 },
+    amount: {
+      color: colors.navy,
+      fontFamily: fontFamilies.semibold,
+      fontSize: 14,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
     meta: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+    documentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    documentMeta: { flex: 1 },
     description: { color: colors.navy, fontSize: 13, lineHeight: 18, marginTop: 2 },
   });

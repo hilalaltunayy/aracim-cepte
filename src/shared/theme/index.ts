@@ -17,6 +17,14 @@ export const spacing = {
 
 export const radii = { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 } as const;
 
+/** Shared layout measurements for calm, predictable mobile surfaces. */
+export const layout = {
+  screenGutter: 20,
+  sectionGap: 20,
+  cardPadding: 18,
+  minimumTouchTarget: 48,
+} as const;
+
 export const fontFamilies = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',

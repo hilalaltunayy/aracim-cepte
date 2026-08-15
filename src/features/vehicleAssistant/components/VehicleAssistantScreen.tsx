@@ -7,6 +7,7 @@ import {
   Card,
   Screen,
   SectionHeader,
+  StatusBadge,
 } from '@/shared/components/ui';
 import {
   fontFamilies,
@@ -25,6 +26,13 @@ const suggestedQuestions = [
   'Bakım durumumu özetler misin?',
   'Yakıt tüketimimde bir değişim var mı?',
 ] as const;
+
+const severityPresentation = {
+  info: { label: 'Bilgilendirme', tone: 'info' },
+  low: { label: 'Takip önerilir', tone: 'neutral' },
+  medium: { label: 'Dikkat gerektirir', tone: 'warning' },
+  high: { label: 'Öncelikli', tone: 'danger' },
+} as const;
 
 export interface VehicleAssistantScreenProps {
   vehicleName: string;
@@ -46,6 +54,7 @@ export function VehicleAssistantScreen({
   const [question, setQuestion] = useState('');
   const [responseQuota, setResponseQuota] = useState<AssistantQuotaState | null>(null);
   const [result, setResult] = useState<VehicleAssistantResult | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const quota = responseQuota ?? initialQuota;
@@ -61,6 +70,7 @@ export function VehicleAssistantScreen({
     try {
       const next = await onAsk(value);
       setResult(next);
+      setEvidenceOpen(false);
       setResponseQuota(next.quota);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Araç Asistanı şu anda kullanılamıyor.');
@@ -161,23 +171,71 @@ export function VehicleAssistantScreen({
               <View style={styles.responseIcon}>
                 <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
               </View>
-              <Text style={styles.cardTitle}>Araç Asistanı</Text>
+              <View style={styles.responseHeadingText}>
+                <Text style={styles.cardTitle}>Araç Asistanı</Text>
+                <Text style={styles.responseMeta}>
+                  Yanıt yalnızca seçili araç verileriyle hazırlandı
+                </Text>
+              </View>
+              <StatusBadge
+                label={
+                  result.response.safetyEscalation
+                    ? 'Güvenlik öncelikli'
+                    : severityPresentation[result.response.severity].label
+                }
+                tone={
+                  result.response.safetyEscalation
+                    ? 'danger'
+                    : severityPresentation[result.response.severity].tone
+                }
+              />
             </View>
             <Text style={styles.answer}>{result.response.answer}</Text>
           </Card>
 
           {result.response.evidence.length ? (
-            <Card style={styles.detailCard}>
-              <Text style={styles.cardTitle}>Kullanılan araç verileri</Text>
-              {result.response.evidence.map((item) => (
-                <View key={`${item.factCode}:${item.value}`} style={styles.detailRow}>
-                  <Ionicons name="checkmark-circle-outline" size={19} color={colors.success} />
-                  <View style={styles.flex}>
-                    <Text style={styles.detailLabel}>{item.label}</Text>
-                    <Text style={styles.meta}>{item.value}</Text>
-                  </View>
+            <Card style={styles.evidenceCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Bu cevabı neye göre verdim?"
+                accessibilityState={{ expanded: evidenceOpen }}
+                style={({ pressed }) => [styles.evidenceToggle, pressed && styles.pressed]}
+                onPress={() => setEvidenceOpen((current) => !current)}
+              >
+                <View style={styles.evidenceIcon} accessible={false}>
+                  <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
                 </View>
-              ))}
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>Bu cevabı neye göre verdim?</Text>
+                  <Text style={styles.meta}>
+                    {result.response.evidence.length} araç verisi kullanıldı
+                  </Text>
+                </View>
+                <Ionicons
+                  name={evidenceOpen ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color={colors.muted}
+                  accessible={false}
+                />
+              </Pressable>
+              {evidenceOpen ? (
+                <View style={styles.evidenceList}>
+                  {result.response.evidence.map((item) => (
+                    <View key={`${item.factCode}:${item.value}`} style={styles.detailRow}>
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={19}
+                        color={colors.success}
+                        accessible={false}
+                      />
+                      <View style={styles.flex}>
+                        <Text style={styles.detailLabel}>{item.label}</Text>
+                        <Text style={styles.meta}>{item.value}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </Card>
           ) : null}
 
@@ -241,6 +299,8 @@ const createStyles = ({ colors }: AppTheme) =>
     responseSection: { gap: spacing.md },
     responseCard: { gap: spacing.md },
     responseHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    responseHeadingText: { flex: 1, minWidth: 0, gap: 2 },
+    responseMeta: { color: colors.muted, ...typography.caption },
     responseIcon: {
       width: 36,
       height: 36,
@@ -257,6 +317,17 @@ const createStyles = ({ colors }: AppTheme) =>
       lineHeight: 25,
     },
     detailCard: { gap: spacing.md },
+    evidenceCard: { gap: spacing.md },
+    evidenceToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    evidenceIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radii.md,
+      backgroundColor: colors.paleAqua,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    evidenceList: { gap: spacing.md, paddingTop: spacing.xs },
     detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
     detailLabel: { color: colors.navy, ...typography.bodyMedium },
     meta: { color: colors.muted, ...typography.caption },
