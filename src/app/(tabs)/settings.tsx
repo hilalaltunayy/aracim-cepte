@@ -209,7 +209,7 @@ export default function SettingsScreen() {
           icon="sparkles-outline"
           title="Aracım Cepte Premium"
           subtitle={
-            entitlements.planId === 'premium'
+            entitlements?.planId === 'premium'
               ? 'Premium planınız aktif'
               : 'Plan seçenekleri ve Premium özellikler'
           }
