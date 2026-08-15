@@ -453,3 +453,10 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/vehicle-ai-assistant/deno.json"
 entrypoint = "./functions/vehicle-ai-assistant/index.ts"
+
+[functions.revenuecat-webhook]
+enabled = true
+# RevenueCat authenticates with a backend-only Authorization value inside the handler.
+verify_jwt = false
+import_map = "./functions/revenuecat-webhook/deno.json"
+entrypoint = "./functions/revenuecat-webhook/index.ts"

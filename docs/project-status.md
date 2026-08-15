@@ -1,6 +1,8 @@
 # Proje durumu
 
-**Güncellik tarihi:** 2026-08-10
+**Ana release kanıtı tarihi:** 2026-08-10
+
+**Son V1.1 development notu:** 2026-08-15
 
 **Güncel release aşaması:** Google Play Closed Testing
 
@@ -79,6 +81,17 @@ Manuel sonuç kaydı olmadan bu kontroller `Passed` sayılamaz.
 
 Supabase kullanımı, public hukuk sitesi veya teknik güvenlik testleri tek başına KVKK uyumluluğu
 oluşturmaz. Hazırlık durumu profesyonel hukuk incelemesi gerektirir.
+
+## 25–26 Ağustos post-freeze backlog'u
+
+RevenueCat Premium foundation kaynakta, feature flag ile kapalı ve remote-deploy edilmemiş olarak
+hazırlanmıştır. Yerel billing migration'ı, `revenuecat-webhook`, RevenueCat/store ürün ve Offering
+konfigürasyonu, yeni native AAB ile license-tester kabulü current Closed Testing ortamına dokunmadan
+planlı deployment penceresinde ayrıca uygulanacaktır. Ayrıntılı sıra
+[RevenueCat Premium foundation](billing/revenuecat-premium-foundation.md) belgesindedir.
+
+Bu backlog mevcut 12 kullanıcılı tester ortamının, yayınlanmış AAB'nin veya Supabase remote
+durumunun TASK-036 sırasında değiştiği anlamına gelmez.
 
 ## Sonraki kontrollü adım
 

@@ -137,6 +137,7 @@ export default function SettingsScreen() {
     clear,
     loading,
     refresh,
+    entitlements,
     error: dataError,
   } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -204,6 +205,16 @@ export default function SettingsScreen() {
       </View>
       <SectionHeader title="Hesap" />
       <Card style={styles.card}>
+        <SettingsRow
+          icon="sparkles-outline"
+          title="Aracım Cepte Premium"
+          subtitle={
+            entitlements.planId === 'premium'
+              ? 'Premium planınız aktif'
+              : 'Plan seçenekleri ve Premium özellikler'
+          }
+          onPress={() => router.push('/premium')}
+        />
         <SettingsRow
           icon="mail-outline"
           title="E-posta"
