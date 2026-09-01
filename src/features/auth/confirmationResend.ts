@@ -1,7 +1,7 @@
 export const CONFIRMATION_RESEND_COOLDOWN_MS = 60_000;
 export const CONFIRMATION_RESEND_MAX_ATTEMPTS = 3;
 export const CONFIRMATION_RESEND_SUCCESS_MESSAGE =
-  'Doğrulama e-postası yeniden gönderildi. Gelen kutunuzu ve spam klasörünü kontrol edin.';
+  'Yeniden gönderim isteği kabul edildi. Gelen kutunuzu ve spam klasörünü kontrol edin.';
 
 export const CONFIRMATION_RESEND_LIMIT_MESSAGE =
   'Çok fazla doğrulama e-postası istediniz. Lütfen daha sonra tekrar deneyin.';

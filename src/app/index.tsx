@@ -24,7 +24,7 @@ export default function EntryScreen() {
   if (decision === 'connection-error') {
     return (
       <Screen scroll={false} style={{ justifyContent: 'center', gap: spacing.lg }}>
-        <ErrorBanner message="Araç verilerinize bağlanılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin." />
+        <ErrorBanner message={bootstrapError ?? 'Araç verileri şu anda yüklenemiyor.'} />
         <AppButton title="Tekrar dene" onPress={() => void bootstrap()} />
       </Screen>
     );

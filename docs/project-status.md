@@ -4,6 +4,8 @@
 
 **Son V1.1 development notu:** 2026-08-15
 
+**Son P0 Android preview incelemesi:** 2026-09-01
+
 **Güncel release aşaması:** Google Play Closed Testing
 
 **Uygulama:** `1.0.0` / Android `versionCode: 2`
@@ -12,6 +14,17 @@ Bu belge mevcut durumu özetler. Ayrıntılı gate statüleri için
 [V1 release kapıları](release/v1-release-gates.md), tarihsel test snapshot'ı için
 [release-readiness raporu](release-readiness.md) kullanılır. AAB üretimi veya Closed Testing'in
 başlaması production ya da hukuki hazırlığın tamamlandığı anlamına gelmez.
+
+## Güncel P0 Android preview blokerleri
+
+1 Eylül 2026 fiziksel cihaz bulgusunda signup e-posta teslimi tamamlanmadı, recovery linki Login'e
+düştü ve giriş sonrası araç bootstrap'ı başarısız oldu. Public/read-only inceleme preview EAS
+Supabase ortamının yerel QA ortamıyla eşleştiğini; buna karşılık remote şemanın current `develop`
+uygulamasının beklediği tabloları/kolonları içermediğini kanıtladı. Auth kodunda dedicated callback
+rotaları mevcut, ancak Dashboard redirect/template ve SMTP teslim ayarları insan doğrulaması
+gerektiriyor. Remote migration uygulanmadan ve yeni APK gerçek cihazda yeniden test edilmeden bu üç
+P0 madde kapanmış veya release-ready sayılamaz. Kanıt ve exact manual adımlar için
+[P0 düzeltme kaydına](bugs/p0-auth-vehicle-remediation.md) bakın.
 
 ## Güncel doğrulanmış gerçekler
 

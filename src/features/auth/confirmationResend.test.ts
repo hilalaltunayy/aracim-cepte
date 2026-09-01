@@ -38,6 +38,6 @@ describe('confirmation resend', () => {
     const safe = getConfirmationResendError(new Error('provider token=secret-value'));
     expect(safe).toMatch(/gönderilemedi/);
     expect(safe).not.toContain('secret-value');
-    expect(CONFIRMATION_RESEND_SUCCESS_MESSAGE).toMatch(/yeniden gönderildi/);
+    expect(CONFIRMATION_RESEND_SUCCESS_MESSAGE).toMatch(/isteği kabul edildi/);
   });
 });

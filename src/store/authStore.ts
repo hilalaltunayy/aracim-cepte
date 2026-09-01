@@ -21,7 +21,10 @@ import {
 import { SESSION_EXPIRED_MESSAGE } from '@/features/auth/sessionRouting';
 import { AppError, getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { markHasSignedInBefore, readHasSignedInBefore } from '@/features/auth/returningUser';
-import { createRegistrationAuthOptions } from '@/features/auth/registrationFlow';
+import {
+  classifyRegistrationResponse,
+  createRegistrationAuthOptions,
+} from '@/features/auth/registrationFlow';
 
 interface AuthState {
   session: Session | null;
@@ -115,12 +118,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signUp: async (email, password, displayName) => {
     set({ busy: true, error: null });
     try {
-      const { error } = await getSupabaseClient().auth.signUp({
+      const client = getSupabaseClient();
+      const { data, error } = await client.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: createRegistrationAuthOptions(displayName, getEmailConfirmationRedirectUrl()),
       });
       if (error) throw error;
+      const responseState = classifyRegistrationResponse({
+        hasUser: Boolean(data.user),
+        hasSession: Boolean(data.session),
+      });
+      if (responseState !== 'verification_pending') {
+        if (data.session) {
+          intentionalSessionEnd = true;
+          try {
+            await client.auth.signOut({ scope: 'local' });
+          } finally {
+            intentionalSessionEnd = false;
+          }
+        }
+        throw new AppError(
+          responseState === 'confirmation_disabled'
+            ? 'E-posta doğrulaması bu ortamda etkin değil. Hesap güvenli şekilde oluşturulamadı.'
+            : 'Hesap oluşturma isteği doğrulanamadı. Lütfen tekrar deneyin.',
+          'AUTH_SIGNUP_INCOMPLETE',
+        );
+      }
       set({ busy: false });
       return true;
     } catch (error) {
