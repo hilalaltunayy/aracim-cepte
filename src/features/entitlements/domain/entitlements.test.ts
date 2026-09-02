@@ -59,11 +59,11 @@ describe('premium entitlement foundation', () => {
       monthlyQuota: 30,
     });
   });
-  it('exposes centralized AI quotas without becoming the server authority', () => {
-    expect(getAiAssistantPolicy()).toEqual({ planId: 'free', monthlyQuota: 1, enabled: true });
+  it('exposes centralized daily AI quotas without becoming the server authority', () => {
+    expect(getAiAssistantPolicy()).toEqual({ planId: 'free', dailyQuota: 1, enabled: true });
     expect(getAiAssistantPolicy(PLAN_ENTITLEMENTS.premium)).toEqual({
       planId: 'premium',
-      monthlyQuota: 50,
+      dailyQuota: 10,
       enabled: true,
     });
   });

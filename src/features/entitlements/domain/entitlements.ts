@@ -10,7 +10,8 @@ export interface PlanEntitlements {
   maxStorageBytesPerUser: number;
   maxVehiclePhotos: number;
   advancedReports: boolean;
-  aiMonthlyQuota: number;
+  /** Successful AI Vehicle Assistant answers allowed per UTC day (REV-008). */
+  aiDailyQuota: number;
   fuelPriceAlerts: boolean;
   advancedNotifications: boolean;
   /** Controls new custom reminder-time choices; stored legacy times remain readable. */
@@ -38,7 +39,7 @@ export const PLAN_ENTITLEMENTS: Readonly<Record<PlanId, Readonly<PlanEntitlement
     maxStorageBytesPerUser: 25 * 1024 * 1024,
     maxVehiclePhotos: 1,
     advancedReports: false,
-    aiMonthlyQuota: 1,
+    aiDailyQuota: 1,
     fuelPriceAlerts: false,
     advancedNotifications: false,
     customReminderTime: false,
@@ -56,7 +57,7 @@ export const PLAN_ENTITLEMENTS: Readonly<Record<PlanId, Readonly<PlanEntitlement
     maxStorageBytesPerUser: 100 * 1024 * 1024,
     maxVehiclePhotos: 5,
     advancedReports: true,
-    aiMonthlyQuota: 50,
+    aiDailyQuota: 10,
     fuelPriceAlerts: true,
     advancedNotifications: true,
     customReminderTime: true,
@@ -109,11 +110,11 @@ export function getOcrInvocationPolicy(
 
 /** Display-only policy. The Edge Function and database remain the authorization boundary. */
 export function getAiAssistantPolicy(
-  entitlements: Pick<PlanEntitlements, 'planId' | 'aiMonthlyQuota'> = FREE_ENTITLEMENTS,
+  entitlements: Pick<PlanEntitlements, 'planId' | 'aiDailyQuota'> = FREE_ENTITLEMENTS,
 ) {
   return {
     planId: entitlements.planId,
-    monthlyQuota: entitlements.aiMonthlyQuota,
-    enabled: entitlements.aiMonthlyQuota > 0,
+    dailyQuota: entitlements.aiDailyQuota,
+    enabled: entitlements.aiDailyQuota > 0,
   } as const;
 }

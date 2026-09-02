@@ -98,7 +98,7 @@ describe('PremiumPaywallScreen', () => {
     const renderer = await mount();
     expect(texts(renderer)).toContain('En fazla 3 araç');
     expect(texts(renderer)).toContain('Ayda 30 OCR taraması');
-    expect(texts(renderer)).toContain('Ayda 50 Araç Asistanı yanıtı');
+    expect(texts(renderer)).toContain('Günde 10 Araç Asistanı yanıtı');
     expect(texts(renderer).join(' ')).not.toContain('OBD');
     expect(texts(renderer).join(' ')).not.toContain('Smart Trips');
   });

@@ -16,7 +16,7 @@ const PREMIUM_BENEFITS = [
   `En fazla ${PLAN_ENTITLEMENTS.premium.maxVehicles} araç`,
   'Gelişmiş araç raporları',
   `Ayda ${PLAN_ENTITLEMENTS.premium.ocrMonthlyQuota} OCR taraması`,
-  `Ayda ${PLAN_ENTITLEMENTS.premium.aiMonthlyQuota} Araç Asistanı yanıtı`,
+  `Günde ${PLAN_ENTITLEMENTS.premium.aiDailyQuota} Araç Asistanı yanıtı`,
   `Kayıt başına ${PLAN_ENTITLEMENTS.premium.maxAttachmentsPerEntity} ek dosya`,
   `${PLAN_ENTITLEMENTS.premium.maxStorageBytesPerUser / 1024 / 1024} MB güvenli depolama`,
   `Araç başına ${PLAN_ENTITLEMENTS.premium.maxVehiclePhotos} fotoğraf`,

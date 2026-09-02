@@ -43,7 +43,7 @@ export default function VehicleAssistantRoute() {
       vehicleName={`${vehicle.brand} ${vehicle.model}`}
       userName={userName}
       initialQuota={quota}
-      entitlementLimit={policy.monthlyQuota}
+      entitlementLimit={policy.dailyQuota}
       enabled={policy.enabled}
       onAsk={(question) => askVehicleAssistant(vehicle.id, question)}
       onUpgrade={() => router.push('/premium' as never)}

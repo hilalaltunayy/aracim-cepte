@@ -49,7 +49,7 @@ export async function askVehicleAssistant(
   if (error) {
     const code = await safeFunctionCode(error);
     if (code === 'AI_MONTHLY_QUOTA_EXCEEDED') {
-      throw new AppError('Bu ayki Araç Asistanı kullanım sınırınıza ulaştınız.', 'AI_QUOTA');
+      throw new AppError('Bugünkü Araç Asistanı kullanım sınırınıza ulaştınız.', 'AI_QUOTA');
     }
     if (code === 'VEHICLE_FORBIDDEN' || code === 'AUTH_REQUIRED') {
       throw new AppError('Bu araç için asistan erişimi doğrulanamadı.', 'AUTH');
