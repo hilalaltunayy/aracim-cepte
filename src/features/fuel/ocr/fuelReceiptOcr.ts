@@ -23,9 +23,11 @@ export interface FuelReceiptOcrResult {
 }
 
 const numberPattern = '(\\d{1,3}(?:[. ]\\d{3})+(?:,\\d{1,3})?|\\d+(?:[.,]\\d{1,3})?|\\d+)';
-const totalLabels = /(?:genel\s*)?(?:toplam|ödenecek|odenecek|tutar)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
-const priceLabels = /(?:birim\s*fiyat|litre\s*fiyat[ıi]|tl\s*\/\s*l)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
-const litreLabels = /(?:litre|lt)\s*[:\-]?\s*/i;
+const totalLabels =
+  /(?:genel\s*)?(?:toplam|top\.?|gnl\s*top\.?|ödenecek|odenecek|ödenen|odenen|tutar)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
+const priceLabels =
+  /(?:birim\s*fiyat|litre\s*fiyat[ıi]|b[ıi]r[ıi]m\s*f\.?|tl\s*\/\s*l|₺\s*\/\s*l)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
+const litreLabels = /(?:litre|lt\.?|miktar)\s*[:\-]?\s*/i;
 const unrelatedReceiptNumber =
   /\b(?:kdv|vergi|fiş\s*(?:no|numara)|terminal|kart|izin|onay|para\s*üstü)\b/i;
 
@@ -50,11 +52,22 @@ function format(field: FuelValueField, value: number): string {
 
 function labeledNumber(text: string, label: RegExp): number | null {
   const matcher = new RegExp(`${label.source}${numberPattern}`, label.flags);
-  for (const line of text.split(/\r?\n/)) {
+  const bareLabel = new RegExp(`${label.source}$`, label.flags);
+  const leadingNumber = new RegExp(`^\\s*(?:tl|₺)?\\s*${numberPattern}`, 'i');
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     if (unrelatedReceiptNumber.test(line)) continue;
-    const match = matcher.exec(line);
-    const value = receiptDecimal(match?.[1]);
+    const value = receiptDecimal(matcher.exec(line)?.[1]);
     if (value !== null) return value;
+    // Label alone on its line, value on the next (right-aligned receipts).
+    if (bareLabel.test(line.trim())) {
+      const next = lines[index + 1];
+      const nextValue = next && !unrelatedReceiptNumber.test(next)
+        ? receiptDecimal(leadingNumber.exec(next)?.[1])
+        : null;
+      if (nextValue !== null) return nextValue;
+    }
   }
   return null;
 }

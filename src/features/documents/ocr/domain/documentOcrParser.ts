@@ -11,22 +11,44 @@ type FieldRule = {
 const insuranceRules: readonly FieldRule[] = [
   {
     fieldId: 'documentNumber',
-    labels: ['poliçe no', 'poliçe numarası', 'poliçe numarasi'],
+    labels: ['poliçe no', 'poliçe numarası', 'poliçe numarasi', 'police no', 'poliçe'],
     kind: 'text',
   },
   {
     fieldId: 'issuerName',
-    labels: ['sigorta şirketi', 'sigorta sirketi', 'sigortacı', 'sigortaci'],
+    labels: [
+      'sigorta şirketi',
+      'sigorta sirketi',
+      'sigorta firması',
+      'sigorta firmasi',
+      'sigortacı',
+      'sigortaci',
+      'acente',
+    ],
     kind: 'text',
   },
   {
     fieldId: 'startDate',
-    labels: ['başlangıç tarihi', 'baslangic tarihi', 'başlangıç', 'baslangic'],
+    labels: [
+      'başlangıç tarihi',
+      'baslangic tarihi',
+      'tanzim tarihi',
+      'başlangıç',
+      'baslangic',
+      'yürürlük',
+    ],
     kind: 'date',
   },
   {
     fieldId: 'expiryDate',
-    labels: ['bitiş tarihi', 'bitis tarihi', 'geçerlilik sonu', 'gecerlilik sonu'],
+    labels: [
+      'bitiş tarihi',
+      'bitis tarihi',
+      'geçerlilik sonu',
+      'gecerlilik sonu',
+      'vade sonu',
+      'sona erme',
+    ],
     kind: 'date',
   },
 ];
@@ -169,23 +191,35 @@ function normalizeLabel(value: string): string {
   return value.toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim();
 }
 
+/** A line that is essentially just a label (short, ends with `:` or has no value after it). */
+function looksLikeBareLabel(line: string): boolean {
+  return /[:\-–]\s*$/.test(line.trim()) || line.trim().length <= 24;
+}
+
 function extractLabeledValue(lines: readonly string[], labels: readonly string[]): string | null {
   const normalizedLabels = labels.map(normalizeLabel).sort((a, b) => b.length - a.length);
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const normalizedLine = normalizeLabel(line);
     for (const label of normalizedLabels) {
       const labelIndex = normalizedLine.indexOf(label);
-      if (labelIndex < 0 || labelIndex > 4) continue;
+      // Accept the label anywhere near the start of the line (OCR often indents
+      // or prefixes a bullet), not only within the first few characters.
+      if (labelIndex < 0 || labelIndex > 24) continue;
       const boundary = normalizedLine.slice(
         labelIndex + label.length,
         labelIndex + label.length + 1,
       );
-      if (boundary && !/[.:\-\s]/.test(boundary)) continue;
-      const value = line
+      if (boundary && !/[.:\-\s)]/.test(boundary)) continue;
+      const sameLine = line
         .slice(labelIndex + label.length)
-        .replace(/^\s*[.:\-–]+\s*/, '')
+        .replace(/^\s*[.:\-–)]+\s*/, '')
         .trim();
-      if (value) return value;
+      if (sameLine) return sameLine;
+      // Label with no value on its own line: take the next non-empty line
+      // unless that line is itself another label.
+      const next = lines[index + 1]?.trim();
+      if (next && !looksLikeBareLabel(next)) return next;
     }
   }
   return null;
@@ -239,6 +273,23 @@ export function parseDocumentOcrText(
       rule.kind === 'date' ? parseTurkishDate(rawValue) : normalizeTextValue(rawValue);
     if (!suggestedValue) continue;
     suggestions.push({ fieldId: rule.fieldId, suggestedValue, source: 'document_ocr' });
+  }
+
+  // Last-resort single-date fallback: only when the type carries an eventDate
+  // field, no labelled date matched, and a date-context line exists.
+  if (
+    hasDocumentField(documentType, 'eventDate') &&
+    !suggestions.some((suggestion) => suggestion.fieldId === 'eventDate')
+  ) {
+    const dateLine = lines.find((line) => /tar[iı]h|düzenlen|duzenlen/i.test(line));
+    const fallbackDate = dateLine ? parseTurkishDate(dateLine) : null;
+    if (fallbackDate) {
+      suggestions.push({
+        fieldId: 'eventDate',
+        suggestedValue: fallbackDate,
+        source: 'document_ocr',
+      });
+    }
   }
 
   return suggestions;

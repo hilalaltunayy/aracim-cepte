@@ -28,7 +28,10 @@ export interface MaintenanceReceiptLineItem {
 }
 
 const numberPattern = '(\\d{1,3}(?:[. ]\\d{3})+(?:,\\d{1,3})?|\\d+(?:[.,]\\d{1,3})?|\\d+)';
-const totalLabel = /(?:genel\s*)?(?:toplam|ödenecek|odenecek|tutar)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
+const totalLabel =
+  /(?:genel\s*)?(?:toplam|top\.?|gnl\s*top\.?|ödenecek|odenecek|ödenen|odenen|tutar)\s*[:\-]?\s*(?:tl|₺)?\s*/i;
+const maintenanceKeyword =
+  /(?:işçilik|iscilik|montaj|bakım|bakim|onarım|onarim|parça|parca|filtre|yağ|yag|balata|akü|aku|buji|kayış|kayis|antifriz|amortisör|amortisor|disk|debriyaj|triger|kampana|malzeme|servis)/i;
 const partsLabel =
   /(?:yedek\s*)?(?:parça|parca|malzeme)\s*(?:tutarı|tutari)?\s*[:\-]?\s*(?:tl|₺)?\s*/i;
 const laborLabel =
@@ -81,27 +84,48 @@ function parseInvoiceNumber(text: string): string | null {
 
 function parseServiceName(text: string): string | null {
   const matcher =
-    /(?:servis|firma|işletme|isletme)\s*(?:adı|adi|ünvanı|unvani)?\s*[:\-]\s*([^\n]{2,120})/i;
-  for (const line of text.split(/\r?\n/)) {
+    /(?:servis|firma|işletme|isletme|ünvan|unvan|düzenleyen|duzenleyen)\s*(?:adı|adi|ünvanı|unvani)?\s*[:\-]\s*([^\n]{2,120})/i;
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
     const candidate = matcher.exec(line)?.[1]?.trim();
     if (candidate && !/[0-9]{8,}/.test(candidate)) return candidate;
+  }
+  // Fallback: a headline-style line near the top (mostly letters, no long digit
+  // runs, not a section keyword).
+  for (const rawLine of lines.slice(0, 6)) {
+    const line = rawLine.replace(/\s+/g, ' ').trim();
+    if (
+      line.length >= 4 &&
+      line.length <= 60 &&
+      !/\d{4,}/.test(line) &&
+      !/(?:fatura|fiş|fis|tarih|toplam|kdv|vergi|adres|tel)/i.test(line) &&
+      /\p{L}{3,}/u.test(line) &&
+      (line === line.toLocaleUpperCase('tr-TR') || /(?:oto|servis|garaj|lastik|motor)/i.test(line))
+    ) {
+      return line;
+    }
   }
   return null;
 }
 
 function parseReceiptDate(text: string): string | null {
   for (const line of text.split(/\r?\n/)) {
-    if (/\b(?:tarih|işlem\s*tarihi|islem\s*tarihi)\b/i.test(line)) {
-      return parseTurkishDate(line);
+    if (/tar[iı]h|düzenlenme|duzenlenme/i.test(line)) {
+      const labelled = parseTurkishDate(line);
+      if (labelled) return labelled;
     }
   }
   return null;
 }
 
 function lineItemCategory(label: string): MaintenanceReceiptLineItem['category'] {
-  return /İşçilik|işçilik|iscilik|montaj|servis\s*ücreti|servis\s*ucreti/i.test(label)
+  return /işçili|iscili|İşçili|montaj|servis\s*[uü]creti|iş\s*[uü]creti|is\s*[uü]creti|bakım\s*[uü]cret|bakim\s*[uü]cret/i.test(
+    label,
+  )
     ? 'labor'
-    : /parça|parca|filtre|yağ|yag|balata|akü|aku|buji|kayış|kayis|malzeme/i.test(label)
+    : /parça|parca|filtre|yağ|yag|balata|akü|aku|buji|kayış|kayis|antifriz|amortis[oö]r|disk|debriyaj|triger|kampana|malzeme|lastik/i.test(
+        label,
+      )
       ? 'parts'
       : 'unknown';
 }
@@ -116,30 +140,65 @@ function parseLineItems(text: string): MaintenanceReceiptLineItem[] {
     `^([\\p{L}][\\p{L}0-9 .()/-]{1,78}?)\\s+(\\d+(?:[.,]\\d+)?)\\s+${numberPattern}\\s+${numberPattern}\\s*(?:tl|₺)?$`,
     'iu',
   );
+  // A maintenance keyword line ending in a single amount (no explicit qty/unit).
+  const keywordAmount = new RegExp(
+    `^([\\p{L}][\\p{L}0-9 .()/-]{1,78}?)\\s+${numberPattern}\\s*(?:tl|₺)?$`,
+    'iu',
+  );
+  const seenLabels = new Set<string>();
   for (const [index, rawLine] of text.split(/\r?\n/).entries()) {
-    const line = rawLine.replace(/\s+/g, ' ').trim();
+    const line = rawLine
+      .replace(/\s+/g, ' ')
+      .replace(/\b(?:tl|try|₺)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (
       !line ||
       excludedNumberLine.test(line) ||
-      /(?:genel\s*)?toplam|ödenecek|odenecek/i.test(line)
+      /(?:genel\s*)?toplam|top\.?\s|ödenecek|odenecek|ara\s*toplam/i.test(line)
     )
       continue;
-    const match = explicit.exec(line) ?? columns.exec(line);
-    if (!match) continue;
-    const label = match[1].trim();
-    const quantity = parseReceiptDecimal(match[2]);
-    const unitPrice = parseReceiptDecimal(match[3]);
-    const lineTotal = parseReceiptDecimal(match[4]);
-    if (!quantity || !unitPrice || !lineTotal) continue;
-    if (Math.abs(quantity * unitPrice - lineTotal) > Math.max(1, lineTotal * 0.02)) continue;
-    items.push({
-      id: `ocr-line-${index}`,
-      label,
-      quantity: formatCost(quantity),
-      unitPrice: formatCost(unitPrice),
-      lineTotal: formatCost(lineTotal),
-      category: lineItemCategory(label),
-    });
+
+    const structured = explicit.exec(line) ?? columns.exec(line);
+    if (structured) {
+      const label = structured[1].trim();
+      const quantity = parseReceiptDecimal(structured[2]);
+      const unitPrice = parseReceiptDecimal(structured[3]);
+      const lineTotal = parseReceiptDecimal(structured[4]);
+      if (quantity && unitPrice && lineTotal) {
+        const consistent =
+          Math.abs(quantity * unitPrice - lineTotal) <= Math.max(1, lineTotal * 0.05);
+        seenLabels.add(label.toLocaleLowerCase('tr-TR'));
+        items.push({
+          id: `ocr-line-${index}`,
+          label,
+          quantity: formatCost(quantity),
+          // Keep the reported unit price only when it reconciles with the total.
+          unitPrice: consistent ? formatCost(unitPrice) : '',
+          lineTotal: formatCost(lineTotal),
+          category: lineItemCategory(label),
+        });
+        continue;
+      }
+    }
+
+    const keyword = keywordAmount.exec(line);
+    if (keyword && maintenanceKeyword.test(keyword[1])) {
+      const label = keyword[1].trim();
+      const key = label.toLocaleLowerCase('tr-TR');
+      const lineTotal = parseReceiptDecimal(keyword[2]);
+      if (lineTotal && !seenLabels.has(key)) {
+        seenLabels.add(key);
+        items.push({
+          id: `ocr-line-${index}`,
+          label,
+          quantity: '',
+          unitPrice: '',
+          lineTotal: formatCost(lineTotal),
+          category: lineItemCategory(label),
+        });
+      }
+    }
   }
   return items.slice(0, 24);
 }

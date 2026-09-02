@@ -90,6 +90,19 @@ describe('maintenance receipt OCR parser', () => {
     });
   });
 
+  it('captures keyword rows that only report a line total (no explicit qty/unit)', () => {
+    const result = parseMaintenanceReceiptOcrText(
+      'OTO PLUS SERVIS\nMotor yagi 850,00 TL\nBakim isciligi 600,00 TL\nGenel Toplam: 1.450,00 TL',
+    );
+    expect(result.lineItems.map((item) => [item.label, item.lineTotal, item.category])).toEqual([
+      ['Motor yagi', '850', 'parts'],
+      ['Bakim isciligi', '600', 'labor'],
+    ]);
+    expect(result.lineItems.every((item) => item.quantity === '' && item.unitPrice === '')).toBe(
+      true,
+    );
+  });
+
   it('keeps partial results and ignores unrelated tax and identifier numbers', () => {
     expect(values('KDV: 200,00\nVKN: 1234567890\nFiş No: R-9\nToplam: 1500,00')).toEqual({
       invoiceNumber: 'R-9',
