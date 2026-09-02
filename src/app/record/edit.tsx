@@ -44,6 +44,7 @@ import {
   validateFuelEntry,
 } from '@/features/fuel/domain/fuelEntry';
 import { useShakeAnimation } from '@/shared/hooks/useShakeAnimation';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { FUEL_STATIONS, type FuelStationId } from '@/features/fuel/config/fuelStations';
 import { FuelPriceReferenceSection } from '@/features/fuelPrice/components/FuelPriceReferenceSection';
 import { FuelReceiptOcrSection } from '@/features/fuel/ocr/FuelReceiptOcrSection';
@@ -316,21 +317,21 @@ export default function RecordEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (!vehicle) {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
       </Screen>
     );
   }
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu kayıt silinmiş veya artık erişilebilir değil." />
         <AppButton title="Geçmişe dön" onPress={() => goBackOr('/(tabs)/history')} />
       </Screen>
     );
   }
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Kayıt ayrıntıları">
         <SelectField

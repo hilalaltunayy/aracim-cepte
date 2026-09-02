@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppButton, Card, EmptyState, Screen } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { useDataStore } from '@/store/dataStore';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { formatDate } from '@/shared/utils/format';
@@ -10,7 +11,7 @@ export default function NotesListScreen() {
   const styles = useThemedStyles(createStyles);
   const notes = useDataStore((state) => state.notes);
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppButton title="Yeni not" icon="add" onPress={() => router.push('/notes/edit')} />
       {notes.length ? (
         <View style={styles.list}>

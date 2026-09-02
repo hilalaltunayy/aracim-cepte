@@ -11,6 +11,7 @@ import {
   SelectField,
   confirmChoice,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { BodyType, FuelType, VehicleColorId } from '@/domain/entities';
 import { fuelTypeLabels } from '@/shared/constants/labels';
 import { parseDecimal } from '@/shared/utils/format';
@@ -117,7 +118,7 @@ export default function VehicleEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu araç silinmiş veya artık erişilebilir değil." />
         <AppButton title="Araç ekranına dön" onPress={() => router.replace('/(tabs)/vehicle')} />
       </Screen>
@@ -125,14 +126,14 @@ export default function VehicleEditScreen() {
   }
   if (routeState === 'create' && !capacity.canAdd) {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message={getVehicleLimitMessage(capacity)} />
         <AppButton title="Araç ekranına dön" onPress={() => router.replace('/(tabs)/vehicle')} />
       </Screen>
     );
   }
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error ? <ErrorBanner message={error} /> : null}
       <FormSection
         title="Temel bilgiler"

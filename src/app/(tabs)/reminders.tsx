@@ -9,6 +9,7 @@ import {
   Screen,
   SectionHeader,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { ReminderCard } from '@/shared/components/entityCards';
 import { getReminderStatus } from '@/shared/utils/analytics';
 import { useDataStore } from '@/store/dataStore';
@@ -33,7 +34,7 @@ export default function RemindersScreen() {
   if (vehicleState === 'loading') return <LoadingScreen />;
   if (!vehicle) {
     return (
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <AppHeader title="Hatırlatıcılar" subtitle="Tarih ve kilometre planlarınız" />
         <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
       </Screen>
@@ -47,7 +48,7 @@ export default function RemindersScreen() {
   const active = sorted.filter((reminder) => !reminder.completed);
   const completed = sorted.filter((reminder) => reminder.completed);
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppHeader title="Hatırlatıcılar" subtitle="Tarih ve kilometre planlarınız" />
       <AppButton
         title="Yeni hatırlatıcı"

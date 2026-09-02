@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppButton, EmptyState, Screen, StatusBadge } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { DocumentCard } from '@/shared/components/entityCards';
 import { useDataStore } from '@/store/dataStore';
 import {
@@ -40,7 +41,7 @@ export default function DocumentsListScreen() {
   const visibleDocuments = filterDocumentsForArchive(documents, filter);
   const emptyState = EMPTY_STATES[filter];
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppButton title="Yeni belge" icon="add" onPress={() => router.push('/documents/edit')} />
       {documents.length ? (
         <>

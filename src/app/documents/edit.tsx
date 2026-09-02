@@ -11,6 +11,7 @@ import {
   SelectField,
   confirmAction,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import type { DocumentType } from '@/domain/entities';
 import {
   deleteAttachment,
@@ -177,14 +178,14 @@ export default function DocumentEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'create' && !activeVehicleId) {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
       </Screen>
     );
   }
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu belge silinmiş veya artık erişilebilir değil." />
         <AppButton title="Belgelere dön" onPress={() => goBackOr('/documents')} />
       </Screen>
@@ -192,7 +193,7 @@ export default function DocumentEditScreen() {
   }
 
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Belge türü">
         <SelectField

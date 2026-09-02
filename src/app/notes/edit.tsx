@@ -10,6 +10,7 @@ import {
   Screen,
   confirmAction,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
@@ -43,14 +44,14 @@ export default function NoteEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu not silinmiş veya artık erişilebilir değil." />
         <AppButton title="Notlara dön" onPress={() => goBackOr('/notes')} />
       </Screen>
     );
   }
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error ? <ErrorBanner message={error} /> : null}
       <FormSection
         title="Not ayrıntıları"

@@ -13,6 +13,7 @@ import {
   Screen,
   confirmAction,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import {
   deleteAttachment,
   openAttachment,
@@ -155,21 +156,21 @@ export default function ExpertiseEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (routeState === 'create' && !activeVehicleId) {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
       </Screen>
     );
   }
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu ekspertiz raporu silinmiş veya artık erişilebilir değil." />
         <AppButton title="Raporlara dön" onPress={() => goBackOr('/expertise')} />
       </Screen>
     );
   }
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error || localError ? <ErrorBanner message={localError ?? error ?? ''} /> : null}
       <FormSection title="Rapor bilgileri">
         <DateField label="Rapor tarihi" value={date} onChange={setDate} optional />

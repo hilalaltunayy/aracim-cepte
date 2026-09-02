@@ -159,14 +159,21 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
+/**
+ * Grouped form fields. The old heavy outer card has been dropped (REV-004): this
+ * is now a plain spaced group with an optional heading, so screens read as
+ * independent rounded fields on the shared backdrop. Pass `card` to keep the
+ * boxed treatment where a screen still needs visual containment.
+ */
 export function FormSection({
   title,
   description,
+  card = false,
   children,
-}: PropsWithChildren<{ title?: string; description?: string }>) {
+}: PropsWithChildren<{ title?: string; description?: string; card?: boolean }>) {
   const styles = useStyles();
-  return (
-    <Card style={styles.formSection}>
+  const inner = (
+    <>
       {title || description ? (
         <View style={styles.formSectionHeading}>
           {title ? <Text style={styles.formSectionTitle}>{title}</Text> : null}
@@ -174,7 +181,12 @@ export function FormSection({
         </View>
       ) : null}
       {children}
-    </Card>
+    </>
+  );
+  return card ? (
+    <Card style={styles.formSection}>{inner}</Card>
+  ) : (
+    <View style={styles.formSection}>{inner}</View>
   );
 }
 
@@ -261,43 +273,15 @@ export function AppButton({
   );
 }
 
-export function AppInput({
-  label,
-  error,
-  multiline,
-  ...props
-}: TextInputProps & { label: string; error?: string | null }) {
-  const { colors } = useAppTheme();
-  const styles = useStyles();
-  const [focused, setFocused] = useState(false);
-  const visibleLabel = withoutOptionalSuffix(label);
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{visibleLabel}</Text>
-      <TextInput
-        placeholderTextColor={colors.muted}
-        {...props}
-        accessibilityLabel={props.accessibilityLabel ?? visibleLabel}
-        onFocus={(event) => {
-          setFocused(true);
-          props.onFocus?.(event);
-        }}
-        onBlur={(event) => {
-          setFocused(false);
-          props.onBlur?.(event);
-        }}
-        multiline={multiline}
-        style={[
-          styles.input,
-          focused && styles.inputFocused,
-          multiline && styles.multiline,
-          error && styles.inputError,
-          props.style,
-        ]}
-      />
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    </View>
-  );
+/**
+ * Standard app text field. Now an alias for the independent floating-label
+ * {@link FloatingField} so every form shares the modern input language
+ * (REV-004 / REV-010).
+ */
+export function AppInput(
+  props: TextInputProps & { label: string; error?: string | null },
+) {
+  return <FloatingField {...props} />;
 }
 
 export function PasswordInput({

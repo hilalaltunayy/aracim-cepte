@@ -21,6 +21,7 @@ import {
   SectionHeader,
   confirmAction,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import {
@@ -216,7 +217,7 @@ export default function SettingsScreen() {
       if (await clearSection(section)) Alert.alert('Tamamlandı', 'Seçilen veriler silindi.');
     });
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppHeader title="Ayarlar" subtitle="Hesap, bildirimler ve veriler" />
       {dataError ? <ErrorBanner message={dataError} /> : null}
       <SectionHeader title="Görünüm" />

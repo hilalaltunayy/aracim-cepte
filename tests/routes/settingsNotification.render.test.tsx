@@ -55,6 +55,7 @@ vi.mock('@/shared/theme', () => {
   };
 });
 
+vi.mock('@/shared/components/AutomotiveBackdrop', () => ({ AutomotiveBackdrop: () => null }));
 vi.mock('@/shared/components/ui', async () => {
   const React = await import('react');
   const host = (name: string) =>
@@ -63,12 +64,14 @@ vi.mock('@/shared/components/ui', async () => {
       title,
       message,
       subtitle,
+      backdrop: _backdrop,
       ...props
     }: Record<string, unknown> & {
       children?: ReactNode;
       title?: ReactNode;
       message?: ReactNode;
       subtitle?: ReactNode;
+      backdrop?: ReactNode;
     }) {
       return React.createElement(
         name,

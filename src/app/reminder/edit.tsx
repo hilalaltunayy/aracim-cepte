@@ -12,6 +12,7 @@ import {
   SelectField,
   confirmAction,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { ReminderType } from '@/domain/entities';
 import { reminderTypeLabels } from '@/shared/constants/labels';
 import { parseDecimal } from '@/shared/utils/format';
@@ -155,21 +156,21 @@ export default function ReminderEditScreen() {
   if (routeState === 'loading') return <LoadingScreen />;
   if (!activeVehicle) {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <NoVehicleState onCreate={() => router.replace('/vehicle/edit')} />
       </Screen>
     );
   }
   if (routeState === 'missing') {
     return (
-      <Screen style={styles.form}>
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
         <ErrorBanner message="Bu hatırlatıcı silinmiş veya artık erişilebilir değil." />
         <AppButton title="Hatırlatıcılara dön" onPress={() => goBackOr('/(tabs)/reminders')} />
       </Screen>
     );
   }
   return (
-    <Screen style={styles.form}>
+    <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
       {error ? <ErrorBanner message={error} /> : null}
       <FormSection
         title="Hatırlatma ayrıntıları"

@@ -26,6 +26,7 @@ vi.mock('@/shared/theme', () => {
     useThemedStyles: (factory: (value: typeof theme) => unknown) => factory(theme),
   };
 });
+vi.mock('@/shared/components/AutomotiveBackdrop', () => ({ AutomotiveBackdrop: () => null }));
 vi.mock('@/shared/components/ui', async () => {
   const React = await import('react');
   const host = (name: string) =>
@@ -33,11 +34,13 @@ vi.mock('@/shared/components/ui', async () => {
       children,
       title,
       message,
+      backdrop: _backdrop,
       ...props
     }: {
       children?: ReactNode;
       title?: ReactNode;
       message?: ReactNode;
+      backdrop?: ReactNode;
       [key: string]: unknown;
     }) {
       return React.createElement(name, { ...props, title, message }, children ?? title ?? message);

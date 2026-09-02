@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppButton, Card, EmptyState, Screen } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { useDataStore } from '@/store/dataStore';
 import {
   radii,
@@ -18,7 +19,7 @@ export default function ExpertiseListScreen() {
   const styles = useThemedStyles(createStyles);
   const reports = useDataStore((state) => state.expertiseReports);
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppButton
         title="Yeni ekspertiz raporu"
         icon="add"
