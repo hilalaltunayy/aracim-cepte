@@ -99,19 +99,44 @@ export function getFuelEntryValues(state: FuelEntryState): FuelEntryValues {
   };
 }
 
-export function validateFuelEntry(state: FuelEntryState): {
+/** Deterministic Smart Fuel trio. A fuel record needs at least two of these. */
+export const FUEL_CORE_FIELDS: readonly FuelValueField[] = ['total', 'liters', 'pricePerLiter'];
+
+export const FUEL_CORE_RULE_MESSAGE =
+  'Yakıt kaydı için toplam tutar, litre ve litre fiyatından en az ikisini girin. Üçüncü değer otomatik hesaplanır.';
+
+export interface FuelEntryValidation {
   valid: boolean;
   errors: Partial<Record<FuelValueField, 'required' | 'invalid'>>;
-} {
+  /** How many of the deterministic trio hold a valid positive value. */
+  coreValueCount: number;
+  /** Set when the save is blocked purely by the two-of-three trio rule. */
+  reason?: 'insufficient_core_values';
+}
+
+export function validateFuelEntry(state: FuelEntryState): FuelEntryValidation {
   const values = getFuelEntryValues(state);
   const errors: Partial<Record<FuelValueField, 'required' | 'invalid'>> = {};
-  if (values.total === null || values.total <= 0) errors.total = state.total.trim() ? 'invalid' : 'required';
+  const isValidPositive = (raw: string, parsed: number | null) =>
+    raw.trim().length > 0 && parsed !== null && parsed > 0;
+
+  const coreValueCount = FUEL_CORE_FIELDS.filter((field) =>
+    isValidPositive(state[field], values[field]),
+  ).length;
+
+  if (state.total.trim() && (values.total === null || values.total <= 0)) errors.total = 'invalid';
   if (state.liters.trim() && (values.liters === null || values.liters <= 0)) errors.liters = 'invalid';
-  if (
-    state.pricePerLiter.trim() &&
-    (values.pricePerLiter === null || values.pricePerLiter <= 0)
-  ) {
+  if (state.pricePerLiter.trim() && (values.pricePerLiter === null || values.pricePerLiter <= 0)) {
     errors.pricePerLiter = 'invalid';
   }
-  return { valid: Object.keys(errors).length === 0, errors };
+
+  const insufficient = coreValueCount < 2;
+  return {
+    valid: Object.keys(errors).length === 0 && !insufficient,
+    errors,
+    coreValueCount,
+    ...(insufficient && Object.keys(errors).length === 0
+      ? { reason: 'insufficient_core_values' as const }
+      : {}),
+  };
 }

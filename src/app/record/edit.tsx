@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, Animated, StyleSheet, Text } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   AppButton,
   AppInput,
   DateField,
   ErrorBanner,
+  FeedbackBanner,
   FormSection,
   LoadingScreen,
   NoVehicleState,
@@ -37,10 +38,12 @@ import {
 import { createMaintenanceTitle } from '@/features/maintenance/domain/maintenancePackages';
 import {
   createFuelEntryState,
+  FUEL_CORE_RULE_MESSAGE,
   getFuelEntryValues,
   updateFuelEntry,
   validateFuelEntry,
 } from '@/features/fuel/domain/fuelEntry';
+import { useShakeAnimation } from '@/shared/hooks/useShakeAnimation';
 import { FUEL_STATIONS, type FuelStationId } from '@/features/fuel/config/fuelStations';
 import { FuelPriceReferenceSection } from '@/features/fuelPrice/components/FuelPriceReferenceSection';
 import { FuelReceiptOcrSection } from '@/features/fuel/ocr/FuelReceiptOcrSection';
@@ -120,6 +123,7 @@ export default function RecordEditScreen() {
     useState<MaintenancePackageKey>('manual');
   const [maintenancePackageTitle, setMaintenancePackageTitle] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const { shake, style: shakeStyle } = useShakeAnimation();
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const mutationRequestId = useRef(createRequestId());
@@ -288,6 +292,7 @@ export default function RecordEditScreen() {
     setSubmitted(true);
     if (!valid || parsedAmount === null) {
       if (type === 'maintenance' && !maintenanceValidation.valid) setDetailsExpanded(true);
+      shake();
       return;
     }
     if (mileageEvaluation.level === 'warning') {
@@ -453,6 +458,9 @@ export default function RecordEditScreen() {
             {fuelEntry.calculatedField === 'pricePerLiter' ? (
               <Text style={[styles.calculated, { color: colors.muted }]}>Otomatik hesaplandı</Text>
             ) : null}
+            {submitted && fuelValidation.reason === 'insufficient_core_values' ? (
+              <FeedbackBanner tone="warning" message={FUEL_CORE_RULE_MESSAGE} />
+            ) : null}
             <SelectField<FuelStationId | ''>
               label="Yakıt istasyonu"
               value={stationBrand}
@@ -560,7 +568,9 @@ export default function RecordEditScreen() {
           }}
         />
       ) : null}
-      <AppButton title="Kaydet" loading={loading || submitting} onPress={submit} />
+      <Animated.View style={shakeStyle}>
+        <AppButton title="Kaydet" loading={loading || submitting} onPress={submit} />
+      </Animated.View>
       {existing ? <AppButton title="Kaydı sil" variant="danger" onPress={remove} /> : null}
     </Screen>
   );

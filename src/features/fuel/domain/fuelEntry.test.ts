@@ -59,9 +59,12 @@ describe('smart fuel entry', () => {
     expect(getFuelEntryValues(state).liters).toBeCloseTo(23.1, 2);
   });
 
-  it('accepts total-only records and preserves unknown values as null', () => {
+  it('blocks a single-core-value record and preserves unknown values as null (REV-005 trio rule)', () => {
     const state = updateFuelEntry(createFuelEntryState(), 'total', '500');
-    expect(validateFuelEntry(state).valid).toBe(true);
+    const result = validateFuelEntry(state);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('insufficient_core_values');
+    expect(result.coreValueCount).toBe(1);
     expect(getFuelEntryValues(state)).toEqual({ total: 500, liters: null, pricePerLiter: null });
   });
 
@@ -74,7 +77,17 @@ describe('smart fuel entry', () => {
   });
 
   it('rejects a completely empty entry', () => {
-    expect(validateFuelEntry(createFuelEntryState()).valid).toBe(false);
+    const result = validateFuelEntry(createFuelEntryState());
+    expect(result.valid).toBe(false);
+    expect(result.reason).toBe('insufficient_core_values');
+  });
+
+  it('calculates the third value so two entered core values satisfy the save rule', () => {
+    const state = enter(['liters', '20'], ['pricePerLiter', '45']);
+    const result = validateFuelEntry(state);
+    expect(result.valid).toBe(true);
+    expect(result.coreValueCount).toBe(3);
+    expect(getFuelEntryValues(state).total).toBeCloseTo(900, 2);
   });
 
   it.each(['0', '-1', 'NaN', 'Infinity'])('rejects unsafe optional value %s', (value) => {
