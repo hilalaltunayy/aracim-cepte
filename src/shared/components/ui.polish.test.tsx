@@ -18,6 +18,10 @@ vi.mock('react-native', () => ({
     timing: () => ({ start: vi.fn() }),
   },
   AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: vi.fn(async () => false),
+    addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+  },
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Modal: 'Modal',
   Platform: { OS: 'android' },

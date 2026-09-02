@@ -33,6 +33,7 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
+import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 import {
   formatDate,
@@ -57,11 +58,17 @@ export function Screen({
   style,
   backgroundColor,
   scrollEnabled = true,
+  backdrop,
 }: PropsWithChildren<{
   scroll?: boolean;
   style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
   scrollEnabled?: boolean;
+  /**
+   * Fixed decorative layer rendered behind (and outside) the scroll area so it
+   * never parallaxes. Callers pass `<AutomotiveBackdrop />`.
+   */
+  backdrop?: ReactNode;
 }>) {
   const { colors } = useAppTheme();
   const styles = useStyles();
@@ -99,6 +106,7 @@ export function Screen({
       style={[styles.safe, { backgroundColor: resolvedBackground }]}
       edges={['top', 'left', 'right']}
     >
+      {backdrop ?? null}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -340,6 +348,82 @@ export function PasswordInput({
           color={colors.muted}
         />
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Independent rounded input with an animated floating label (no external form
+ * card, no stacked label + placeholder). Accessibility label always resolves to
+ * the field name. Shares the base input styling with {@link AppInput}.
+ */
+export function FloatingField({
+  label,
+  error,
+  value,
+  multiline,
+  ...props
+}: TextInputProps & { label: string; error?: string | null }) {
+  const { colors } = useAppTheme();
+  const styles = useStyles();
+  const [focused, setFocused] = useState(false);
+  const visibleLabel = withoutOptionalSuffix(label);
+  const floated = focused || Boolean(value && String(value).length > 0);
+  const [progress] = useState(() => new Animated.Value(floated ? 1 : 0));
+
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: floated ? 1 : 0,
+      duration: 140,
+      useNativeDriver: false,
+    }).start();
+  }, [floated, progress]);
+
+  return (
+    <View style={styles.field}>
+      <View style={[styles.floatingWrap, multiline && styles.multiline]}>
+        <Animated.Text
+          pointerEvents="none"
+          style={[
+            styles.floatingLabel,
+            {
+              top: progress.interpolate({ inputRange: [0, 1], outputRange: [17, 7] }),
+              fontSize: progress.interpolate({ inputRange: [0, 1], outputRange: [15, 11] }),
+              color: error
+                ? colors.error
+                : floated
+                  ? colors.primaryAction
+                  : colors.muted,
+            },
+          ]}
+        >
+          {visibleLabel}
+        </Animated.Text>
+        <TextInput
+          placeholderTextColor={colors.muted}
+          {...props}
+          value={value}
+          multiline={multiline}
+          accessibilityLabel={props.accessibilityLabel ?? visibleLabel}
+          onFocus={(event) => {
+            setFocused(true);
+            props.onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            props.onBlur?.(event);
+          }}
+          style={[
+            styles.input,
+            styles.floatingInput,
+            focused && styles.inputFocused,
+            multiline && styles.multiline,
+            error && styles.inputError,
+            props.style,
+          ]}
+        />
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -840,26 +924,91 @@ export function LoadingScreen() {
   );
 }
 
-export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export type FeedbackTone = 'error' | 'warning' | 'success' | 'info';
+
+const FEEDBACK_ICON: Record<FeedbackTone, keyof typeof Ionicons.glyphMap> = {
+  error: 'alert-circle',
+  warning: 'warning',
+  success: 'checkmark-circle',
+  info: 'information-circle',
+};
+
+/**
+ * Unified modern feedback surface: soft-tinted rounded banner with a small tone
+ * icon and a gentle fade/slide entrance (skipped under reduce-motion). Replaces
+ * the old flat full-width colour blocks. Business logic stays with callers.
+ */
+export function FeedbackBanner({
+  tone = 'info',
+  message,
+  title,
+  onRetry,
+  action,
+}: {
+  tone?: FeedbackTone;
+  message: string;
+  title?: string;
+  onRetry?: () => void;
+  action?: { label: string; onPress: () => void };
+}) {
   const { colors } = useAppTheme();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
+  const [progress] = useState(() => new Animated.Value(reducedMotion ? 1 : 0));
+  const assertive = tone === 'error' || tone === 'warning';
+  const resolved = action ?? (onRetry ? { label: 'Tekrar dene', onPress: onRetry } : null);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      progress.setValue(1);
+      return;
+    }
+    Animated.timing(progress, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+  }, [progress, reducedMotion]);
+
+  const toneColor = colors[tone];
+  const toneSurface = colors[`${tone}Surface`];
+
   return (
-    <View style={styles.errorBanner} accessibilityRole="alert">
-      <Ionicons name="alert-circle-outline" size={20} color={colors.danger} accessible={false} />
-      <Text style={styles.errorBannerText}>{message}</Text>
-      {onRetry ? (
+    <Animated.View
+      accessibilityRole={assertive ? 'alert' : undefined}
+      accessibilityLiveRegion={assertive ? 'assertive' : 'polite'}
+      style={[
+        styles.feedbackBanner,
+        { backgroundColor: toneSurface, borderColor: toneColor },
+        {
+          opacity: progress,
+          transform: [
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) },
+          ],
+        },
+      ]}
+    >
+      <Ionicons name={FEEDBACK_ICON[tone]} size={20} color={toneColor} accessible={false} />
+      <View style={styles.feedbackBannerBody}>
+        {title ? (
+          <Text style={[styles.feedbackBannerTitle, { color: toneColor }]}>{title}</Text>
+        ) : null}
+        <Text style={styles.feedbackBannerText}>{message}</Text>
+      </View>
+      {resolved ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Tekrar dene"
+          accessibilityLabel={resolved.label}
           hitSlop={8}
           style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-          onPress={onRetry}
+          onPress={resolved.onPress}
         >
-          <Text style={styles.retry}>Tekrar dene</Text>
+          <Text style={[styles.retry, { color: toneColor }]}>{resolved.label}</Text>
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
+}
+
+/** Backwards-compatible error banner; delegates to {@link FeedbackBanner}. */
+export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return <FeedbackBanner tone="error" message={message} onRetry={onRetry} />;
 }
 
 export function StatusBadge({
@@ -967,6 +1116,15 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     buttonTextDisabled: { color: colors.disabledText },
     field: { gap: 7 },
     fieldLabel: { color: colors.textPrimary, ...typography.label },
+    floatingWrap: { position: 'relative', justifyContent: 'center' },
+    floatingLabel: {
+      position: 'absolute',
+      left: spacing.lg,
+      fontFamily: fontFamilies.medium,
+      backgroundColor: 'transparent',
+      zIndex: 1,
+    },
+    floatingInput: { paddingTop: 18, paddingBottom: 4 },
     input: {
       minHeight: 54,
       borderWidth: 1,
@@ -1155,6 +1313,18 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       gap: spacing.sm,
     },
     errorBannerText: { color: colors.textPrimary, flex: 1, ...typography.caption },
+    feedbackBanner: {
+      borderRadius: radii.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    feedbackBannerBody: { flex: 1, gap: 2 },
+    feedbackBannerTitle: { ...typography.label },
+    feedbackBannerText: { color: colors.textPrimary, ...typography.caption },
     retryButton: { minHeight: 36, justifyContent: 'center' },
     retry: { color: colors.error, ...typography.label },
     badge: {
