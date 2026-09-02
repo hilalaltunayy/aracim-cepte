@@ -149,7 +149,7 @@ describe('live-first legal route behavior', () => {
 
     legalPressables.forEach((pressable, index) => {
       act(() => pressable.props.onPress());
-      const [link, fallback] = openLegalLinkMock.mock.calls[index];
+      const [link, fallback] = openLegalLinkMock.mock.calls[index] as unknown as [(typeof LEGAL_LINKS)[number], () => void];
       expect(link).toMatchObject(LEGAL_LINKS[index]);
       act(() => fallback());
       expect(routerMock.push).toHaveBeenLastCalledWith(LEGAL_LINKS[index].href);
@@ -163,7 +163,7 @@ describe('live-first legal route behavior', () => {
 
     rows.forEach((row, index) => {
       act(() => row.props.onPress());
-      const [link, fallback] = openLegalLinkMock.mock.calls[index];
+      const [link, fallback] = openLegalLinkMock.mock.calls[index] as unknown as [(typeof LEGAL_LINKS)[number], () => void];
       expect(link).toEqual(LEGAL_LINKS[index]);
       act(() => fallback());
       expect(routerMock.push).toHaveBeenLastCalledWith(LEGAL_LINKS[index].href);

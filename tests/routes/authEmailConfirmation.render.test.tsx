@@ -78,7 +78,7 @@ describe('email confirmation route', () => {
     const renderer = await mount();
     expect(JSON.stringify(renderer.toJSON())).toContain('E-posta adresiniz doğrulandı');
     const login = renderer.root.find(
-      (node) => node.type === 'AppButton' && node.props.title === 'Giriş ekranına dön',
+      (node) => (node.type as unknown) === 'AppButton' && node.props.title === 'Giriş ekranına dön',
     );
     act(() => login.props.onPress());
     expect(routerMock.replace).toHaveBeenCalledWith('/auth/login');
