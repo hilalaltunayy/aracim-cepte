@@ -27,60 +27,67 @@ interface HullSection {
   width: number;
   bottom: number;
   top: number;
+  /** Corner rounding at the roof/top edge as a fraction of the section height. */
+  topRound?: number;
+  /** Corner rounding at the sill/bottom edge as a fraction of the section height. */
+  bottomRound?: number;
 }
 
+const RING_CORNER_STEPS = 3;
+
+/** A closed rounded-rectangle ring of points (x,y) in the section's local plane. */
+function ringPoints(section: HullSection): [number, number][] {
+  const halfWidth = section.width / 2;
+  const height = section.top - section.bottom;
+  const topR = Math.max(0, Math.min(0.5, section.topRound ?? 0.32)) * Math.min(halfWidth, height);
+  const bottomR =
+    Math.max(0, Math.min(0.5, section.bottomRound ?? 0.16)) * Math.min(halfWidth, height);
+  const arc = (
+    cx: number,
+    cy: number,
+    r: number,
+    from: number,
+    to: number,
+  ): [number, number][] => {
+    if (r <= 0) return [[cx, cy]];
+    const points: [number, number][] = [];
+    for (let step = 0; step <= RING_CORNER_STEPS; step += 1) {
+      const angle = from + ((to - from) * step) / RING_CORNER_STEPS;
+      points.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
+    }
+    return points;
+  };
+  return [
+    ...arc(halfWidth - bottomR, section.bottom + bottomR, bottomR, -Math.PI / 2, 0),
+    ...arc(halfWidth - topR, section.top - topR, topR, 0, Math.PI / 2),
+    ...arc(-halfWidth + topR, section.top - topR, topR, Math.PI / 2, Math.PI),
+    ...arc(-halfWidth + bottomR, section.bottom + bottomR, bottomR, Math.PI, Math.PI * 1.5),
+  ];
+}
+
+/** Lofts a smooth hull through rounded cross-sections along the z axis. */
 function createSectionHull(sections: readonly HullSection[]): BufferGeometry {
+  const rings = sections.map(ringPoints);
+  const ringSize = rings[0].length;
   const positions: number[] = [];
   const indices: number[] = [];
-  for (const section of sections) {
-    const halfWidth = section.width / 2;
-    positions.push(
-      -halfWidth,
-      section.bottom,
-      section.z,
-      halfWidth,
-      section.bottom,
-      section.z,
-      halfWidth,
-      section.top,
-      section.z,
-      -halfWidth,
-      section.top,
-      section.z,
-    );
+  rings.forEach((ring, sectionIndex) => {
+    for (const [x, y] of ring) positions.push(x, y, sections[sectionIndex].z);
+  });
+  for (let sectionIndex = 0; sectionIndex < rings.length - 1; sectionIndex += 1) {
+    const a = sectionIndex * ringSize;
+    const b = a + ringSize;
+    for (let point = 0; point < ringSize; point += 1) {
+      const next = (point + 1) % ringSize;
+      indices.push(a + point, b + next, b + point, a + point, a + next, b + next);
+    }
   }
-  for (let index = 0; index < sections.length - 1; index += 1) {
-    const a = index * 4;
-    const b = a + 4;
-    indices.push(
-      a,
-      b + 1,
-      b,
-      a,
-      a + 1,
-      b + 1,
-      a + 1,
-      a + 2,
-      b + 2,
-      a + 1,
-      b + 2,
-      b + 1,
-      a + 2,
-      a + 3,
-      b + 3,
-      a + 2,
-      b + 3,
-      b + 2,
-      a + 3,
-      a,
-      b,
-      a + 3,
-      b,
-      b + 3,
-    );
+  // Flat end caps (triangle fan around each terminal ring).
+  const last = (rings.length - 1) * ringSize;
+  for (let point = 1; point < ringSize - 1; point += 1) {
+    indices.push(0, point + 1, point);
+    indices.push(last, last + point, last + point + 1);
   }
-  const last = (sections.length - 1) * 4;
-  indices.push(0, 3, 2, 0, 2, 1, last, last + 1, last + 2, last, last + 2, last + 3);
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
@@ -137,17 +144,57 @@ function OrbitController({
 }
 
 function Wheel({ position, radius }: { position: [number, number, number]; radius: number }) {
+  const width = radius * 0.42;
   return (
     <group position={position} rotation={[0, 0, Math.PI / 2]}>
-      <mesh>
-        <cylinderGeometry args={[radius, radius, radius * 0.44, 20]} />
-        <meshStandardMaterial color="#172127" roughness={0.86} />
+      {/* tyre */}
+      <mesh castShadow>
+        <cylinderGeometry args={[radius, radius, width, 28]} />
+        <meshStandardMaterial color="#15191E" roughness={0.92} metalness={0.02} />
       </mesh>
-      <mesh position={[0, radius * 0.24, 0]}>
-        <cylinderGeometry args={[radius * 0.49, radius * 0.49, 0.025, 10]} />
-        <meshStandardMaterial color="#9AAAB1" metalness={0.58} roughness={0.36} />
+      {/* sidewall inset */}
+      <mesh position={[0, width * 0.5 + 0.001, 0]}>
+        <cylinderGeometry args={[radius * 0.7, radius * 0.7, 0.012, 24]} />
+        <meshStandardMaterial color="#1E242B" roughness={0.8} />
       </mesh>
+      {/* alloy rim */}
+      <mesh position={[0, width * 0.52, 0]}>
+        <cylinderGeometry args={[radius * 0.56, radius * 0.56, 0.03, 24]} />
+        <meshStandardMaterial color="#C6D0D6" metalness={0.82} roughness={0.28} />
+      </mesh>
+      {/* hub + spokes hint */}
+      <mesh position={[0, width * 0.54, 0]}>
+        <cylinderGeometry args={[radius * 0.2, radius * 0.2, 0.036, 12]} />
+        <meshStandardMaterial color="#8A959C" metalness={0.7} roughness={0.35} />
+      </mesh>
+      {[0, 1, 2, 3, 4].map((spoke) => (
+        <mesh
+          key={spoke}
+          position={[0, width * 0.53, 0]}
+          rotation={[0, (spoke * Math.PI) / 2.5, 0]}
+        >
+          <boxGeometry args={[radius * 0.9, 0.02, radius * 0.16]} />
+          <meshStandardMaterial color="#AEB9BF" metalness={0.75} roughness={0.32} />
+        </mesh>
+      ))}
     </group>
+  );
+}
+
+function WheelArch({
+  position,
+  radius,
+  width,
+}: {
+  position: [number, number, number];
+  radius: number;
+  width: number;
+}) {
+  return (
+    <mesh position={position} rotation={[0, 0, Math.PI / 2]}>
+      <torusGeometry args={[radius * 1.12, width * 0.34, 8, 18, Math.PI]} />
+      <meshStandardMaterial color="#20272D" roughness={0.7} />
+    </mesh>
   );
 }
 
@@ -252,21 +299,25 @@ function ProceduralVehicle({
 
   const wheelX = profile.width * 0.51;
   const wheelZ = profile.wheelBase / 2;
+  const wheelWidth = profile.wheelRadius * 0.42;
   return (
     <group position={[0, -0.27, 0]}>
-      <mesh geometry={mainBody}>
+      <mesh geometry={mainBody} castShadow>
         <meshStandardMaterial
           color={vehicleColor}
-          metalness={0.24}
-          roughness={0.34}
+          metalness={0.5}
+          roughness={0.32}
+          envMapIntensity={0.9}
           side={DoubleSide}
         />
       </mesh>
       <mesh geometry={cabin}>
         <meshStandardMaterial
-          color={profile.openRoof ? '#28363C' : '#638C9C'}
-          metalness={0.12}
-          roughness={0.22}
+          color={profile.openRoof ? '#202A30' : '#1C2A33'}
+          metalness={0.1}
+          roughness={0.12}
+          transparent
+          opacity={profile.openRoof ? 1 : 0.82}
           side={DoubleSide}
         />
       </mesh>
@@ -274,12 +325,29 @@ function ProceduralVehicle({
         <mesh geometry={roof}>
           <meshStandardMaterial
             color={vehicleColor}
-            metalness={0.2}
-            roughness={0.34}
+            metalness={0.5}
+            roughness={0.32}
             side={DoubleSide}
           />
         </mesh>
       ) : null}
+      {/* front + rear bumpers */}
+      {[profile.length / 2 - 0.02, -profile.length / 2 + 0.02].map((z, index) => (
+        <mesh key={index} position={[0, 0.42, z]}>
+          <boxGeometry args={[profile.width * 0.98, 0.3, 0.16]} />
+          <meshStandardMaterial color="#2B343A" roughness={0.6} metalness={0.2} />
+        </mesh>
+      ))}
+      {([-1, 1] as const).flatMap((side) =>
+        [wheelZ, -wheelZ].map((z) => (
+          <WheelArch
+            key={`arch:${side}:${z}`}
+            position={[side * wheelX * 0.98, profile.wheelRadius + 0.02, z]}
+            radius={profile.wheelRadius}
+            width={wheelWidth}
+          />
+        )),
+      )}
       {profile.pickupBed ? (
         <mesh position={[0, profile.bodyHeight + 0.015, -profile.length * 0.34]}>
           <boxGeometry args={[profile.width * 0.76, 0.04, profile.length * 0.26]} />
@@ -337,7 +405,8 @@ export default function Sedan3DScene({
   const gesture = useMemo(() => {
     const pan = Gesture.Pan()
       .maxPointers(1)
-      .minDistance(1)
+      .minDistance(2)
+      .averageTouches(true)
       .onBegin(beginInteraction)
       .onChange((event) => handlePan(event.changeX, event.changeY))
       .onFinalize(endInteraction)
@@ -367,13 +436,21 @@ export default function Sedan3DScene({
           gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         >
           <color attach="background" args={[colors.diagramBackground]} />
-          <ambientLight intensity={1.55} />
-          <directionalLight position={[4, 7, 6]} intensity={2.05} />
-          <directionalLight position={[-4, 3, -3]} intensity={0.65} />
+          <hemisphereLight args={['#ffffff', '#3a4750', 0.85]} />
+          <ambientLight intensity={0.35} />
+          <directionalLight position={[5, 8, 5]} intensity={1.9} castShadow />
+          <directionalLight position={[-6, 4, -4]} intensity={0.5} color="#cfe6ff" />
+          <spotLight position={[0, 6, -6]} angle={0.6} penumbra={1} intensity={0.5} />
           <ProceduralVehicle profile={profile} vehicleColor={vehicleColor} />
-          <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[4.4, 36]} />
-            <meshStandardMaterial color={colors.neutralSurface} roughness={1} />
+          {/* studio floor */}
+          <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <circleGeometry args={[7, 48]} />
+            <meshStandardMaterial color={colors.neutralSurface} roughness={0.95} metalness={0.02} />
+          </mesh>
+          {/* soft contact shadow */}
+          <mesh position={[0, 0.012, -0.1]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[profile.length * 0.34, 32]} />
+            <meshBasicMaterial color="#0d1418" transparent opacity={0.22} />
           </mesh>
           <OrbitController controllerRef={controllerRef} />
         </Canvas>

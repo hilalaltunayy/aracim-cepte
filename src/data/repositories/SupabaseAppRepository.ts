@@ -74,29 +74,31 @@ export class SupabaseAppRepository implements AppRepository {
     const vehicleRows = data ?? [];
     if (!vehicleRows.length) return [];
     const vehicleIds = vehicleRows.map((vehicle) => vehicle.id);
-    const [photoResult, attachmentResult] = await Promise.all([
-      client
-        .from('vehicle_photos')
-        .select('*')
-        .in('vehicle_id', vehicleIds)
-        .eq('is_primary', true),
-      client
-        .from('attachments')
-        .select('*')
-        .in('vehicle_id', vehicleIds)
-        .eq('parent_type', 'vehicle_photo'),
-    ]);
-    if (photoResult.error) {
-      throw createDataAccessError('vehicles.primary-photos', photoResult.error);
+    const { data: photoRows, error: photoError } = await client
+      .from('vehicle_photos')
+      .select('*')
+      .in('vehicle_id', vehicleIds)
+      .eq('is_primary', true);
+    if (photoError) {
+      throw createDataAccessError('vehicles.primary-photos', photoError);
     }
-    if (attachmentResult.error) {
-      throw createDataAccessError('vehicles.photo-attachments', attachmentResult.error);
+    const { data: attachmentRows, error: attachmentError } = (photoRows ?? []).length
+      ? await client
+          .from('attachments')
+          .select('*')
+          .in(
+            'id',
+            (photoRows ?? []).map((photo) => photo.attachment_id),
+          )
+      : { data: [], error: null };
+    if (attachmentError) {
+      throw createDataAccessError('vehicles.photo-attachments', attachmentError);
     }
     const attachmentById = new Map(
-      (attachmentResult.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
+      (attachmentRows ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
     );
     const primaryByVehicle = new Map<string, NonNullable<Vehicle['primaryPhoto']>>();
-    for (const photo of photoResult.data ?? []) {
+    for (const photo of photoRows ?? []) {
       const attachment = attachmentById.get(photo.attachment_id);
       if (attachment) primaryByVehicle.set(photo.vehicle_id, { id: photo.id, storagePath: attachment.storagePath });
     }
@@ -159,26 +161,29 @@ export class SupabaseAppRepository implements AppRepository {
 
   async listVehiclePhotos(vehicleId: string): Promise<VehiclePhoto[]> {
     const client = getSupabaseClient();
-    const [photos, attachments] = await Promise.all([
-      client
-        .from('vehicle_photos')
-        .select('*')
-        .eq('vehicle_id', vehicleId)
-        .order('is_primary', { ascending: false })
-        .order('sort_order')
-        .order('created_at'),
-      client
-        .from('attachments')
-        .select('*')
-        .eq('vehicle_id', vehicleId)
-        .eq('parent_type', 'vehicle_photo'),
-    ]);
-    if (photos.error) throw photos.error;
-    if (attachments.error) throw attachments.error;
+    const { data: photoRows, error: photoError } = await client
+      .from('vehicle_photos')
+      .select('*')
+      .eq('vehicle_id', vehicleId)
+      .order('is_primary', { ascending: false })
+      .order('sort_order')
+      .order('created_at');
+    if (photoError) throw photoError;
+    if (!photoRows?.length) return [];
+    // Resolve the linked attachment rows directly by id so a photo is never
+    // silently dropped because of a parent_type drift on the attachment row.
+    const { data: attachmentRows, error: attachmentError } = await client
+      .from('attachments')
+      .select('*')
+      .in(
+        'id',
+        photoRows.map((photo) => photo.attachment_id),
+      );
+    if (attachmentError) throw attachmentError;
     const attachmentById = new Map<string, Attachment>(
-      (attachments.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
+      (attachmentRows ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
     );
-    return (photos.data ?? []).flatMap((photo) => {
+    return photoRows.flatMap((photo) => {
       const attachment = attachmentById.get(photo.attachment_id);
       return attachment ? [mapVehiclePhoto(photo, attachment)] : [];
     });
@@ -328,6 +333,20 @@ export class SupabaseAppRepository implements AppRepository {
     const attachmentById = new Map<string, Attachment>(
       (attachments.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
     );
+    // Guarantee every vehicle photo resolves its attachment even if the row's
+    // parent_type drifted: fetch any still-missing ones directly by id.
+    const missingPhotoAttachmentIds = (vehiclePhotos.data ?? [])
+      .map((photo) => photo.attachment_id)
+      .filter((id) => !attachmentById.has(id));
+    if (missingPhotoAttachmentIds.length) {
+      const { data: extraAttachments } = await client
+        .from('attachments')
+        .select('*')
+        .in('id', missingPhotoAttachmentIds);
+      for (const attachment of extraAttachments ?? []) {
+        attachmentById.set(attachment.id, mapAttachment(attachment));
+      }
+    }
     return {
       records: (records.data ?? []).map((row) =>
         mapRecord(
