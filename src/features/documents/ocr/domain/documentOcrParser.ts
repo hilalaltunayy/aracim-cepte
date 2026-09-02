@@ -80,6 +80,71 @@ const rulesByType: Partial<Record<DocumentType, readonly FieldRule[]>> = {
       kind: 'text',
     },
   ],
+  tax: [
+    {
+      fieldId: 'documentNumber',
+      labels: ['tahakkuk no', 'belge no', 'makbuz no'],
+      kind: 'text',
+    },
+    {
+      fieldId: 'eventDate',
+      labels: ['tahakkuk tarihi', 'belge tarihi', 'ödeme tarihi', 'odeme tarihi'],
+      kind: 'date',
+    },
+    {
+      fieldId: 'expiryDate',
+      labels: ['son ödeme tarihi', 'son odeme tarihi', 'vade tarihi'],
+      kind: 'date',
+    },
+  ],
+  service_document: [
+    {
+      fieldId: 'documentNumber',
+      labels: ['iş emri no', 'is emri no', 'servis formu no', 'belge no'],
+      kind: 'text',
+    },
+    { fieldId: 'issuerName', labels: ['servis', 'firma', 'işletme', 'isletme'], kind: 'text' },
+    {
+      fieldId: 'eventDate',
+      labels: ['servis tarihi', 'işlem tarihi', 'islem tarihi', 'tarih'],
+      kind: 'date',
+    },
+  ],
+  invoice: [
+    {
+      fieldId: 'documentNumber',
+      labels: ['fatura no', 'fiş no', 'fis no', 'belge no'],
+      kind: 'text',
+    },
+    {
+      fieldId: 'issuerName',
+      labels: ['firma', 'satıcı', 'satici', 'ünvan', 'unvan'],
+      kind: 'text',
+    },
+    {
+      fieldId: 'eventDate',
+      labels: ['fatura tarihi', 'fiş tarihi', 'fis tarihi', 'tarih'],
+      kind: 'date',
+    },
+  ],
+  custom: [
+    {
+      fieldId: 'documentNumber',
+      labels: ['ceza no', 'tutanak no', 'belge no', 'evrak no'],
+      kind: 'text',
+    },
+    { fieldId: 'issuerName', labels: ['kurum', 'düzenleyen', 'duzenleyen'], kind: 'text' },
+    {
+      fieldId: 'eventDate',
+      labels: ['düzenleme tarihi', 'duzenleme tarihi', 'belge tarihi', 'tarih'],
+      kind: 'date',
+    },
+    {
+      fieldId: 'expiryDate',
+      labels: ['son ödeme tarihi', 'son odeme tarihi', 'bitiş tarihi', 'bitis tarihi'],
+      kind: 'date',
+    },
+  ],
 };
 
 export const OCR_SUPPORTED_DOCUMENT_TYPES = Object.freeze(
@@ -109,11 +174,15 @@ function extractLabeledValue(lines: readonly string[], labels: readonly string[]
   for (const line of lines) {
     const normalizedLine = normalizeLabel(line);
     for (const label of normalizedLabels) {
-      if (!normalizedLine.startsWith(label)) continue;
-      const boundary = normalizedLine.slice(label.length, label.length + 1);
+      const labelIndex = normalizedLine.indexOf(label);
+      if (labelIndex < 0 || labelIndex > 4) continue;
+      const boundary = normalizedLine.slice(
+        labelIndex + label.length,
+        labelIndex + label.length + 1,
+      );
       if (boundary && !/[.:\-\s]/.test(boundary)) continue;
       const value = line
-        .slice(label.length)
+        .slice(labelIndex + label.length)
         .replace(/^\s*[.:\-–]+\s*/, '')
         .trim();
       if (value) return value;

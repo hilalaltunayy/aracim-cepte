@@ -11,8 +11,13 @@ describe('multi-vehicle domain rules', () => {
   it('uses centralized Free and Premium capacity limits', () => {
     expect(getVehicleCapacity(0)).toMatchObject({ current: 0, maximum: 1, canAdd: true });
     expect(getVehicleCapacity(1)).toMatchObject({ current: 1, maximum: 1, canAdd: false });
-    expect([0, 1, 2].every((count) => getVehicleCapacity(count, PLAN_ENTITLEMENTS.premium).canAdd)).toBe(true);
-    expect(getVehicleCapacity(2, PLAN_ENTITLEMENTS.premium)).toMatchObject({ current: 2, maximum: 3 });
+    expect(
+      [0, 1, 2].every((count) => getVehicleCapacity(count, PLAN_ENTITLEMENTS.premium).canAdd),
+    ).toBe(true);
+    expect(getVehicleCapacity(2, PLAN_ENTITLEMENTS.premium)).toMatchObject({
+      current: 2,
+      maximum: 3,
+    });
     expect(getVehicleCapacity(3, PLAN_ENTITLEMENTS.premium).canAdd).toBe(false);
   });
 
@@ -27,7 +32,7 @@ describe('multi-vehicle domain rules', () => {
 
   it('keeps display names concise and exposes a capacity-safe message', () => {
     expect(getVehicleDisplayName({ brand: ' Kia ', model: ' Sportage ' })).toBe('Kia Sportage');
-    expect(getVehicleLimitMessage({ maximum: 3 })).toContain('3 araÃ§');
+    expect(getVehicleLimitMessage({ maximum: 3 })).toContain('3 araç');
   });
 
   it('rejects stale vehicle bundle responses after an A to B switch', () => {

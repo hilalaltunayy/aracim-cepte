@@ -16,37 +16,29 @@ select set_config('request.jwt.claims', '{"sub":"a3500000-0000-4000-8000-0000000
 set local role authenticated;
 
 select * from public.reserve_ai_usage('a3520000-0000-4000-8000-000000000001', 'a3510000-0000-4000-8000-000000000001');
-select * from public.commit_ai_usage('a3520000-0000-4000-8000-000000000001');
-select * from public.commit_ai_usage('a3520000-0000-4000-8000-000000000001');
-do $$
-declare blocked boolean := false;
-begin
-  begin
-    perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000001', 'a3510000-0000-4000-8000-000000000001');
-  exception when others then blocked := sqlerrm like '%AI_OPERATION_ALREADY_COMMITTED%'; end;
-  if not blocked then raise exception 'Committed AI operation was replayed'; end if;
-end $$;
+select public.release_ai_usage('a3520000-0000-4000-8000-000000000001');
 select * from public.reserve_ai_usage('a3520000-0000-4000-8000-000000000002', 'a3510000-0000-4000-8000-000000000001');
 select * from public.commit_ai_usage('a3520000-0000-4000-8000-000000000002');
-select * from public.reserve_ai_usage('a3520000-0000-4000-8000-000000000003', 'a3510000-0000-4000-8000-000000000001');
-
+select * from public.commit_ai_usage('a3520000-0000-4000-8000-000000000002');
 do $$
-declare blocked boolean := false; own_count integer; used integer;
+declare blocked boolean := false; used integer;
 begin
   begin
-    perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000004', 'a3510000-0000-4000-8000-000000000001');
-  exception when others then blocked := sqlerrm like '%AI_MONTHLY_QUOTA_EXCEEDED%'; end;
-  if not blocked then raise exception 'Free AI quota/reservation concurrency bypassed'; end if;
-  perform public.release_ai_usage('a3520000-0000-4000-8000-000000000003');
+    perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000002', 'a3510000-0000-4000-8000-000000000001');
+  exception when others then blocked := sqlerrm like '%AI_OPERATION_ALREADY_COMMITTED%'; end;
+  if not blocked then raise exception 'Committed AI operation was replayed'; end if;
   select used_count into used from public.get_my_ai_usage();
-  if used <> 2 then raise exception 'Released AI reservation consumed quota'; end if;
-  perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000005', 'a3510000-0000-4000-8000-000000000001');
-  perform public.commit_ai_usage('a3520000-0000-4000-8000-000000000005');
+  if used <> 1 then raise exception 'Released request consumed quota or committed request was not counted'; end if;
   blocked := false;
   begin
-    perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000006', 'a3510000-0000-4000-8000-000000000001');
+    perform public.reserve_ai_usage('a3520000-0000-4000-8000-000000000003', 'a3510000-0000-4000-8000-000000000001');
   exception when others then blocked := sqlerrm like '%AI_MONTHLY_QUOTA_EXCEEDED%'; end;
-  if not blocked then raise exception 'Fourth successful Free AI request was accepted'; end if;
+  if not blocked then raise exception 'Second successful Free AI request was accepted'; end if;
+end $$;
+
+do $$
+declare blocked boolean := false; own_count integer;
+begin
   if has_table_privilege('authenticated', 'public.ai_usage_reservations', 'INSERT')
     or has_table_privilege('authenticated', 'public.ai_usage_reservations', 'UPDATE')
     or has_table_privilege('authenticated', 'public.ai_usage_reservations', 'DELETE') then

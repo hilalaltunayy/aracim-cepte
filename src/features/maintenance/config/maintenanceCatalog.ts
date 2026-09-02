@@ -29,7 +29,24 @@ export const defaultMaintenancePackages = [
 ] as const satisfies readonly DefaultMaintenancePackage[];
 
 const labels = new Map<string, string>(maintenanceCatalog.map((item) => [item.id, item.label]));
+const customPrefix = 'custom:';
+
+export function normalizeCustomMaintenanceLabel(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 70);
+}
+
+export function createCustomMaintenanceItemId(value: string): string | null {
+  const label = normalizeCustomMaintenanceLabel(value);
+  return label ? `${customPrefix}${label}` : null;
+}
+
+export function isCustomMaintenanceItemId(value: string): boolean {
+  return value.startsWith(customPrefix) && value.length > customPrefix.length;
+}
 
 export function getMaintenanceItemLabel(itemId: string): string {
-  return labels.get(itemId) ?? itemId;
+  return (
+    labels.get(itemId) ??
+    (isCustomMaintenanceItemId(itemId) ? itemId.slice(customPrefix.length) : itemId)
+  );
 }

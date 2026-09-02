@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +35,7 @@ vi.mock('@/shared/components/ui', async () => {
     AppHeader: host('AppHeader'),
     AppInput: host('AppInput'),
     Card: host('Card'),
+    FadeIn: host('FadeIn'),
     Screen: host('Screen'),
     SectionHeader: host('SectionHeader'),
     StatusBadge: host('StatusBadge'),
@@ -46,7 +47,7 @@ import type { VehicleAssistantResult } from '../domain/assistantContract';
 
 const success: VehicleAssistantResult = {
   source: 'provider',
-  quota: { used: 1, limit: 3, remaining: 2, periodStart: '2026-08-01' },
+  quota: { used: 1, limit: 1, remaining: 0, periodStart: '2026-08-01' },
   response: {
     answer: 'Bakım yaklaşıyor; 600 km içinde planlamak uygun olur.',
     domain: 'maintenance',
@@ -59,10 +60,10 @@ const success: VehicleAssistantResult = {
     suggestions: ['Bakım randevusu planlayın.'],
   },
 };
-const base = {
+const base: ComponentProps<typeof VehicleAssistantScreen> = {
   vehicleName: 'Kia Sportage',
-  initialQuota: { used: 0, limit: 3, remaining: 3, periodStart: '2026-08-01' },
-  entitlementLimit: 3,
+  initialQuota: { used: 0, limit: 1, remaining: 1, periodStart: '2026-08-01' },
+  entitlementLimit: 1,
   enabled: true,
   onAsk: vi.fn().mockResolvedValue(success),
 };
@@ -92,7 +93,12 @@ describe('VehicleAssistantScreen', () => {
       renderer.root.find((node) => String(node.type) === 'AppHeader').props.subtitle,
     ).toContain('Kia Sportage');
     expect(texts(renderer)).toContain('Örnek sorular');
-    expect(texts(renderer)).toContain('Bu ay 3 / 3 soru kaldı');
+    expect(texts(renderer)).toContain('Bu ay 1 / 1 soru kaldı');
+  });
+
+  it('uses the authenticated first name when it is available', async () => {
+    const renderer = await mount({ ...base, userName: 'Hilal' });
+    expect(texts(renderer)).toContain('Merhaba Hilal, aracınız hakkında sorun');
   });
 
   it('submits an explicit question and renders the structured answer', async () => {
@@ -104,14 +110,14 @@ describe('VehicleAssistantScreen', () => {
     await act(async () => button.props.onPress());
     expect(onAsk).toHaveBeenCalledWith('Bakım durumum nedir?');
     expect(texts(renderer)).toContain(success.response.answer);
-    expect(texts(renderer)).toContain('Bu ay 2 / 3 soru kaldı');
+    expect(texts(renderer)).toContain('Bu ay 0 / 1 soru kaldı');
     expect(renderer.root.find((node) => String(node.type) === 'StatusBadge').props.label).toBe(
       'Dikkat gerektirir',
     );
   });
 
   it('discloses human-readable evidence on demand and keeps suggestions out of raw JSON', async () => {
-    const renderer = await mount({ ...base, initialQuota: success.quota });
+    const renderer = await mount();
     const input = renderer.root.find((node) => String(node.type) === 'AppInput');
     await act(async () => input.props.onChangeText('Bunu neye göre söyledin?'));
     await act(async () =>
@@ -169,7 +175,7 @@ describe('VehicleAssistantScreen', () => {
   it('renders quota exhaustion and disables a new request', async () => {
     const renderer = await mount({
       ...base,
-      initialQuota: { used: 3, limit: 3, remaining: 0, periodStart: '2026-08-01' },
+      initialQuota: { used: 1, limit: 1, remaining: 0, periodStart: '2026-08-01' },
     });
     expect(texts(renderer)).toContain('Bu ayki Araç Asistanı kullanım sınırınıza ulaştınız.');
     expect(renderer.root.find((node) => String(node.type) === 'AppButton').props.disabled).toBe(

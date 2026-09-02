@@ -64,13 +64,15 @@ describe('DocumentOcrReviewPanel', () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
-  it('does not preselect an OCR overwrite for existing manual input', () => {
+  it('keeps OCR values directly editable and transfers every non-empty reviewed value', () => {
     const prepared = prepareReviewSuggestions(suggestions, {
       ...emptyValues,
       documentNumber: 'MANUEL-9',
     });
-    expect(prepared[0].selected).toBe(false);
-    expect(buildDocumentOcrFormPatch(prepared)).toEqual({ expiryDate: '2027-08-10' });
+    expect(buildDocumentOcrFormPatch(prepared)).toEqual({
+      documentNumber: 'POL-1',
+      expiryDate: '2027-08-10',
+    });
   });
 
   it('allows edit, remove and explicit apply without persisting itself', async () => {
@@ -97,14 +99,10 @@ describe('DocumentOcrReviewPanel', () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ suggestedValue: 'POL-EDIT' })]),
     );
-    act(() =>
-      renderer!.root
-        .findByProps({ testID: 'ocr-suggestion-toggle-documentNumber' })
-        .props.onPress(),
-    );
+    act(() => policyInput.props.onChangeText(''));
     expect(onChange).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ fieldId: 'documentNumber', selected: false }),
+        expect.objectContaining({ fieldId: 'documentNumber', suggestedValue: '' }),
       ]),
     );
     expect(onApply).not.toHaveBeenCalled();

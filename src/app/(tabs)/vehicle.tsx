@@ -100,6 +100,7 @@ export default function VehicleScreen() {
     deleteVehiclePhoto,
   } = useDataStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [vehicle3dInteracting, setVehicle3dInteracting] = useState(false);
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const vehicleState = resolveVehicleScreenState({ bootstrapped, vehicleFound: Boolean(vehicle) });
   if (vehicleState === 'loading') return <LoadingScreen />;
@@ -119,10 +120,13 @@ export default function VehicleScreen() {
       router.navigate('/vehicle/edit');
       return;
     }
-    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity));
+    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity), [
+      { text: 'Daha sonra', style: 'cancel' },
+      { text: 'Premium’u incele', onPress: () => router.push('/premium' as never) },
+    ]);
   };
   return (
-    <Screen>
+    <Screen scrollEnabled={!vehicle3dInteracting}>
       <AppHeader title="Aracım" subtitle="Kimlik, durum ve belgeler" />
       <Card style={styles.vehicleCard}>
         {vehicle.primaryPhoto ? (
@@ -186,7 +190,11 @@ export default function VehicleScreen() {
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.muted} accessible={false} />
       </Pressable>
-      <Vehicle3DRegion bodyType={vehicle.bodyType} colorId={vehicle.colorId} />
+      <Vehicle3DRegion
+        bodyType={vehicle.bodyType}
+        colorId={vehicle.colorId}
+        onInteractionChange={setVehicle3dInteracting}
+      />
       <VehiclePhotoGallery
         vehicleName={`${vehicle.brand} ${vehicle.model}`}
         photos={vehiclePhotos}

@@ -5,6 +5,7 @@ import {
   AppHeader,
   AppInput,
   Card,
+  FadeIn,
   Screen,
   SectionHeader,
   StatusBadge,
@@ -36,24 +37,29 @@ const severityPresentation = {
 
 export interface VehicleAssistantScreenProps {
   vehicleName: string;
+  userName?: string;
   initialQuota: AssistantQuotaState | null;
   entitlementLimit: number;
   enabled: boolean;
   onAsk(question: string): Promise<VehicleAssistantResult>;
+  onUpgrade?(): void;
 }
 
 export function VehicleAssistantScreen({
   vehicleName,
+  userName,
   initialQuota,
   entitlementLimit,
   enabled,
   onAsk,
+  onUpgrade,
 }: VehicleAssistantScreenProps) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const [question, setQuestion] = useState('');
   const [responseQuota, setResponseQuota] = useState<AssistantQuotaState | null>(null);
   const [result, setResult] = useState<VehicleAssistantResult | null>(null);
+  const [submittedQuestion, setSubmittedQuestion] = useState('');
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +75,7 @@ export function VehicleAssistantScreen({
     setError(null);
     try {
       const next = await onAsk(value);
+      setSubmittedQuestion(value);
       setResult(next);
       setEvidenceOpen(false);
       setResponseQuota(next.quota);
@@ -92,7 +99,9 @@ export function VehicleAssistantScreen({
       />
 
       <Card style={styles.introCard}>
-        <Text style={styles.introTitle}>Aracınız hakkında sorun</Text>
+        <Text style={styles.introTitle}>
+          {userName ? `Merhaba ${userName}, aracınız hakkında sorun` : 'Aracınız hakkında sorun'}
+        </Text>
         <Text style={styles.bodyText}>
           Bakım, yakıt, belge ve kaydedilen maliyet verilerinizi anlaşılır biçimde yorumlar. Kesin
           mekanik teşhis veya canlı dış veri sunmaz.
@@ -132,7 +141,14 @@ export function VehicleAssistantScreen({
           editable={!loading && enabled && !exhausted}
         />
         {exhausted ? (
-          <Text style={styles.limitText}>Bu ayki Araç Asistanı kullanım sınırınıza ulaştınız.</Text>
+          <View style={styles.limitBlock}>
+            <Text style={styles.limitText}>
+              Bu ayki Araç Asistanı kullanım sınırınıza ulaştınız.
+            </Text>
+            {onUpgrade ? (
+              <AppButton title="Premium’u incele" compact variant="ghost" onPress={onUpgrade} />
+            ) : null}
+          </View>
         ) : !enabled ? (
           <Text style={styles.limitText}>Araç Asistanı şu anda kullanıma kapalı.</Text>
         ) : null}
@@ -164,93 +180,101 @@ export function VehicleAssistantScreen({
       ) : null}
 
       {result ? (
-        <View style={styles.responseSection}>
-          <SectionHeader title="Yanıt" />
-          <Card style={styles.responseCard}>
-            <View style={styles.responseHeading}>
-              <View style={styles.responseIcon}>
-                <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+        <FadeIn>
+          <View style={styles.responseSection}>
+            <SectionHeader title="Yanıt" />
+            {submittedQuestion ? (
+              <View style={styles.questionBubble}>
+                <Text style={styles.questionLabel}>Siz</Text>
+                <Text style={styles.questionText}>{submittedQuestion}</Text>
               </View>
-              <View style={styles.responseHeadingText}>
-                <Text style={styles.cardTitle}>Araç Asistanı</Text>
-                <Text style={styles.responseMeta}>
-                  Yanıt yalnızca seçili araç verileriyle hazırlandı
-                </Text>
-              </View>
-              <StatusBadge
-                label={
-                  result.response.safetyEscalation
-                    ? 'Güvenlik öncelikli'
-                    : severityPresentation[result.response.severity].label
-                }
-                tone={
-                  result.response.safetyEscalation
-                    ? 'danger'
-                    : severityPresentation[result.response.severity].tone
-                }
-              />
-            </View>
-            <Text style={styles.answer}>{result.response.answer}</Text>
-          </Card>
-
-          {result.response.evidence.length ? (
-            <Card style={styles.evidenceCard}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Bu cevabı neye göre verdim?"
-                accessibilityState={{ expanded: evidenceOpen }}
-                style={({ pressed }) => [styles.evidenceToggle, pressed && styles.pressed]}
-                onPress={() => setEvidenceOpen((current) => !current)}
-              >
-                <View style={styles.evidenceIcon} accessible={false}>
-                  <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+            ) : null}
+            <Card style={styles.responseCard}>
+              <View style={styles.responseHeading}>
+                <View style={styles.responseIcon}>
+                  <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
                 </View>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>Bu cevabı neye göre verdim?</Text>
-                  <Text style={styles.meta}>
-                    {result.response.evidence.length} araç verisi kullanıldı
+                <View style={styles.responseHeadingText}>
+                  <Text style={styles.cardTitle}>Araç Asistanı</Text>
+                  <Text style={styles.responseMeta}>
+                    Yanıt yalnızca seçili araç verileriyle hazırlandı
                   </Text>
                 </View>
-                <Ionicons
-                  name={evidenceOpen ? 'chevron-up' : 'chevron-down'}
-                  size={20}
-                  color={colors.muted}
-                  accessible={false}
+                <StatusBadge
+                  label={
+                    result.response.safetyEscalation
+                      ? 'Güvenlik öncelikli'
+                      : severityPresentation[result.response.severity].label
+                  }
+                  tone={
+                    result.response.safetyEscalation
+                      ? 'danger'
+                      : severityPresentation[result.response.severity].tone
+                  }
                 />
-              </Pressable>
-              {evidenceOpen ? (
-                <View style={styles.evidenceList}>
-                  {result.response.evidence.map((item) => (
-                    <View key={`${item.factCode}:${item.value}`} style={styles.detailRow}>
-                      <Ionicons
-                        name="checkmark-circle-outline"
-                        size={19}
-                        color={colors.success}
-                        accessible={false}
-                      />
-                      <View style={styles.flex}>
-                        <Text style={styles.detailLabel}>{item.label}</Text>
-                        <Text style={styles.meta}>{item.value}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
+              </View>
+              <Text style={styles.answer}>{result.response.answer}</Text>
             </Card>
-          ) : null}
 
-          {result.response.suggestions.length ? (
-            <Card style={styles.detailCard}>
-              <Text style={styles.cardTitle}>Önerilen sonraki adımlar</Text>
-              {result.response.suggestions.map((suggestion) => (
-                <View key={suggestion} style={styles.detailRow}>
-                  <View style={styles.bullet} />
-                  <Text style={[styles.bodyText, styles.flex]}>{suggestion}</Text>
-                </View>
-              ))}
-            </Card>
-          ) : null}
-        </View>
+            {result.response.evidence.length ? (
+              <Card style={styles.evidenceCard}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Bu cevabı neye göre verdim?"
+                  accessibilityState={{ expanded: evidenceOpen }}
+                  style={({ pressed }) => [styles.evidenceToggle, pressed && styles.pressed]}
+                  onPress={() => setEvidenceOpen((current) => !current)}
+                >
+                  <View style={styles.evidenceIcon} accessible={false}>
+                    <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.cardTitle}>Bu cevabı neye göre verdim?</Text>
+                    <Text style={styles.meta}>
+                      {result.response.evidence.length} araç verisi kullanıldı
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={evidenceOpen ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color={colors.muted}
+                    accessible={false}
+                  />
+                </Pressable>
+                {evidenceOpen ? (
+                  <View style={styles.evidenceList}>
+                    {result.response.evidence.map((item) => (
+                      <View key={`${item.factCode}:${item.value}`} style={styles.detailRow}>
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={19}
+                          color={colors.success}
+                          accessible={false}
+                        />
+                        <View style={styles.flex}>
+                          <Text style={styles.detailLabel}>{item.label}</Text>
+                          <Text style={styles.meta}>{item.value}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </Card>
+            ) : null}
+
+            {result.response.suggestions.length ? (
+              <Card style={styles.detailCard}>
+                <Text style={styles.cardTitle}>Önerilen sonraki adımlar</Text>
+                {result.response.suggestions.map((suggestion) => (
+                  <View key={suggestion} style={styles.detailRow}>
+                    <View style={styles.bullet} />
+                    <Text style={[styles.bodyText, styles.flex]}>{suggestion}</Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+          </View>
+        </FadeIn>
       ) : null}
     </Screen>
   );
@@ -288,6 +312,7 @@ const createStyles = ({ colors }: AppTheme) =>
     suggestionText: { flex: 1, color: colors.navy, ...typography.bodyMedium },
     composerCard: { gap: spacing.md },
     limitText: { color: colors.warning, ...typography.caption },
+    limitBlock: { gap: spacing.xs, alignItems: 'flex-start' },
     loadingCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     errorCard: {
       flexDirection: 'row',
@@ -297,6 +322,17 @@ const createStyles = ({ colors }: AppTheme) =>
     },
     errorText: { flex: 1, color: colors.error, ...typography.body },
     responseSection: { gap: spacing.md },
+    questionBubble: {
+      alignSelf: 'flex-end',
+      maxWidth: '88%',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.lg,
+      backgroundColor: colors.paleAqua,
+    },
+    questionLabel: { color: colors.primary, ...typography.caption },
+    questionText: { color: colors.textPrimary, ...typography.body },
     responseCard: { gap: spacing.md },
     responseHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     responseHeadingText: { flex: 1, minWidth: 0, gap: 2 },

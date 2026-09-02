@@ -23,14 +23,14 @@ import type { PendingAttachment } from '@/features/attachments/domain/types';
 import { appRepository } from '@/data/repositories/SupabaseAppRepository';
 import { getFriendlyError, isSessionExpiredError } from '@/shared/utils/errors';
 import { createSafeStringStorage } from '@/data/storage/safeStorage';
-import {
-  canStartMutation,
-  requiresVehicleMileageCorrection,
-} from '@/shared/utils/repositoryRules';
+import { canStartMutation, requiresVehicleMileageCorrection } from '@/shared/utils/repositoryRules';
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useAuthStore } from '@/store/authStore';
 import { resolveActiveVehicleId } from '@/shared/utils/vehicleState';
-import { FREE_ENTITLEMENTS, type PlanEntitlements } from '@/features/entitlements/domain/entitlements';
+import {
+  FREE_ENTITLEMENTS,
+  type PlanEntitlements,
+} from '@/features/entitlements/domain/entitlements';
 import { loadCurrentEntitlements } from '@/features/entitlements/services/entitlementService';
 import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
 
@@ -113,13 +113,22 @@ export const useDataStore = create<DataState>()(
       const loadActiveData = async (vehicleId: string) => {
         const loadSequence = ++vehicleLoadSequence;
         const bundle = await appRepository.loadVehicleData(vehicleId);
-        if (!canApplyVehicleData(get().activeVehicleId, vehicleId, loadSequence, vehicleLoadSequence))
+        if (
+          !canApplyVehicleData(get().activeVehicleId, vehicleId, loadSequence, vehicleLoadSequence)
+        )
           return;
         set(bundle);
         void appRepository
           .reconcileVehicleData(vehicleId, bundle.reminders)
           .then((reconciled) => {
-            if (canApplyVehicleData(get().activeVehicleId, vehicleId, loadSequence, vehicleLoadSequence))
+            if (
+              canApplyVehicleData(
+                get().activeVehicleId,
+                vehicleId,
+                loadSequence,
+                vehicleLoadSequence,
+              )
+            )
               set(reconciled);
           })
           .catch(() => undefined);
@@ -253,9 +262,12 @@ export const useDataStore = create<DataState>()(
         saveVehiclePhoto: async (attachment, replacesPhotoId) => {
           const vehicleId = get().activeVehicleId;
           if (!vehicleId || !canStartMutation(get().loading)) return false;
-          if (!replacesPhotoId && get().vehiclePhotos.length >= get().entitlements.maxVehiclePhotos) {
+          if (
+            !replacesPhotoId &&
+            get().vehiclePhotos.length >= get().entitlements.maxVehiclePhotos
+          ) {
             set({
-              error: `PlanÄ±nÄ±zda en fazla ${get().entitlements.maxVehiclePhotos} araÃ§ fotoÄŸrafÄ± ekleyebilirsiniz.`,
+              error: `Planınızda en fazla ${get().entitlements.maxVehiclePhotos} araç fotoğrafı ekleyebilirsiniz.`,
             });
             return false;
           }

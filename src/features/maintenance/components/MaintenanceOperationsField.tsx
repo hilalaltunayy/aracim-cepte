@@ -4,20 +4,17 @@ import { Ionicons } from '@expo/vector-icons';
 import type { MaintenanceTemplate } from '@/domain/entities';
 import {
   defaultMaintenancePackages,
+  getMaintenanceItemLabel,
+  isCustomMaintenanceItemId,
   maintenanceCatalog,
 } from '@/features/maintenance/config/maintenanceCatalog';
 import {
+  addCustomMaintenanceItem,
   clonePackageItemIds,
   toggleMaintenanceItem,
 } from '@/features/maintenance/domain/maintenancePackages';
 import { AppButton, AppInput, SelectField, confirmAction } from '@/shared/components/ui';
-import {
-  fontFamilies,
-  radii,
-  spacing,
-  useThemedStyles,
-  type AppTheme,
-} from '@/shared/theme';
+import { fontFamilies, radii, spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 
 export type MaintenancePackageKey = `default:${string}` | `user:${string}` | 'manual';
 
@@ -44,6 +41,7 @@ export function MaintenanceOperationsField({
   const [creating, setCreating] = useState(false);
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateItems, setTemplateItems] = useState<string[]>([]);
+  const [customOperation, setCustomOperation] = useState('');
   const options = useMemo(
     () => [
       { value: 'manual' as const, label: 'İşlemleri kendim seçeyim' },
@@ -70,7 +68,8 @@ export function MaintenanceOperationsField({
       return;
     }
     const template = templates.find((value) => `user:${value.id}` === key);
-    if (template) onPackageChange(key, template.title, clonePackageItemIds(template.itemDefinitions));
+    if (template)
+      onPackageChange(key, template.title, clonePackageItemIds(template.itemDefinitions));
   };
 
   const selectedUserTemplate = selectedPackageKey.startsWith('user:')
@@ -94,6 +93,10 @@ export function MaintenanceOperationsField({
       setTemplateTitle('');
       setTemplateItems([]);
     }
+  };
+  const addCustom = () => {
+    setTemplateItems((items) => addCustomMaintenanceItem(items, customOperation));
+    setCustomOperation('');
   };
 
   return (
@@ -143,6 +146,24 @@ export function MaintenanceOperationsField({
             onChange={setTemplateItems}
             testIDPrefix="template-item"
           />
+          <View style={styles.customRow}>
+            <View style={styles.customInput}>
+              <AppInput
+                label="Özel işlem"
+                value={customOperation}
+                placeholder="Örn. Klima gazı kontrolü"
+                maxLength={70}
+                onChangeText={setCustomOperation}
+              />
+            </View>
+            <AppButton
+              title="Özel işlemi ekle"
+              compact
+              variant="secondary"
+              disabled={!customOperation.trim()}
+              onPress={addCustom}
+            />
+          </View>
           <View style={styles.actions}>
             <AppButton
               title="Vazgeç"
@@ -202,6 +223,21 @@ function OperationList({
           </Pressable>
         );
       })}
+      {selected.filter(isCustomMaintenanceItemId).map((itemId) => (
+        <Pressable
+          key={itemId}
+          testID={`${testIDPrefix}-${itemId}`}
+          accessibilityRole="checkbox"
+          accessibilityLabel={`${getMaintenanceItemLabel(itemId)} özel işlemi`}
+          accessibilityState={{ checked: true }}
+          style={({ pressed }) => [styles.item, styles.itemSelected, pressed && styles.pressed]}
+          onPress={() => onChange(toggleMaintenanceItem(selected, itemId))}
+        >
+          <Ionicons name="checkmark-circle" size={22} style={styles.icon} accessible={false} />
+          <Text style={styles.label}>{getMaintenanceItemLabel(itemId)}</Text>
+          <Ionicons name="close-circle-outline" size={20} style={styles.icon} accessible={false} />
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -236,4 +272,6 @@ const createStyles = ({ colors }: AppTheme) =>
       backgroundColor: colors.elevatedSurface,
     },
     creatorTitle: { color: colors.navy, fontFamily: fontFamilies.semibold, fontSize: 16 },
+    customRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+    customInput: { flex: 1, minWidth: 0 },
   });

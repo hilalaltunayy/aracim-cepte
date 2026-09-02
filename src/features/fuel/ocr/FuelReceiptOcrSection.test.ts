@@ -6,13 +6,20 @@ import type { PendingAttachment } from '@/features/attachments/domain/types';
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
-  StyleSheet: { create: <T,>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
 }));
 vi.mock('@/features/entitlements/services/ocrUsageQuota', () => ({
-  reserveOcrUsage: vi.fn().mockResolvedValue({ operationId: 'ocr-op', usage: { usedCount: 0, monthlyQuota: 3, periodStart: '2026-08-01' } }),
-  commitOcrUsage: vi.fn().mockResolvedValue({ usedCount: 1, monthlyQuota: 3, periodStart: '2026-08-01' }),
+  reserveOcrUsage: vi
+    .fn()
+    .mockResolvedValue({
+      operationId: 'ocr-op',
+      usage: { usedCount: 0, monthlyQuota: 3, periodStart: '2026-08-01' },
+    }),
+  commitOcrUsage: vi
+    .fn()
+    .mockResolvedValue({ usedCount: 1, monthlyQuota: 3, periodStart: '2026-08-01' }),
   releaseOcrUsage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/features/attachments/components/UnifiedAttachmentField', () => ({
@@ -28,7 +35,16 @@ vi.mock('@/shared/theme', () => ({
   spacing: { sm: 8, md: 12 },
   typography: { label: {}, caption: {} },
   useThemedStyles: (factory: (theme: unknown) => unknown) =>
-    factory({ colors: { textPrimary: '#000', textSecondary: '#555', border: '#ddd', elevatedSurface: '#fff', primaryAction: '#00a', warning: '#a80' } }),
+    factory({
+      colors: {
+        textPrimary: '#000',
+        textSecondary: '#555',
+        border: '#ddd',
+        elevatedSurface: '#fff',
+        primaryAction: '#00a',
+        warning: '#a80',
+      },
+    }),
 }));
 import { createFuelEntryState } from '../domain/fuelEntry';
 import {
@@ -48,7 +64,7 @@ const image: PendingAttachment = {
 };
 
 describe('FuelReceiptOcrSection review safety', () => {
-  it('does not preselect an OCR overwrite for existing manual input', () => {
+  it('keeps every OCR value directly editable and transfers each non-empty reviewed value', () => {
     const suggestions = prepareFuelReceiptReviewSuggestions(
       [
         { fieldId: 'total', value: '2000', source: 'ocr' },
@@ -59,17 +75,15 @@ describe('FuelReceiptOcrSection review safety', () => {
       '2026-08-11',
     );
 
-    expect(suggestions[0].selected).toBe(false);
-    expect(suggestions[1].selected).toBe(true);
-    expect(buildFuelReceiptFormPatch(suggestions)).toEqual({ liters: '43,29' });
+    expect(buildFuelReceiptFormPatch(suggestions)).toEqual({ total: '2000', liters: '43,29' });
   });
 
-  it('copies only explicitly selected edited suggestions into the unsaved form patch', () => {
+  it('copies only non-empty reviewed suggestions into the unsaved form patch', () => {
     expect(
       buildFuelReceiptFormPatch([
-        { fieldId: 'total', value: '2000', source: 'ocr', selected: true },
-        { fieldId: 'stationBrand', value: 'opet', source: 'ocr', selected: true },
-        { fieldId: 'recordDate', value: '2026-08-11', source: 'ocr', selected: false },
+        { fieldId: 'total', value: '2000', source: 'ocr' },
+        { fieldId: 'stationBrand', value: 'opet', source: 'ocr' },
+        { fieldId: 'recordDate', value: '', source: 'ocr' },
       ]),
     ).toEqual({ total: '2000', stationBrand: 'opet' });
   });
@@ -99,7 +113,9 @@ describe('FuelReceiptOcrSection review safety', () => {
     });
 
     act(() => renderer!.root.findByType('UnifiedAttachmentField' as never).props.onChange([image]));
-    await act(async () => renderer!.root.findByProps({ title: 'Fişten bilgileri tara' }).props.onPress());
+    await act(async () =>
+      renderer!.root.findByProps({ title: 'Fişten bilgileri tara' }).props.onPress(),
+    );
 
     expect(onApply).not.toHaveBeenCalled();
     expect(renderer!.root.findAllByProps({ testID: 'fuel-receipt-ocr-review' })).toHaveLength(1);

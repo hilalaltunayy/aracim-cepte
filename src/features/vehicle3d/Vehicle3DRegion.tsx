@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { BodyType, VehicleColorId } from '@/domain/entities';
 import { getVehicleRenderColor } from '@/features/vehicles/config/vehicleColors';
@@ -8,6 +8,8 @@ import { VEHICLE_3D_CONFIG } from './config';
 import { Vehicle3DErrorBoundary } from './Vehicle3DErrorBoundary';
 import { Vehicle3DViewportState } from './Vehicle3DViewportState';
 import { getVehicle3DMode } from './vehicle3dMode';
+import { getVehicle3DBodyProfile } from './bodyFamilies';
+import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
 
 const LazySedan3DScene = lazy(() => import('./Sedan3DScene'));
 
@@ -15,15 +17,18 @@ export interface Vehicle3DRegionProps {
   bodyType?: BodyType | null;
   colorId?: VehicleColorId | null;
   enabled?: boolean;
+  onInteractionChange?(active: boolean): void;
 }
 
 export function Vehicle3DRegion({
   bodyType,
   colorId,
   enabled = featureFlags.vehicle3dEnabled,
+  onInteractionChange,
 }: Vehicle3DRegionProps) {
   const styles = useThemedStyles(createStyles);
   const mode = getVehicle3DMode(enabled, bodyType);
+  const profile = useMemo(() => getVehicle3DBodyProfile(bodyType), [bodyType]);
   if (mode === 'disabled') return null;
 
   return (
@@ -37,7 +42,7 @@ export function Vehicle3DRegion({
       <View
         accessible
         accessibilityRole="image"
-        accessibilityLabel="Etkileşimli üç boyutlu sedan araç görünümü"
+        accessibilityLabel={`Etkileşimli üç boyutlu ${getVehicleBodyTypeLabel(bodyType)} araç görünümü`}
         accessibilityHint="Araç bilgileri bu görselin dışında metin olarak da sunulur."
         style={styles.viewport}
       >
@@ -46,7 +51,13 @@ export function Vehicle3DRegion({
         ) : (
           <Vehicle3DErrorBoundary>
             <Suspense fallback={<Vehicle3DViewportState state="loading" />}>
-              <LazySedan3DScene vehicleColor={getVehicleRenderColor(colorId)} />
+              {profile ? (
+                <LazySedan3DScene
+                  vehicleColor={getVehicleRenderColor(colorId)}
+                  profile={profile}
+                  onInteractionChange={onInteractionChange}
+                />
+              ) : null}
             </Suspense>
           </Vehicle3DErrorBoundary>
         )}

@@ -1,7 +1,7 @@
 /* eslint-disable import/first */
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VehicleDocument } from '@/domain/entities';
 
 const { dataState, routerMock } = vi.hoisted(() => ({
@@ -60,7 +60,7 @@ vi.mock('@/store/dataStore', () => ({
   useDataStore: (selector: (state: typeof dataState) => unknown) => selector(dataState),
 }));
 
-import DocumentsListScreen from './index';
+import DocumentsListScreen from '@/app/documents/index';
 
 const document = (id: string, expiryDate: string | null): VehicleDocument => ({
   id,
@@ -91,9 +91,15 @@ async function mount(): Promise<ReactTestRenderer> {
 
 describe('DocumentsListScreen archive UX', () => {
   beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-01T12:00:00+03:00'));
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
   });
 
   beforeEach(() => {

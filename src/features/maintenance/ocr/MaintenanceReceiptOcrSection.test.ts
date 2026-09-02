@@ -6,13 +6,20 @@ import type { PendingAttachment } from '@/features/attachments/domain/types';
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
-  StyleSheet: { create: <T,>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
 }));
 vi.mock('@/features/entitlements/services/ocrUsageQuota', () => ({
-  reserveOcrUsage: vi.fn().mockResolvedValue({ operationId: 'ocr-op', usage: { usedCount: 0, monthlyQuota: 3, periodStart: '2026-08-01' } }),
-  commitOcrUsage: vi.fn().mockResolvedValue({ usedCount: 1, monthlyQuota: 3, periodStart: '2026-08-01' }),
+  reserveOcrUsage: vi
+    .fn()
+    .mockResolvedValue({
+      operationId: 'ocr-op',
+      usage: { usedCount: 0, monthlyQuota: 3, periodStart: '2026-08-01' },
+    }),
+  commitOcrUsage: vi
+    .fn()
+    .mockResolvedValue({ usedCount: 1, monthlyQuota: 3, periodStart: '2026-08-01' }),
   releaseOcrUsage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/shared/components/ui', () => ({
@@ -24,7 +31,16 @@ vi.mock('@/shared/theme', () => ({
   spacing: { xs: 4, sm: 8, md: 12 },
   typography: { label: {}, caption: {} },
   useThemedStyles: (factory: (theme: unknown) => unknown) =>
-    factory({ colors: { textPrimary: '#000', textSecondary: '#555', border: '#ddd', elevatedSurface: '#fff', primaryAction: '#00a', warning: '#a80' } }),
+    factory({
+      colors: {
+        textPrimary: '#000',
+        textSecondary: '#555',
+        border: '#ddd',
+        elevatedSurface: '#fff',
+        primaryAction: '#00a',
+        warning: '#a80',
+      },
+    }),
 }));
 
 import {
@@ -42,10 +58,17 @@ const image: PendingAttachment = {
   sizeBytes: 1024,
   source: 'gallery',
 };
-const details = { serviceType: '', serviceName: '', partsCost: '', laborCost: '', invoiceNumber: '', notes: '' };
+const details = {
+  serviceType: '',
+  serviceName: '',
+  partsCost: '',
+  laborCost: '',
+  invoiceNumber: '',
+  notes: '',
+};
 
 describe('MaintenanceReceiptOcrSection review safety', () => {
-  it('does not preselect an OCR overwrite for existing manual values', () => {
+  it('keeps OCR values directly editable and transfers every non-empty reviewed value', () => {
     const suggestions = prepareMaintenanceReceiptReviewSuggestions(
       [
         { fieldId: 'total', value: '4300', source: 'ocr' },
@@ -55,8 +78,10 @@ describe('MaintenanceReceiptOcrSection review safety', () => {
       '5000',
       '2026-08-11',
     );
-    expect(suggestions[0].selected).toBe(false);
-    expect(buildMaintenanceReceiptPatch(suggestions)).toEqual({ partsCost: '3200' });
+    expect(buildMaintenanceReceiptPatch(suggestions)).toEqual({
+      total: '4300',
+      partsCost: '3200',
+    });
   });
 
   it('applies reviewed suggestions only after explicit user action', async () => {
@@ -69,13 +94,23 @@ describe('MaintenanceReceiptOcrSection review safety', () => {
     await act(async () => {
       renderer = create(
         React.createElement(MaintenanceReceiptOcrSection, {
-          attachments: [image], details, total: '', recordDate: '2026-08-11', disabled: false, onApply, analyze,
+          attachments: [image],
+          details,
+          total: '',
+          recordDate: '2026-08-11',
+          disabled: false,
+          onApply,
+          analyze,
         }),
       );
     });
-    await act(async () => renderer!.root.findByProps({ title: 'Fişten bilgileri tara' }).props.onPress());
+    await act(async () =>
+      renderer!.root.findByProps({ title: 'Fişten bilgileri tara' }).props.onPress(),
+    );
     expect(onApply).not.toHaveBeenCalled();
-    expect(renderer!.root.findAllByProps({ testID: 'maintenance-receipt-ocr-review' })).toHaveLength(1);
+    expect(
+      renderer!.root.findAllByProps({ testID: 'maintenance-receipt-ocr-review' }),
+    ).toHaveLength(1);
     act(() => renderer!.root.findByProps({ title: 'Forma aktar' }).props.onPress());
     expect(onApply).toHaveBeenCalledWith({ serviceName: 'ABC Oto' });
   });

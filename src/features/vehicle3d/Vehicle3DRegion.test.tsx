@@ -30,14 +30,24 @@ vi.mock('@/shared/theme', () => {
 
 vi.mock('./Sedan3DScene', async () => {
   const React = await import('react');
-  function MockSedan3DScene({ vehicleColor }: { vehicleColor: string }) {
+  function MockSedan3DScene({
+    vehicleColor,
+    profile,
+  }: {
+    vehicleColor: string;
+    profile: { family: string };
+  }) {
     React.useEffect(() => {
       sceneLifecycle.mounts += 1;
       return () => {
         sceneLifecycle.unmounts += 1;
       };
     }, []);
-    return React.createElement('Sedan3DScene', { vehicleColor, testID: 'mock-sedan-scene' });
+    return React.createElement('Sedan3DScene', {
+      vehicleColor,
+      profile,
+      testID: 'mock-sedan-scene',
+    });
   }
   return {
     default: MockSedan3DScene,
@@ -76,12 +86,14 @@ describe('isolated vehicle 3D region', () => {
     expect(sceneLifecycle.mounts).toBe(0);
   });
 
-  it('uses a calm fallback without mounting the renderer for unsupported and legacy bodies', async () => {
+  it('maps every supported body to an optimized family scene', async () => {
     const renderer = await mount(
       <Vehicle3DRegion enabled bodyType="suv_crossover" colorId="blue" />,
     );
-    expect(renderer.root.findByProps({ testID: 'vehicle-3d-unsupported' })).toBeDefined();
-    expect(sceneLifecycle.mounts).toBe(0);
+    expect(renderer.root.findByProps({ testID: 'mock-sedan-scene' }).props.profile.family).toBe(
+      'suv',
+    );
+    expect(sceneLifecycle.mounts).toBe(1);
   });
 
   it('lazy-mounts Sedan with TASK-018 color and neutral fallback color', async () => {

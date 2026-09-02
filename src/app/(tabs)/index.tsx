@@ -18,6 +18,7 @@ import {
 import { RecordCard } from '@/shared/components/entityCards';
 import { MiniBarChart } from '@/shared/components/MiniBarChart';
 import { useDataStore } from '@/store/dataStore';
+import { useAuthStore } from '@/store/authStore';
 import {
   fontFamilies,
   radii,
@@ -48,6 +49,10 @@ export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const displayName = useAuthStore((state) => {
+    const value = state.session?.user.user_metadata?.display_name;
+    return typeof value === 'string' ? value.trim().split(/\s+/)[0] : '';
+  });
   const {
     vehicles,
     activeVehicleId,
@@ -87,7 +92,10 @@ export default function DashboardScreen() {
       router.navigate('/vehicle/edit');
       return;
     }
-    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity));
+    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity), [
+      { text: 'Daha sonra', style: 'cancel' },
+      { text: 'Premium’u incele', onPress: () => router.push('/premium' as never) },
+    ]);
   };
   const actions = [
     { label: 'Yakıt', icon: 'water-outline', type: 'fuel' },
@@ -96,153 +104,169 @@ export default function DashboardScreen() {
     { label: 'Hatırlat', icon: 'notifications-outline', route: '/reminder/edit' },
   ] as const;
   return (
-    <Screen>
-      <AppHeader
-        title="Merhaba"
-        subtitle={`${vehicle.brand} ${vehicle.model} bugün nasıl?`}
-        action={
-          <Pressable
-            accessibilityRole={vehicles.length > 1 ? 'button' : undefined}
-            accessibilityLabel={vehicles.length > 1 ? 'Aktif aracı değiştir' : undefined}
-            style={({ pressed }) => [styles.headerIcon, pressed && vehicles.length > 1 && styles.headerPressed]}
-            disabled={vehicles.length <= 1}
-            onPress={() => setSwitcherOpen(true)}
+    <View style={styles.root}>
+      <Screen>
+        <AppHeader
+          title={displayName ? `Merhaba ${displayName}` : 'Merhaba'}
+          subtitle={`${vehicle.brand} ${vehicle.model} bugün nasıl?`}
+          action={
+            <Pressable
+              accessibilityRole={vehicles.length > 1 ? 'button' : undefined}
+              accessibilityLabel={vehicles.length > 1 ? 'Aktif aracı değiştir' : undefined}
+              style={({ pressed }) => [
+                styles.headerIcon,
+                pressed && vehicles.length > 1 && styles.headerPressed,
+              ]}
+              disabled={vehicles.length <= 1}
+              onPress={() => setSwitcherOpen(true)}
+            >
+              <Ionicons
+                name="car-sport-outline"
+                size={24}
+                color={colors.primary}
+                accessible={false}
+              />
+            </Pressable>
+          }
+        />
+        {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+        <FadeIn>
+          <LinearGradient
+            colors={[colors.brandGradientStart, colors.brandGradientEnd]}
+            style={styles.hero}
           >
-            <Ionicons
-              name="car-sport-outline"
-              size={24}
-              color={colors.primary}
-              accessible={false}
-            />
-          </Pressable>
-        }
-      />
-      {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-      <FadeIn>
-        <LinearGradient
-          colors={[colors.brandGradientStart, colors.brandGradientEnd]}
-          style={styles.hero}
-        >
-          <View style={styles.heroTop}>
-            <View style={styles.heroIdentity}>
-              <Text style={styles.plate}>{vehicle.plate ?? 'PLAKA EKLENMEDİ'}</Text>
-              <Text numberOfLines={2} style={styles.vehicleName}>
-                {vehicle.brand} {vehicle.model}
-              </Text>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIdentity}>
+                <Text style={styles.plate}>{vehicle.plate ?? 'PLAKA EKLENMEDİ'}</Text>
+                <Text numberOfLines={2} style={styles.vehicleName}>
+                  {vehicle.brand} {vehicle.model}
+                </Text>
+              </View>
+              <StatusBadge label={`${activeReminderCount} aktif plan`} tone="neutral" />
             </View>
-            <StatusBadge label={`${activeReminderCount} aktif plan`} tone="neutral" />
-          </View>
-          <View>
-            <Text style={styles.heroLabel}>Güncel kilometre</Text>
-            <Text style={styles.km}>{formatNumber(vehicle.currentKm)} km</Text>
-          </View>
-          <View style={styles.heroFooter}>
-            <Text style={styles.heroFooterText}>Toplam kayıt</Text>
-            <Text style={styles.heroFooterValue}>{records.length}</Text>
-          </View>
-        </LinearGradient>
-      </FadeIn>
-      <View style={styles.actions}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.label}
-            accessibilityRole="button"
-            accessibilityLabel={getDashboardShortcutAccessibilityLabel(action.label)}
-            style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-            onPress={() =>
-              'route' in action
-                ? router.navigate(action.route)
-                : router.navigate(createRecordHref(action.type))
-            }
-          >
-            <View style={styles.actionIcon}>
-              <Ionicons name={action.icon} size={22} color={colors.primary} accessible={false} />
+            <View>
+              <Text style={styles.heroLabel}>Güncel kilometre</Text>
+              <Text style={styles.km}>{formatNumber(vehicle.currentKm)} km</Text>
             </View>
-            <Text style={styles.actionLabel}>{action.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <SectionHeader title="Bu ayın görünümü" />
-      <View style={styles.metrics}>
-        {[
-          ['Yakıt', totals.fuel, 'water-outline'],
-          ['Bakım', totals.maintenance, 'construct-outline'],
-          ['Diğer', totals.expense, 'receipt-outline'],
-        ].map(([label, value, icon]) => (
-          <Card key={String(label)} style={styles.metric}>
-            <Ionicons
-              name={icon as keyof typeof Ionicons.glyphMap}
-              size={19}
-              color={colors.primary}
-              accessible={false}
-            />
-            <Text style={styles.metricLabel}>{label}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.metricValue}>
-              {formatCurrency(value as number)}
-            </Text>
-          </Card>
-        ))}
-      </View>
-      <Card>
-        <MiniBarChart data={monthly} />
-        {comparison === null ? (
-          <Text style={styles.insight}>Karşılaştırma için önceki ay verisi gerekiyor.</Text>
-        ) : (
-          <Text style={styles.insight}>
-            Önceki aya göre %
-            {Math.abs(comparison).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}{' '}
-            {comparison >= 0 ? 'artış' : 'azalış'}.
-          </Text>
-        )}
-      </Card>
-      <View style={styles.detailMetrics}>
-        <Card style={styles.detailMetric}>
-          <Text style={styles.detailValue}>
-            {fuelLiters > 0 ? `${formatNumber(fuelLiters, 1)} L` : '—'}
-          </Text>
-          <Text style={styles.metricLabel}>Toplam yakıt</Text>
-        </Card>
-      </View>
-      <SectionHeader
-        title="Son hareketler"
-        actionLabel="Tümünü gör"
-        onAction={() => router.push('/(tabs)/history')}
-      />
-      {recent.length ? (
-        <View style={styles.list}>
-          {recent.map((record) => (
-            <RecordCard
-              key={record.id}
-              record={record}
-              onPress={() => router.navigate(editRecordHref(record.id))}
-            />
+            <View style={styles.heroFooter}>
+              <Text style={styles.heroFooterText}>Toplam kayıt</Text>
+              <Text style={styles.heroFooterValue}>{records.length}</Text>
+            </View>
+          </LinearGradient>
+        </FadeIn>
+        <View style={styles.actions}>
+          {actions.map((action) => (
+            <Pressable
+              key={action.label}
+              accessibilityRole="button"
+              accessibilityLabel={getDashboardShortcutAccessibilityLabel(action.label)}
+              style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+              onPress={() =>
+                'route' in action
+                  ? router.navigate(action.route)
+                  : router.navigate(createRecordHref(action.type))
+              }
+            >
+              <View style={styles.actionIcon}>
+                <Ionicons name={action.icon} size={22} color={colors.primary} accessible={false} />
+              </View>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+            </Pressable>
           ))}
         </View>
-      ) : (
-        <EmptyState
-          title="Henüz kayıt yok"
-          message="İlk yakıt, bakım veya masraf kaydınızı ekleyerek başlayın."
-          icon="receipt-outline"
+        <SectionHeader title="Bu ayın görünümü" />
+        <View style={styles.metrics}>
+          {[
+            ['Yakıt', totals.fuel, 'water-outline'],
+            ['Bakım', totals.maintenance, 'construct-outline'],
+            ['Diğer', totals.expense, 'receipt-outline'],
+          ].map(([label, value, icon]) => (
+            <Card key={String(label)} style={styles.metric}>
+              <Ionicons
+                name={icon as keyof typeof Ionicons.glyphMap}
+                size={19}
+                color={colors.primary}
+                accessible={false}
+              />
+              <Text style={styles.metricLabel}>{label}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={styles.metricValue}>
+                {formatCurrency(value as number)}
+              </Text>
+            </Card>
+          ))}
+        </View>
+        <Card>
+          <MiniBarChart data={monthly} />
+          {comparison === null ? (
+            <Text style={styles.insight}>Karşılaştırma için önceki ay verisi gerekiyor.</Text>
+          ) : (
+            <Text style={styles.insight}>
+              Önceki aya göre %
+              {Math.abs(comparison).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}{' '}
+              {comparison >= 0 ? 'artış' : 'azalış'}.
+            </Text>
+          )}
+        </Card>
+        <View style={styles.detailMetrics}>
+          <Card style={styles.detailMetric}>
+            <Text style={styles.detailValue}>
+              {fuelLiters > 0 ? `${formatNumber(fuelLiters, 1)} L` : '—'}
+            </Text>
+            <Text style={styles.metricLabel}>Toplam yakıt</Text>
+          </Card>
+        </View>
+        <SectionHeader
+          title="Son hareketler"
+          actionLabel="Tümünü gör"
+          onAction={() => router.push('/(tabs)/history')}
         />
-      )}
-      <VehicleSwitcherSheet
-        visible={switcherOpen}
-        vehicles={vehicles}
-        activeVehicleId={activeVehicleId}
-        capacityLabel={`${capacity.current} / ${capacity.maximum} araç`}
-        onSelect={(vehicleId) => {
-          setSwitcherOpen(false);
-          void setActiveVehicle(vehicleId);
-        }}
-        onAddVehicle={requestAddVehicle}
-        onClose={() => setSwitcherOpen(false)}
-      />
-    </Screen>
+        {recent.length ? (
+          <View style={styles.list}>
+            {recent.map((record) => (
+              <RecordCard
+                key={record.id}
+                record={record}
+                onPress={() => router.navigate(editRecordHref(record.id))}
+              />
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            title="Henüz kayıt yok"
+            message="İlk yakıt, bakım veya masraf kaydınızı ekleyerek başlayın."
+            icon="receipt-outline"
+          />
+        )}
+        <VehicleSwitcherSheet
+          visible={switcherOpen}
+          vehicles={vehicles}
+          activeVehicleId={activeVehicleId}
+          capacityLabel={`${capacity.current} / ${capacity.maximum} araç`}
+          onSelect={(vehicleId) => {
+            setSwitcherOpen(false);
+            void setActiveVehicle(vehicleId);
+          }}
+          onAddVehicle={requestAddVehicle}
+          onClose={() => setSwitcherOpen(false)}
+        />
+      </Screen>
+      <Pressable
+        testID="dashboard-assistant-entry"
+        accessibilityRole="button"
+        accessibilityLabel="Araç Asistanını aç"
+        accessibilityHint="Seçili aracınız hakkında soru sorabileceğiniz ekranı açar."
+        style={({ pressed }) => [styles.assistantFab, pressed && styles.assistantFabPressed]}
+        onPress={() => router.push('/vehicle-assistant' as never)}
+      >
+        <Ionicons name="sparkles" size={21} color={colors.onBrand} accessible={false} />
+      </Pressable>
+    </View>
   );
 }
 
 const createStyles = ({ colors, shadows }: AppTheme) =>
   StyleSheet.create({
+    root: { flex: 1 },
     headerIcon: {
       width: 46,
       height: 46,
@@ -310,4 +334,17 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     detailMetric: { flex: 1, gap: spacing.xs },
     detailValue: { color: colors.navy, ...typography.cardTitle },
     list: { gap: spacing.md },
+    assistantFab: {
+      position: 'absolute',
+      right: spacing.lg,
+      bottom: 94,
+      width: 56,
+      height: 56,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 28,
+      backgroundColor: colors.primaryAction,
+      ...shadows.floating,
+    },
+    assistantFabPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
   });

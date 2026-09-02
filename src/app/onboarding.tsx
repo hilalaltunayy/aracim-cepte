@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { AppButton, FadeIn, Screen } from '@/shared/components/ui';
+import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
+import { AppButton, Screen } from '@/shared/components/ui';
 import {
   fontFamilies,
   radii,
@@ -14,8 +15,14 @@ import {
 } from '@/shared/theme';
 import { useDataStore } from '@/store/dataStore';
 
-function VehicleIllustration() {
+const AnimatedSvgGroup = Animated.createAnimatedComponent(G);
+
+function VehicleIllustration({ wheelProgress }: { wheelProgress: Animated.Value }) {
   const { colors } = useAppTheme();
+  const wheelRotation = wheelProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
   return (
     <Svg width="100%" height={260} viewBox="0 0 360 260" accessible={false}>
       <Circle cx="180" cy="125" r="108" fill={colors.brandSurfaceStrong} />
@@ -25,10 +32,46 @@ function VehicleIllustration() {
       />
       <Path d="M132 105l29-12c14-5 32-4 44 2l30 15-103-5Z" fill={colors.illustrationGlass} />
       <Rect x="55" y="153" width="250" height="42" rx="21" fill={colors.illustrationTrim} />
-      <Circle cx="111" cy="194" r="26" fill={colors.illustrationWheel} />
-      <Circle cx="111" cy="194" r="12" fill={colors.illustrationHub} />
-      <Circle cx="253" cy="194" r="26" fill={colors.illustrationWheel} />
-      <Circle cx="253" cy="194" r="12" fill={colors.illustrationHub} />
+      <AnimatedSvgGroup origin="111, 194" rotation={wheelRotation as unknown as number}>
+        <Circle cx="111" cy="194" r="26" fill={colors.illustrationWheel} />
+        <Circle cx="111" cy="194" r="12" fill={colors.illustrationHub} />
+        <Line
+          x1="111"
+          y1="182"
+          x2="111"
+          y2="206"
+          stroke={colors.illustrationAccent}
+          strokeWidth="2"
+        />
+        <Line
+          x1="99"
+          y1="194"
+          x2="123"
+          y2="194"
+          stroke={colors.illustrationAccent}
+          strokeWidth="2"
+        />
+      </AnimatedSvgGroup>
+      <AnimatedSvgGroup origin="253, 194" rotation={wheelRotation as unknown as number}>
+        <Circle cx="253" cy="194" r="26" fill={colors.illustrationWheel} />
+        <Circle cx="253" cy="194" r="12" fill={colors.illustrationHub} />
+        <Line
+          x1="253"
+          y1="182"
+          x2="253"
+          y2="206"
+          stroke={colors.illustrationAccent}
+          strokeWidth="2"
+        />
+        <Line
+          x1="241"
+          y1="194"
+          x2="265"
+          y2="194"
+          stroke={colors.illustrationAccent}
+          strokeWidth="2"
+        />
+      </AnimatedSvgGroup>
       <Path
         d="M67 166h33M265 166h31"
         stroke={colors.illustrationAccent}
@@ -39,10 +82,61 @@ function VehicleIllustration() {
   );
 }
 
+function Entrance({ progress, children }: { progress: Animated.Value; children: React.ReactNode }) {
+  return (
+    <Animated.View
+      style={{
+        width: '100%',
+        opacity: progress,
+        transform: [
+          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function OnboardingScreen() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const setOnboardingSeen = useDataStore((state) => state.setOnboardingSeen);
+  const [entrances] = useState(() => Array.from({ length: 6 }, () => new Animated.Value(0)));
+  const [wheelProgress] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduceMotion) => {
+      if (!mounted) return;
+      if (reduceMotion) {
+        entrances.forEach((value) => value.setValue(1));
+        wheelProgress.setValue(1);
+        return;
+      }
+      Animated.sequence([
+        Animated.timing(entrances[0], { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.parallel([
+          Animated.timing(entrances[1], { toValue: 1, duration: 320, useNativeDriver: true }),
+          Animated.timing(wheelProgress, { toValue: 1, duration: 520, useNativeDriver: false }),
+        ]),
+        Animated.stagger(
+          70,
+          entrances
+            .slice(2, 5)
+            .map((value) =>
+              Animated.timing(value, { toValue: 1, duration: 220, useNativeDriver: true }),
+            ),
+        ),
+        Animated.timing(entrances[5], { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start();
+    });
+    return () => {
+      mounted = false;
+      entrances.forEach((value) => value.stopAnimation());
+      wheelProgress.stopAnimation();
+    };
+  }, [entrances, wheelProgress]);
   const continueToAuth = () => {
     setOnboardingSeen();
     router.replace('/auth/login');
@@ -53,7 +147,7 @@ export default function OnboardingScreen() {
       style={styles.gradient}
     >
       <Screen style={styles.screen} backgroundColor="transparent">
-        <FadeIn>
+        <Entrance progress={entrances[0]}>
           <View style={styles.brand}>
             <Text style={styles.eyebrow}>ARACINIZIN DİJİTAL YOL ARKADAŞI</Text>
             <Text style={styles.title}>Aracım Cepte</Text>
@@ -61,26 +155,32 @@ export default function OnboardingScreen() {
               Masraflarınızı, bakımlarınızı ve yaklaşan tarihleri tek, güvenli bir yerde yönetin.
             </Text>
           </View>
-        </FadeIn>
-        <View style={styles.hero}>
-          <VehicleIllustration />
-        </View>
+        </Entrance>
+        <Entrance progress={entrances[1]}>
+          <View style={styles.hero}>
+            <VehicleIllustration wheelProgress={wheelProgress} />
+          </View>
+        </Entrance>
         <View style={styles.featureRow}>
           {[
             ['Masraf takibi', 'Tüm kayıtlarınız düzenli'],
             ['Akıllı plan', 'Tarih ve kilometre hatırlatıcıları'],
             ['Güvenli bulut', 'Size özel, korumalı veriler'],
-          ].map(([title, message]) => (
-            <View key={title} style={styles.feature}>
-              <View style={styles.dot} />
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{title}</Text>
-                <Text style={styles.featureMessage}>{message}</Text>
+          ].map(([title, message], index) => (
+            <Entrance key={title} progress={entrances[index + 2]}>
+              <View style={styles.feature}>
+                <View style={styles.dot} />
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{title}</Text>
+                  <Text style={styles.featureMessage}>{message}</Text>
+                </View>
               </View>
-            </View>
+            </Entrance>
           ))}
         </View>
-        <AppButton title="Başlayalım" onPress={continueToAuth} />
+        <Entrance progress={entrances[5]}>
+          <AppButton title="Başlayalım" onPress={continueToAuth} />
+        </Entrance>
       </Screen>
     </LinearGradient>
   );

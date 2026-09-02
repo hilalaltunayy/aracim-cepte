@@ -42,6 +42,7 @@ vi.mock('react-native-gesture-handler', async () => {
   const React = await import('react');
   const createGesture = (kind: 'pan' | 'pinch') => {
     const builder = {
+      maxPointers: () => builder,
       minDistance: () => builder,
       onChange: (callback: (event: { changeX: number; changeY: number }) => void) => {
         if (kind === 'pan') gestureCallbacks.panChange = callback;
@@ -51,6 +52,7 @@ vi.mock('react-native-gesture-handler', async () => {
         if (kind === 'pinch') gestureCallbacks.pinchBegin = callback;
         return builder;
       },
+      onFinalize: () => builder,
       onUpdate: (callback: (event: { scale: number }) => void) => {
         if (kind === 'pinch') gestureCallbacks.pinchUpdate = callback;
         return builder;
@@ -77,11 +79,14 @@ vi.mock('@/shared/theme', () => ({
 }));
 
 import Sedan3DScene from './Sedan3DScene';
+import { getVehicle3DBodyProfile } from './bodyFamilies';
 
 async function mount(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
   await act(async () => {
-    renderer = create(<Sedan3DScene vehicleColor="#C93B3B" />);
+    renderer = create(
+      <Sedan3DScene vehicleColor="#C93B3B" profile={getVehicle3DBodyProfile('sedan')!} />,
+    );
   });
   return renderer!;
 }
@@ -110,7 +115,7 @@ describe('procedural Sedan 3D scene lifecycle', () => {
     const renderer = await mount();
     const canvas = renderer.root.findByProps({ testID: 'mock-canvas' });
     expect(canvas.props.frameloop).toBe('demand');
-    expect(renderer.root.findByProps({ testID: 'sedan-3d-scene' })).toBeDefined();
+    expect(renderer.root.findByProps({ testID: 'vehicle-3d-scene' })).toBeDefined();
     expect(camera.position.set).toHaveBeenCalled();
 
     act(() => {

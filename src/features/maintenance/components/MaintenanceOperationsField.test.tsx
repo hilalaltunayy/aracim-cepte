@@ -67,8 +67,9 @@ async function mount(overrides: Record<string, unknown> = {}): Promise<ReactTest
 
 describe('MaintenanceOperationsField', () => {
   beforeAll(() => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   it('applies default and user packages as copied form selections', async () => {
@@ -111,5 +112,28 @@ describe('MaintenanceOperationsField', () => {
       'engine_oil',
       'oil_filter',
     ]);
+  });
+
+  it('adds, deduplicates and removes a custom operation before saving the package', async () => {
+    const onCreateTemplate = vi.fn(async () => true);
+    const renderer = await mount({ onCreateTemplate });
+    act(() => renderer.root.findByProps({ title: 'Yeni paket oluştur' }).props.onPress());
+    const customInput = renderer.root.findByProps({ label: 'Özel işlem' });
+    act(() => customInput.props.onChangeText('  Klima gazı kontrolü  '));
+    act(() => renderer.root.findByProps({ title: 'Özel işlemi ekle' }).props.onPress());
+    const custom = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        String(node.props.testID).startsWith('template-item-custom:'),
+    );
+    expect(custom).toHaveLength(1);
+    act(() => custom[0].props.onPress());
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Pressable' &&
+          String(node.props.testID).startsWith('template-item-custom:'),
+      ),
+    ).toHaveLength(0);
   });
 });

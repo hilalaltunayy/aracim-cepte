@@ -35,7 +35,7 @@ sayılır ve kota tüketmez.
 
 ## Kota ve production enablement
 
-UTC takvim ayı için Free **3**, Premium **50** başarılı yanıt kullanır. `ai_usage_reservations` ve
+UTC takvim ayı için Free **1**, Premium **50** başarılı yanıt kullanır. `ai_usage_reservations` ve
 authenticated-only RPC'ler advisory lock ile paralel aşımı engeller. Soru, yanıt ve context tabloda
 tutulmaz. Downgrade veri silmez.
 

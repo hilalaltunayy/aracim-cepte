@@ -1,12 +1,21 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { FuelStationId } from '@/domain/entities';
 import { UnifiedAttachmentField } from '@/features/attachments/components/UnifiedAttachmentField';
-import { isPendingAttachment, type AttachmentListItem, type PendingAttachment } from '@/features/attachments/domain/types';
+import {
+  isPendingAttachment,
+  type AttachmentListItem,
+  type PendingAttachment,
+} from '@/features/attachments/domain/types';
 import { AppButton, AppInput, ErrorBanner, SelectField } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { FUEL_STATIONS } from '../config/fuelStations';
-import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
+import {
+  commitOcrUsage,
+  releaseOcrUsage,
+  reserveOcrUsage,
+  type OcrUsage,
+} from '@/features/entitlements/services/ocrUsageQuota';
 import type { FuelEntryState } from '../domain/fuelEntry';
 import {
   analyzeFuelReceiptAttachment,
@@ -14,45 +23,56 @@ import {
   type FuelReceiptOcrSuggestion,
 } from './fuelReceiptOcr';
 
-type ReviewSuggestion = FuelReceiptOcrSuggestion & { selected: boolean };
+type ReviewSuggestion = FuelReceiptOcrSuggestion;
 type FuelReceiptPatch = Partial<{
   total: string;
   liters: string;
   pricePerLiter: string;
   stationBrand: FuelStationId;
   recordDate: string;
+  description: string;
 }>;
 type Analyzer = (attachment: PendingAttachment) => ReturnType<typeof analyzeFuelReceiptAttachment>;
 
-function hasValue(field: FuelReceiptOcrField, fuel: FuelEntryState, station: FuelStationId | '', date: string) {
+function hasValue(
+  field: FuelReceiptOcrField,
+  fuel: FuelEntryState,
+  station: FuelStationId | '',
+  date: string,
+) {
   if (field === 'stationBrand') return Boolean(station);
   if (field === 'recordDate') return Boolean(date);
-  return Boolean(fuel[field].trim());
+  return field === 'total' || field === 'liters' || field === 'pricePerLiter'
+    ? Boolean(fuel[field].trim())
+    : false;
 }
 
 export function prepareFuelReceiptReviewSuggestions(
   suggestions: readonly FuelReceiptOcrSuggestion[],
-  fuelEntry: FuelEntryState,
-  stationBrand: FuelStationId | '',
-  recordDate: string,
+  _fuelEntry: FuelEntryState,
+  _stationBrand: FuelStationId | '',
+  _recordDate: string,
 ): ReviewSuggestion[] {
-  return suggestions.map((suggestion) => ({
-    ...suggestion,
-    selected: !hasValue(suggestion.fieldId, fuelEntry, stationBrand, recordDate),
-  }));
+  return suggestions.map((suggestion) => ({ ...suggestion }));
 }
 
 export function buildFuelReceiptFormPatch(
   suggestions: readonly ReviewSuggestion[],
 ): FuelReceiptPatch {
   const patch: FuelReceiptPatch = {};
+  const metadata: string[] = [];
   suggestions
-    .filter((item) => item.selected && item.value.trim())
+    .filter((item) => item.value.trim())
     .forEach((item) => {
       if (item.fieldId === 'stationBrand') patch.stationBrand = item.value as FuelStationId;
       else if (item.fieldId === 'recordDate') patch.recordDate = item.value;
+      else if (item.fieldId === 'receiptTime') metadata.push(`Fiş saati: ${item.value.trim()}`);
+      else if (item.fieldId === 'location') metadata.push(`Fiş konumu: ${item.value.trim()}`);
+      else if (item.fieldId === 'documentNumber')
+        metadata.push(`Fiş / belge no: ${item.value.trim()}`);
       else patch[item.fieldId] = item.value;
     });
+  if (metadata.length) patch.description = metadata.join('\n');
   return patch;
 }
 
@@ -71,7 +91,10 @@ function fieldLabel(fieldId: FuelReceiptOcrField) {
   if (fieldId === 'liters') return 'Litre';
   if (fieldId === 'pricePerLiter') return 'Litre fiyatı';
   if (fieldId === 'stationBrand') return 'İstasyon';
-  return 'Tarih';
+  if (fieldId === 'recordDate') return 'Tarih';
+  if (fieldId === 'receiptTime') return 'Saat';
+  if (fieldId === 'location') return 'İl / şube';
+  return 'Fiş / belge no';
 }
 
 export function FuelReceiptOcrSection({
@@ -108,8 +131,16 @@ export function FuelReceiptOcrSection({
     }
 
     let operationId: string;
-    try { ({ operationId } = await reserveOcrUsage('fuel_receipt')); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.'); return; }
+    try {
+      ({ operationId } = await reserveOcrUsage('fuel_receipt'));
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.',
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     setWarning(null);
@@ -121,15 +152,28 @@ export function FuelReceiptOcrSection({
         setError(message(result.code));
         return;
       }
-      try { setUsage(await commitOcrUsage(operationId)); }
-      catch (caught) { setError(caught instanceof Error ? caught.message : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.'); return; }
+      try {
+        setUsage(await commitOcrUsage(operationId));
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.',
+        );
+        return;
+      }
       setWarning(
         result.result.inconsistent
           ? 'Fişteki tutarlar birbiriyle uyumlu görünmüyor. Kaydetmeden önce kontrol edin.'
           : null,
       );
       setSuggestions(
-        prepareFuelReceiptReviewSuggestions(result.result.suggestions, fuelEntry, stationBrand, recordDate),
+        prepareFuelReceiptReviewSuggestions(
+          result.result.suggestions,
+          fuelEntry,
+          stationBrand,
+          recordDate,
+        ),
       );
     } catch {
       void releaseOcrUsage(operationId);
@@ -149,7 +193,8 @@ export function FuelReceiptOcrSection({
     <View style={styles.container}>
       <Text style={styles.title}>Yakıt fişi tarama</Text>
       <Text style={styles.helper}>
-        Fiş görseli yalnız tarama için kullanılır; siz onaylamadan forma aktarılmaz veya kaydedilmez.
+        Fiş görseli yalnız tarama için kullanılır; siz onaylamadan forma aktarılmaz veya
+        kaydedilmez.
       </Text>
       <UnifiedAttachmentField
         items={attachments}
@@ -159,39 +204,35 @@ export function FuelReceiptOcrSection({
         helper="Kamera, galeri veya dosyadan seçin. JPG ve PNG taranabilir."
       />
       {error ? <ErrorBanner message={error} /> : null}
-      {usage ? <Text style={styles.helper}>{usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı</Text> : null}
+      {usage ? (
+        <Text style={styles.helper}>
+          {usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı
+        </Text>
+      ) : null}
       {warning ? <Text style={styles.warning}>{warning}</Text> : null}
       {suggestions.length ? (
         <View style={styles.review} testID="fuel-receipt-ocr-review">
           <Text style={styles.title}>Fişten bulunan bilgiler</Text>
           {suggestions.map((suggestion, index) => {
-            const currentValueExists = hasValue(suggestion.fieldId, fuelEntry, stationBrand, recordDate);
+            const currentValueExists = hasValue(
+              suggestion.fieldId,
+              fuelEntry,
+              stationBrand,
+              recordDate,
+            );
             return (
-              <View key={suggestion.fieldId} style={styles.suggestion}>
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={`${fieldLabel(suggestion.fieldId)} önerisini forma aktar`}
-                  accessibilityState={{ checked: suggestion.selected }}
-                  onPress={() =>
-                    setSuggestions((items) =>
-                      items.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, selected: !item.selected } : item,
-                      ),
-                    )
-                  }
-                >
-                  <Text style={styles.toggle}>
-                    {suggestion.selected ? '✓ Forma aktarılacak' : '○ Öneriyi kullanma'}
-                  </Text>
-                </Pressable>
+              <View key={`${suggestion.fieldId}:${index}`} style={styles.suggestion}>
                 {suggestion.fieldId === 'stationBrand' ? (
-                  <SelectField
+                  <SelectField<FuelStationId | ''>
                     label={fieldLabel(suggestion.fieldId)}
-                    value={suggestion.value as FuelStationId}
-                    options={FUEL_STATIONS.map((station) => ({
-                      value: station.id,
-                      label: station.label,
-                    }))}
+                    value={suggestion.value as FuelStationId | ''}
+                    options={[
+                      { value: '' as const, label: 'Öneriyi temizle' },
+                      ...FUEL_STATIONS.map((station) => ({
+                        value: station.id,
+                        label: station.label,
+                      })),
+                    ]}
                     onChange={(value) =>
                       setSuggestions((items) =>
                         items.map((item, itemIndex) =>
@@ -204,7 +245,6 @@ export function FuelReceiptOcrSection({
                   <AppInput
                     label={fieldLabel(suggestion.fieldId)}
                     value={suggestion.value}
-                    editable={suggestion.selected}
                     onChangeText={(value) =>
                       setSuggestions((items) =>
                         items.map((item, itemIndex) =>
@@ -215,7 +255,14 @@ export function FuelReceiptOcrSection({
                   />
                 )}
                 {currentValueExists ? (
-                  <Text style={styles.warning}>Mevcut değer korunuyor; kullanmak için öneriyi seçin.</Text>
+                  <Text style={styles.warning}>
+                    Forma aktarırsanız mevcut değerin üzerine yazılır.
+                  </Text>
+                ) : null}
+                {suggestion.source === 'calculated' ? (
+                  <Text style={styles.calculated}>
+                    Diğer fiş değerlerinden hesaplandı; kaydetmeden önce kontrol edin.
+                  </Text>
                 ) : null}
               </View>
             );
@@ -233,7 +280,7 @@ export function FuelReceiptOcrSection({
             <AppButton
               title="Forma aktar"
               compact
-              disabled={!suggestions.some((item) => item.selected)}
+              disabled={!suggestions.some((item) => item.value.trim())}
               onPress={apply}
             />
           </View>
@@ -266,7 +313,7 @@ const createStyles = ({ colors }: AppTheme) =>
       backgroundColor: colors.elevatedSurface,
     },
     suggestion: { gap: spacing.xs },
-    toggle: { color: colors.primaryAction, ...typography.caption },
+    calculated: { color: colors.textSecondary, ...typography.caption },
     warning: { color: colors.warning, ...typography.caption },
     actions: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   });

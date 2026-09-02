@@ -241,7 +241,7 @@ export default function SettingsScreen() {
               ? 'Premium planınız aktif'
               : 'Plan seçenekleri ve Premium özellikler'
           }
-          onPress={() => router.push('/premium')}
+          onPress={() => router.push('/premium' as Href)}
         />
         <SettingsRow
           icon="mail-outline"

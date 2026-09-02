@@ -76,7 +76,37 @@ describe('document OCR parser', () => {
 
   it('returns no result for unlabeled or unsupported text', () => {
     expect(parseDocumentOcrText('traffic_insurance', '123456 10.08.2026')).toEqual([]);
-    expect(parseDocumentOcrText('invoice', 'Fatura no: 123')).toEqual([]);
+    expect(parseDocumentOcrText('invoice', '123456 10.08.2026')).toEqual([]);
+  });
+
+  it.each([
+    [
+      'tax',
+      'Tahakkuk No: MTV-42\nÖdeme Tarihi: 10.08.2026\nSon Ödeme Tarihi: 31.08.2026',
+      { documentNumber: 'MTV-42', eventDate: '2026-08-10', expiryDate: '2026-08-31' },
+    ],
+    [
+      'service_document',
+      'İş Emri No: IS-77\nServis: Örnek Oto\nİşlem Tarihi: 11.08.2026',
+      { documentNumber: 'IS-77', issuerName: 'Örnek Oto', eventDate: '2026-08-11' },
+    ],
+    [
+      'invoice',
+      'Fatura No: F-88\nFirma: Güven Otomotiv\nFatura Tarihi: 12.08.2026',
+      { documentNumber: 'F-88', issuerName: 'Güven Otomotiv', eventDate: '2026-08-12' },
+    ],
+    [
+      'custom',
+      'Ceza No: C-9\nKurum: Trafik Birimi\nBelge Tarihi: 13.08.2026\nSon Ödeme Tarihi: 30.08.2026',
+      {
+        documentNumber: 'C-9',
+        issuerName: 'Trafik Birimi',
+        eventDate: '2026-08-13',
+        expiryDate: '2026-08-30',
+      },
+    ],
+  ] as const)('extracts safe structured fields for %s documents', (type, text, expected) => {
+    expect(values(type, text)).toEqual(expected);
   });
 
   it('rejects impossible and ambiguous dates', () => {

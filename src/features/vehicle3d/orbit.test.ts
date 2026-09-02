@@ -10,11 +10,11 @@ import {
 import { getVehicle3DMode } from './vehicle3dMode';
 
 describe('vehicle 3D feature gating', () => {
-  it('initializes only for enabled normalized Sedan vehicles', () => {
+  it('initializes every supported normalized or legacy body when enabled', () => {
     expect(getVehicle3DMode(false, 'sedan')).toBe('disabled');
     expect(getVehicle3DMode(true, 'sedan')).toBe('ready');
-    expect(getVehicle3DMode(true, 'suv')).toBe('unsupported');
-    expect(getVehicle3DMode(true, 'sedan_hatchback')).toBe('unsupported');
+    expect(getVehicle3DMode(true, 'suv')).toBe('ready');
+    expect(getVehicle3DMode(true, 'sedan_hatchback')).toBe('ready');
     expect(getVehicle3DMode(true, null)).toBe('unsupported');
   });
 });

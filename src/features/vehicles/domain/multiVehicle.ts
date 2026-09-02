@@ -21,11 +21,14 @@ export function getVehicleCapacity(
 }
 
 export function getVehicleDisplayName(vehicle: Pick<Vehicle, 'brand' | 'model'>): string {
-  return [vehicle.brand, vehicle.model].map((value) => value.trim()).filter(Boolean).join(' ');
+  return [vehicle.brand, vehicle.model]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function getVehicleLimitMessage(capacity: Pick<VehicleCapacity, 'maximum'>): string {
-  return `PlanÄ±nÄ±zda en fazla ${capacity.maximum} araÃ§ ekleyebilirsiniz. Mevcut araÃ§larÄ±nÄ±z korunur.`;
+  return `Planınızda en fazla ${capacity.maximum} araç ekleyebilirsiniz. Mevcut araçlarınız korunur.`;
 }
 
 /** A response for an old vehicle selection must never overwrite the current vehicle bundle. */

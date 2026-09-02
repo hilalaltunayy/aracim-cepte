@@ -56,10 +56,12 @@ export function Screen({
   scroll = true,
   style,
   backgroundColor,
+  scrollEnabled = true,
 }: PropsWithChildren<{
   scroll?: boolean;
   style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
+  scrollEnabled?: boolean;
 }>) {
   const { colors } = useAppTheme();
   const styles = useStyles();
@@ -75,6 +77,7 @@ export function Screen({
         style,
       ]}
       keyboardShouldPersistTaps="handled"
+      scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator={false}
     >
       {children}

@@ -6,6 +6,7 @@ import {
 } from '@/features/maintenance/config/maintenanceCatalog';
 import {
   clonePackageItemIds,
+  addCustomMaintenanceItem,
   createMaintenanceTitle,
   getMaintenanceSummary,
   templateSelection,
@@ -61,7 +62,10 @@ describe('maintenance package domain', () => {
   });
 
   it('keeps legacy records readable and summarizes multi-item records compactly', () => {
-    const legacy = { maintenanceItems: undefined } satisfies Pick<VehicleRecord, 'maintenanceItems'>;
+    const legacy = { maintenanceItems: undefined } satisfies Pick<
+      VehicleRecord,
+      'maintenanceItems'
+    >;
     expect(getMaintenanceSummary(legacy)).toBeNull();
     expect(createMaintenanceTitle([], null, 'Yağ değişimi')).toBe('Yağ değişimi');
     expect(
@@ -70,5 +74,13 @@ describe('maintenance package domain', () => {
       }),
     ).toBe('Motor yağı + 2 işlem daha');
     expect(getMaintenanceItemLabel('future_item')).toBe('future_item');
+  });
+
+  it('adds trimmed custom operations once and keeps them selectable', () => {
+    const added = addCustomMaintenanceItem(['engine_oil'], '  Klima   gazı kontrolü ');
+    expect(added).toEqual(['engine_oil', 'custom:Klima gazı kontrolü']);
+    expect(addCustomMaintenanceItem(added, 'klima gazı kontrolü')).toEqual(added);
+    expect(getMaintenanceItemLabel(added[1])).toBe('Klima gazı kontrolü');
+    expect(toggleMaintenanceItem(added, added[1])).toEqual(['engine_oil']);
   });
 });

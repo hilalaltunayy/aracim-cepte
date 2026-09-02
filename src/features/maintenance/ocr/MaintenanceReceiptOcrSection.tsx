@@ -1,25 +1,39 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import type { AttachmentListItem, PendingAttachment } from '@/features/attachments/domain/types';
 import { isPendingAttachment } from '@/features/attachments/domain/types';
 import { AppButton, AppInput, ErrorBanner } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
-import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
+import {
+  commitOcrUsage,
+  releaseOcrUsage,
+  reserveOcrUsage,
+  type OcrUsage,
+} from '@/features/entitlements/services/ocrUsageQuota';
 import type { MaintenanceDetailsFormValues } from '../domain/maintenanceDetails';
+import { createCustomMaintenanceItemId } from '../config/maintenanceCatalog';
 import {
   analyzeMaintenanceReceiptAttachment,
   type MaintenanceReceiptOcrField,
+  type MaintenanceReceiptLineItem,
   type MaintenanceReceiptOcrSuggestion,
 } from './maintenanceReceiptOcr';
 
 export type MaintenanceReceiptPatch = Partial<
-  Pick<MaintenanceDetailsFormValues, 'serviceName' | 'invoiceNumber' | 'partsCost' | 'laborCost'> & {
+  Pick<
+    MaintenanceDetailsFormValues,
+    'serviceName' | 'invoiceNumber' | 'partsCost' | 'laborCost'
+  > & {
     recordDate: string;
     total: string;
+    maintenanceItemTypes: string[];
+    notesAppend: string;
   }
 >;
-type ReviewSuggestion = MaintenanceReceiptOcrSuggestion & { selected: boolean };
-type Analyzer = (attachment: PendingAttachment) => ReturnType<typeof analyzeMaintenanceReceiptAttachment>;
+type ReviewSuggestion = MaintenanceReceiptOcrSuggestion;
+type Analyzer = (
+  attachment: PendingAttachment,
+) => ReturnType<typeof analyzeMaintenanceReceiptAttachment>;
 
 function fieldLabel(field: MaintenanceReceiptOcrField): string {
   if (field === 'serviceName') return 'Servis / İşletme';
@@ -43,24 +57,43 @@ function hasCurrentValue(
 
 export function prepareMaintenanceReceiptReviewSuggestions(
   suggestions: readonly MaintenanceReceiptOcrSuggestion[],
-  details: MaintenanceDetailsFormValues,
-  total: string,
-  recordDate: string,
+  _details: MaintenanceDetailsFormValues,
+  _total: string,
+  _recordDate: string,
 ): ReviewSuggestion[] {
-  return suggestions.map((suggestion) => ({
-    ...suggestion,
-    selected: !hasCurrentValue(suggestion.fieldId, details, total, recordDate),
-  }));
+  return suggestions.map((suggestion) => ({ ...suggestion }));
 }
 
 export function buildMaintenanceReceiptPatch(
   suggestions: readonly ReviewSuggestion[],
+  lineItems: readonly MaintenanceReceiptLineItem[] = [],
 ): MaintenanceReceiptPatch {
-  return Object.fromEntries(
+  const patch = Object.fromEntries(
     suggestions
-      .filter((suggestion) => suggestion.selected && suggestion.value.trim())
+      .filter((suggestion) => suggestion.value.trim())
       .map((suggestion) => [suggestion.fieldId, suggestion.value.trim()]),
   ) as MaintenanceReceiptPatch;
+  const reviewedItems = lineItems.filter((item) => item.label.trim() && item.lineTotal.trim());
+  const itemTypes = reviewedItems
+    .map((item) => createCustomMaintenanceItemId(item.label))
+    .filter((item): item is string => Boolean(item));
+  if (itemTypes.length) patch.maintenanceItemTypes = [...new Set(itemTypes)];
+  if (reviewedItems.length) {
+    patch.notesAppend = [
+      'Fiş kalemleri:',
+      ...reviewedItems.map((item) =>
+        [
+          item.label.trim(),
+          item.quantity.trim() ? `${item.quantity.trim()} adet` : '',
+          item.unitPrice.trim() ? `${item.unitPrice.trim()} TL/adet` : '',
+          item.lineTotal.trim() ? `${item.lineTotal.trim()} TL` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      ),
+    ].join('\n');
+  }
+  return patch;
 }
 
 function errorMessage(code: string): string {
@@ -94,7 +127,17 @@ export function MaintenanceReceiptOcrSection({
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
+  const [lineItems, setLineItems] = useState<MaintenanceReceiptLineItem[]>([]);
+  const localLineItemSequence = useRef(0);
   const [usage, setUsage] = useState<OcrUsage | null>(null);
+  const createBlankLineItem = (): MaintenanceReceiptLineItem => ({
+    id: `manual-line-${++localLineItemSequence.current}`,
+    label: '',
+    quantity: '',
+    unitPrice: '',
+    lineTotal: '',
+    category: 'unknown',
+  });
 
   const start = async () => {
     if (disabled || analyzing) return;
@@ -107,54 +150,71 @@ export function MaintenanceReceiptOcrSection({
       return;
     }
     let operationId: string;
-    try { ({ operationId } = await reserveOcrUsage('maintenance_receipt')); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.'); return; }
+    try {
+      ({ operationId } = await reserveOcrUsage('maintenance_receipt'));
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Kullanım limiti şu anda kontrol edilemiyor. Lütfen tekrar deneyin.',
+      );
+      return;
+    }
     setAnalyzing(true);
     setError(null);
     setSuggestions([]);
-    const result = await analyze(attachment).catch(() => ({ status: 'error' as const, code: 'failed' as const }));
+    setLineItems([]);
+    const result = await analyze(attachment).catch(() => ({
+      status: 'error' as const,
+      code: 'failed' as const,
+    }));
     setAnalyzing(false);
     if (result.status === 'error') {
       void releaseOcrUsage(operationId);
       setError(errorMessage(result.code));
       return;
     }
-    try { setUsage(await commitOcrUsage(operationId)); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.'); return; }
-    setSuggestions(prepareMaintenanceReceiptReviewSuggestions(result.result.suggestions, details, total, recordDate));
+    try {
+      setUsage(await commitOcrUsage(operationId));
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Tarama sonucu kaydedilemedi. Lütfen tekrar deneyin.',
+      );
+      return;
+    }
+    setSuggestions(
+      prepareMaintenanceReceiptReviewSuggestions(
+        result.result.suggestions,
+        details,
+        total,
+        recordDate,
+      ),
+    );
+    setLineItems(result.result.lineItems ?? []);
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Bakım fişi tarama</Text>
-      <Text style={styles.helper}>Bulunan bilgiler öneridir; onaylamadan forma aktarılmaz veya kaydedilmez.</Text>
-      {usage ? <Text style={styles.helper}>{usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı</Text> : null}
+      <Text style={styles.helper}>
+        Bulunan bilgiler öneridir; onaylamadan forma aktarılmaz veya kaydedilmez.
+      </Text>
+      {usage ? (
+        <Text style={styles.helper}>
+          {usage.usedCount}/{usage.monthlyQuota} tarama bu ay kullanıldı
+        </Text>
+      ) : null}
       {error ? <ErrorBanner message={error} /> : null}
-      {suggestions.length ? (
+      {suggestions.length || lineItems.length ? (
         <View style={styles.review} testID="maintenance-receipt-ocr-review">
           <Text style={styles.title}>Fişten bulunan bilgiler</Text>
           {suggestions.map((suggestion, index) => (
             <View key={suggestion.fieldId} style={styles.suggestion}>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityLabel={`${fieldLabel(suggestion.fieldId)} önerisini forma aktar`}
-                accessibilityState={{ checked: suggestion.selected }}
-                onPress={() =>
-                  setSuggestions((items) =>
-                    items.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, selected: !item.selected } : item,
-                    ),
-                  )
-                }
-              >
-                <Text style={styles.toggle}>
-                  {suggestion.selected ? '✓ Forma aktarılacak' : '○ Öneriyi kullanma'}
-                </Text>
-              </Pressable>
               <AppInput
                 label={fieldLabel(suggestion.fieldId)}
                 value={suggestion.value}
-                editable={suggestion.selected}
                 onChangeText={(value) =>
                   setSuggestions((items) =>
                     items.map((item, itemIndex) =>
@@ -164,19 +224,121 @@ export function MaintenanceReceiptOcrSection({
                 }
               />
               {hasCurrentValue(suggestion.fieldId, details, total, recordDate) ? (
-                <Text style={styles.warning}>Mevcut değer korunuyor; kullanmak için öneriyi seçin.</Text>
+                <Text style={styles.warning}>
+                  Forma aktarırsanız mevcut değerin üzerine yazılır.
+                </Text>
               ) : null}
             </View>
           ))}
+          {lineItems.length ? (
+            <View style={styles.lineItems}>
+              <Text style={styles.title}>Parça / hizmet kalemleri</Text>
+              <Text style={styles.helper}>
+                Yanlış satırı kaldırabilir, bulunan değerleri doğrudan düzeltebilirsiniz.
+              </Text>
+              {lineItems.map((item, index) => (
+                <View key={item.id} style={styles.lineItem}>
+                  <AppInput
+                    label={`Kalem ${index + 1}`}
+                    value={item.label}
+                    onChangeText={(label) =>
+                      setLineItems((items) =>
+                        items.map((candidate) =>
+                          candidate.id === item.id ? { ...candidate, label } : candidate,
+                        ),
+                      )
+                    }
+                  />
+                  <View style={styles.lineItemNumbers}>
+                    <View style={styles.lineItemNumber}>
+                      <AppInput
+                        label="Adet"
+                        value={item.quantity}
+                        keyboardType="decimal-pad"
+                        onChangeText={(quantity) =>
+                          setLineItems((items) =>
+                            items.map((candidate) =>
+                              candidate.id === item.id ? { ...candidate, quantity } : candidate,
+                            ),
+                          )
+                        }
+                      />
+                    </View>
+                    <View style={styles.lineItemNumber}>
+                      <AppInput
+                        label="Birim fiyat"
+                        value={item.unitPrice}
+                        keyboardType="decimal-pad"
+                        onChangeText={(unitPrice) =>
+                          setLineItems((items) =>
+                            items.map((candidate) =>
+                              candidate.id === item.id ? { ...candidate, unitPrice } : candidate,
+                            ),
+                          )
+                        }
+                      />
+                    </View>
+                    <View style={styles.lineItemNumber}>
+                      <AppInput
+                        label="Satır toplamı"
+                        value={item.lineTotal}
+                        keyboardType="decimal-pad"
+                        onChangeText={(lineTotal) =>
+                          setLineItems((items) =>
+                            items.map((candidate) =>
+                              candidate.id === item.id ? { ...candidate, lineTotal } : candidate,
+                            ),
+                          )
+                        }
+                      />
+                    </View>
+                  </View>
+                  <AppButton
+                    title="Satırı kaldır"
+                    variant="ghost"
+                    compact
+                    onPress={() =>
+                      setLineItems((items) => items.filter((candidate) => candidate.id !== item.id))
+                    }
+                  />
+                </View>
+              ))}
+              <AppButton
+                title="Satır ekle"
+                variant="secondary"
+                compact
+                onPress={() => setLineItems((items) => [...items, createBlankLineItem()])}
+              />
+            </View>
+          ) : (
+            <AppButton
+              title="Kalem ekle"
+              variant="secondary"
+              compact
+              onPress={() => setLineItems([createBlankLineItem()])}
+            />
+          )}
           <View style={styles.actions}>
-            <AppButton title="Vazgeç" compact variant="secondary" onPress={() => setSuggestions([])} />
+            <AppButton
+              title="Vazgeç"
+              compact
+              variant="secondary"
+              onPress={() => {
+                setSuggestions([]);
+                setLineItems([]);
+              }}
+            />
             <AppButton
               title="Forma aktar"
               compact
-              disabled={!suggestions.some((suggestion) => suggestion.selected)}
+              disabled={
+                !suggestions.some((suggestion) => suggestion.value.trim()) &&
+                !lineItems.some((item) => item.label.trim() && item.lineTotal.trim())
+              }
               onPress={() => {
-                onApply(buildMaintenanceReceiptPatch(suggestions));
+                onApply(buildMaintenanceReceiptPatch(suggestions, lineItems));
                 setSuggestions([]);
+                setLineItems([]);
               }}
             />
           </View>
@@ -200,9 +362,25 @@ const createStyles = ({ colors }: AppTheme) =>
     container: { gap: spacing.sm },
     title: { color: colors.textPrimary, ...typography.label },
     helper: { color: colors.textSecondary, ...typography.caption },
-    review: { gap: spacing.sm, padding: spacing.md, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.elevatedSurface },
+    review: {
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.elevatedSurface,
+    },
     suggestion: { gap: spacing.xs },
-    toggle: { color: colors.primaryAction, ...typography.caption },
     warning: { color: colors.warning, ...typography.caption },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    lineItems: { gap: spacing.sm, paddingTop: spacing.xs },
+    lineItem: {
+      gap: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    lineItemNumbers: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    lineItemNumber: { flex: 1, minWidth: 92 },
   });

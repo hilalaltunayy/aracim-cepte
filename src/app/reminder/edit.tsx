@@ -31,6 +31,10 @@ import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
 import { validateReminderDateTime } from '@/features/reminders/reminderDateTimeValidation';
 import { ReminderScheduleFields } from '@/features/reminders/ReminderScheduleFields';
 import { resolveReminderTimeForForm } from '@/features/reminders/reminderSchedulePreferences';
+import {
+  isAutomaticReminderTitle,
+  titleAfterReminderTypeChange,
+} from '@/features/reminders/reminderTitle';
 
 export default function ReminderEditScreen() {
   const params = useLocalSearchParams<{
@@ -60,6 +64,13 @@ export default function ReminderEditScreen() {
   const [type, setType] = useState<ReminderType>(existing?.reminderType ?? 'periodic_maintenance');
   const [title, setTitle] = useState(
     existing?.title ?? requestedTitle ?? reminderTypeLabels.periodic_maintenance,
+  );
+  const [titleIsAutomatic, setTitleIsAutomatic] = useState(() =>
+    requestedTitle
+      ? false
+      : existing
+        ? isAutomaticReminderTitle(existing.title, existing.reminderType)
+        : true,
   );
   const [date, setDate] = useState<string | null>(existing?.dueDate ?? requestedDate ?? null);
   const canCustomizeTime = entitlements.customReminderTime;
@@ -168,8 +179,10 @@ export default function ReminderEditScreen() {
           label="Hatırlatıcı türü"
           value={type}
           onChange={(value) => {
+            setTitle((currentTitle) =>
+              titleAfterReminderTypeChange(currentTitle, type, value, titleIsAutomatic),
+            );
             setType(value);
-            if (!existing && !title.trim()) setTitle(reminderTypeLabels[value]);
           }}
           options={(Object.keys(reminderTypeLabels) as ReminderType[]).map((value) => ({
             value,
@@ -179,7 +192,10 @@ export default function ReminderEditScreen() {
         <AppInput
           label="Başlık"
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(value) => {
+            setTitle(value);
+            setTitleIsAutomatic(false);
+          }}
           error={submitted && !title.trim() ? 'Başlık gereklidir.' : null}
         />
         <ReminderScheduleFields

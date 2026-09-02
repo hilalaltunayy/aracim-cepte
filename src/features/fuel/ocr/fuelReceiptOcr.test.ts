@@ -15,7 +15,10 @@ const image: PendingAttachment = {
 
 function values(text: string) {
   return Object.fromEntries(
-    parseFuelReceiptOcrText(text).suggestions.map((suggestion) => [suggestion.fieldId, suggestion.value]),
+    parseFuelReceiptOcrText(text).suggestions.map((suggestion) => [
+      suggestion.fieldId,
+      suggestion.value,
+    ]),
   );
 }
 
@@ -54,13 +57,36 @@ describe('fuel receipt OCR parser', () => {
     });
   });
 
-  it('does not treat KDV or receipt identifiers as a total', () => {
-    expect(values('KDV Tutar: 120,00\nFiş No: 9912\nTerminal: 17')).toEqual({});
+  it('extracts multiplication rows and optional time, location and document metadata', () => {
+    expect(
+      values(
+        'OPET\nTarih: 11.08.2026 Saat: 18:42\nŞube: Konya Selçuklu\nFiş No: AB-9912\n43,29 LT x 46,20 TL/L',
+      ),
+    ).toMatchObject({
+      liters: '43,29',
+      pricePerLiter: '46,2',
+      total: '2000',
+      stationBrand: 'opet',
+      recordDate: '2026-08-11',
+      receiptTime: '18:42',
+      location: 'Konya Selçuklu',
+      documentNumber: 'AB-9912',
+    });
+  });
+
+  it('does not treat KDV or receipt identifiers as a total while retaining the optional receipt number', () => {
+    expect(values('KDV Tutar: 120,00\nFiş No: 9912\nTerminal: 17')).toEqual({
+      documentNumber: '9912',
+    });
   });
 
   it('flags inconsistent three-value results but accepts normal rounding tolerance', () => {
-    expect(parseFuelReceiptOcrText('Toplam: 2000,00\nLitre: 43,29\nBirim Fiyat: 46,20').inconsistent).toBe(false);
-    expect(parseFuelReceiptOcrText('Toplam: 2000,00\nLitre: 43,29\nBirim Fiyat: 30,00').inconsistent).toBe(true);
+    expect(
+      parseFuelReceiptOcrText('Toplam: 2000,00\nLitre: 43,29\nBirim Fiyat: 46,20').inconsistent,
+    ).toBe(false);
+    expect(
+      parseFuelReceiptOcrText('Toplam: 2000,00\nLitre: 43,29\nBirim Fiyat: 30,00').inconsistent,
+    ).toBe(true);
   });
 
   it('returns safe no-fields and unsupported-file states', async () => {

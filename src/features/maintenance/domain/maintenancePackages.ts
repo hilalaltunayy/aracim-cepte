@@ -1,5 +1,8 @@
 import type { MaintenanceTemplate, VehicleRecord } from '@/domain/entities';
-import { getMaintenanceItemLabel } from '@/features/maintenance/config/maintenanceCatalog';
+import {
+  createCustomMaintenanceItemId,
+  getMaintenanceItemLabel,
+} from '@/features/maintenance/config/maintenanceCatalog';
 
 export function clonePackageItemIds(itemIds: readonly string[]): string[] {
   return [...itemIds];
@@ -9,6 +12,17 @@ export function toggleMaintenanceItem(selected: readonly string[], itemId: strin
   return selected.includes(itemId)
     ? selected.filter((value) => value !== itemId)
     : [...selected, itemId];
+}
+
+export function addCustomMaintenanceItem(selected: readonly string[], label: string): string[] {
+  const itemId = createCustomMaintenanceItemId(label);
+  if (!itemId) return [...selected];
+  const duplicate = selected.some(
+    (value) =>
+      getMaintenanceItemLabel(value).toLocaleLowerCase('tr-TR') ===
+      getMaintenanceItemLabel(itemId).toLocaleLowerCase('tr-TR'),
+  );
+  return duplicate ? [...selected] : [...selected, itemId];
 }
 
 export function createMaintenanceTitle(
@@ -30,6 +44,8 @@ export function getMaintenanceSummary(
   return `${getMaintenanceItemLabel(items[0].itemType)} + ${items.length - 1} işlem daha`;
 }
 
-export function templateSelection(template: Pick<MaintenanceTemplate, 'itemDefinitions'>): string[] {
+export function templateSelection(
+  template: Pick<MaintenanceTemplate, 'itemDefinitions'>,
+): string[] {
   return clonePackageItemIds(template.itemDefinitions);
 }

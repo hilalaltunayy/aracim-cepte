@@ -38,7 +38,7 @@ export const PLAN_ENTITLEMENTS: Readonly<Record<PlanId, Readonly<PlanEntitlement
     maxStorageBytesPerUser: 25 * 1024 * 1024,
     maxVehiclePhotos: 1,
     advancedReports: false,
-    aiMonthlyQuota: 3,
+    aiMonthlyQuota: 1,
     fuelPriceAlerts: false,
     advancedNotifications: false,
     customReminderTime: false,

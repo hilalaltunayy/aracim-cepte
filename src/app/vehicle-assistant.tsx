@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { NoVehicleState, Screen } from '@/shared/components/ui';
 import { useDataStore } from '@/store/dataStore';
+import { useAuthStore } from '@/store/authStore';
 import { getAiAssistantPolicy } from '@/features/entitlements/domain/entitlements';
 import { VehicleAssistantScreen } from '@/features/vehicleAssistant/components/VehicleAssistantScreen';
 import {
@@ -12,6 +13,10 @@ import type { AssistantQuotaState } from '@/features/vehicleAssistant/domain/ass
 
 export default function VehicleAssistantRoute() {
   const { vehicles, activeVehicleId, entitlements } = useDataStore();
+  const userName = useAuthStore((state) => {
+    const value = state.session?.user.user_metadata?.display_name;
+    return typeof value === 'string' ? value.trim().split(/\s+/)[0] : undefined;
+  });
   const vehicle = vehicles.find((item) => item.id === activeVehicleId) ?? null;
   const policy = getAiAssistantPolicy(entitlements);
   const [quota, setQuota] = useState<AssistantQuotaState | null>(null);
@@ -36,10 +41,12 @@ export default function VehicleAssistantRoute() {
     <VehicleAssistantScreen
       key={vehicle.id}
       vehicleName={`${vehicle.brand} ${vehicle.model}`}
+      userName={userName}
       initialQuota={quota}
       entitlementLimit={policy.monthlyQuota}
       enabled={policy.enabled}
       onAsk={(question) => askVehicleAssistant(vehicle.id, question)}
+      onUpgrade={() => router.push('/premium' as never)}
     />
   );
 }

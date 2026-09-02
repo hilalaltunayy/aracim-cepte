@@ -487,6 +487,11 @@ export default function RecordEditScreen() {
                 });
                 if (patch.stationBrand !== undefined) setStationBrand(patch.stationBrand);
                 if (patch.recordDate !== undefined) setDate(patch.recordDate);
+                if (patch.description !== undefined) {
+                  setDescription((current) =>
+                    current.trim() ? `${current.trim()}\n${patch.description}` : patch.description!,
+                  );
+                }
               }}
             />
           </>
@@ -536,6 +541,22 @@ export default function RecordEditScreen() {
             }));
             if (patch.total !== undefined) setAmount(patch.total);
             if (patch.recordDate !== undefined) setDate(patch.recordDate);
+            if (patch.maintenanceItemTypes?.length) {
+              setMaintenanceItemTypes((current) => [
+                ...new Set([...current, ...patch.maintenanceItemTypes!]),
+              ]);
+            }
+            if (patch.notesAppend) {
+              setDescription((current) =>
+                current.trim() ? `${current.trim()}\n${patch.notesAppend}` : patch.notesAppend!,
+              );
+              setMaintenanceDetails((current) => ({
+                ...current,
+                notes: current.notes.trim()
+                  ? `${current.notes.trim()}\n${patch.notesAppend}`
+                  : patch.notesAppend!,
+              }));
+            }
           }}
         />
       ) : null}

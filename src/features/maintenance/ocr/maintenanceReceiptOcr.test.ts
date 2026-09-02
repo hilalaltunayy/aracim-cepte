@@ -18,7 +18,10 @@ const image: PendingAttachment = {
 
 function values(text: string) {
   return Object.fromEntries(
-    parseMaintenanceReceiptOcrText(text).suggestions.map((suggestion) => [suggestion.fieldId, suggestion.value]),
+    parseMaintenanceReceiptOcrText(text).suggestions.map((suggestion) => [
+      suggestion.fieldId,
+      suggestion.value,
+    ]),
   );
 }
 
@@ -49,6 +52,42 @@ describe('maintenance receipt OCR parser', () => {
   it('derives a total only when both parts and labour are known', () => {
     expect(values('Malzeme: 3200\nİşçilik: 1100')).toMatchObject({ total: '4300' });
     expect(values('Malzeme: 3200')).not.toHaveProperty('total');
+  });
+
+  it('extracts multiple editable part and service rows with quantities and totals', () => {
+    const result = parseMaintenanceReceiptOcrText(
+      'ABC Oto Servis\nYağ filtresi 2 adet x 250,00 TL = 500,00 TL\nFren balatası 1 adet x 1200,00 TL = 1200,00 TL\nİşçilik 2 adet x 400,00 TL = 800,00 TL\nGenel Toplam: 2.500,00 TL',
+    );
+    expect(result.lineItems).toEqual([
+      expect.objectContaining({
+        label: 'Yağ filtresi',
+        quantity: '2',
+        unitPrice: '250',
+        lineTotal: '500',
+        category: 'parts',
+      }),
+      expect.objectContaining({
+        label: 'Fren balatası',
+        quantity: '1',
+        unitPrice: '1200',
+        lineTotal: '1200',
+        category: 'parts',
+      }),
+      expect.objectContaining({
+        label: 'İşçilik',
+        quantity: '2',
+        unitPrice: '400',
+        lineTotal: '800',
+        category: 'labor',
+      }),
+    ]);
+    expect(
+      Object.fromEntries(result.suggestions.map((item) => [item.fieldId, item.value])),
+    ).toMatchObject({
+      partsCost: '1700',
+      laborCost: '800',
+      total: '2500',
+    });
   });
 
   it('keeps partial results and ignores unrelated tax and identifier numbers', () => {

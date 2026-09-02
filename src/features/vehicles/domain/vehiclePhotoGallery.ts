@@ -33,5 +33,5 @@ export function orderVehiclePhotos(photos: readonly VehiclePhoto[]): VehiclePhot
 }
 
 export function getVehiclePhotoLimitMessage(capacity: VehiclePhotoCapacity): string {
-  return `PlanÄ±nÄ±zda en fazla ${capacity.maximum} araÃ§ fotoÄŸrafÄ± ekleyebilirsiniz.`;
+  return `Planınızda en fazla ${capacity.maximum} araç fotoğrafı ekleyebilirsiniz.`;
 }

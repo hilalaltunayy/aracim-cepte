@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PendingAttachment } from '@/features/attachments/domain/types';
-import { createOnDeviceDocumentOcrProvider, type NativeTextRecognizer } from './onDeviceDocumentOcrProvider';
+import {
+  createOnDeviceDocumentOcrProvider,
+  type NativeTextRecognizer,
+} from './onDeviceDocumentOcrProvider';
 
 const attachment: PendingAttachment = {
   id: 'pending-ocr-image',
@@ -42,20 +45,37 @@ describe('on-device document OCR provider', () => {
     await expect(provider.analyzeImage(input)).resolves.toEqual({ status: 'no_text' });
   });
 
+  it('recognizes the normalized local image while falling back safely when preprocessing fails', async () => {
+    const native = recognizer();
+    const preprocess = vi.fn().mockResolvedValue('file:///normalized-ocr.jpg');
+    await createOnDeviceDocumentOcrProvider(() => native, preprocess).analyzeImage(input);
+    expect(preprocess).toHaveBeenCalledWith(input);
+    expect(native.recognizeText).toHaveBeenCalledWith('file:///normalized-ocr.jpg');
+
+    const fallback = recognizer();
+    await createOnDeviceDocumentOcrProvider(
+      () => fallback,
+      vi.fn().mockRejectedValue(new Error('synthetic preprocess failure')),
+    ).analyzeImage(input);
+    expect(fallback.recognizeText).toHaveBeenCalledWith(attachment.uri);
+  });
+
   it('keeps manual fallback safe when the module is unavailable, unsupported, or throws', async () => {
     await expect(
       createOnDeviceDocumentOcrProvider(() => null).analyzeImage(input),
     ).resolves.toEqual({ status: 'error', code: 'provider_unavailable' });
 
     await expect(
-      createOnDeviceDocumentOcrProvider(() => recognizer({ isSupported: vi.fn(() => false) })).analyzeImage(
-        input,
-      ),
+      createOnDeviceDocumentOcrProvider(() =>
+        recognizer({ isSupported: vi.fn(() => false) }),
+      ).analyzeImage(input),
     ).resolves.toEqual({ status: 'error', code: 'provider_unavailable' });
 
     await expect(
       createOnDeviceDocumentOcrProvider(() =>
-        recognizer({ recognizeText: vi.fn().mockRejectedValue(new Error('native internal detail')) }),
+        recognizer({
+          recognizeText: vi.fn().mockRejectedValue(new Error('native internal detail')),
+        }),
       ).analyzeImage(input),
     ).resolves.toEqual({ status: 'error', code: 'failed' });
   });

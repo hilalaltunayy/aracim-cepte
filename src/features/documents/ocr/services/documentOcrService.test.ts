@@ -72,7 +72,7 @@ describe('document OCR service', () => {
     expect(JSON.stringify(result)).not.toContain('private provider detail');
   });
 
-  it('does not call the provider for PDFs or unsupported document types', async () => {
+  it('does not call the provider for PDFs and supports structured invoice OCR', async () => {
     const mockProvider = provider({ status: 'success', rawText: 'Belge No: 1' });
     await expect(
       analyzeDocumentAttachment(
@@ -81,10 +81,11 @@ describe('document OCR service', () => {
         mockProvider,
       ),
     ).resolves.toEqual({ status: 'unsupported', code: 'unsupported_attachment' });
-    await expect(analyzeDocumentAttachment('invoice', image, mockProvider)).resolves.toEqual({
-      status: 'unsupported',
-      code: 'unsupported_document_type',
-    });
     expect(mockProvider.analyzeImage).not.toHaveBeenCalled();
+    await expect(analyzeDocumentAttachment('invoice', image, mockProvider)).resolves.toEqual({
+      status: 'success',
+      suggestions: [{ fieldId: 'documentNumber', suggestedValue: '1', source: 'document_ocr' }],
+    });
+    expect(mockProvider.analyzeImage).toHaveBeenCalledTimes(1);
   });
 });
