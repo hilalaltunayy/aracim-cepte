@@ -252,6 +252,7 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen name="vehicle/edit" options={detailOptions('Araç bilgileri')} />
+        <Stack.Screen name="record/detail" options={detailOptions('Kayıt ayrıntısı')} />
         <Stack.Screen name="record/edit" options={detailOptions('Kayıt ekle')} />
         <Stack.Screen name="reminder/edit" options={detailOptions('Hatırlatıcı')} />
         <Stack.Screen name="body-condition/index" options={detailOptions('Gövde durumu')} />

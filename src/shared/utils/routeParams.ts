@@ -27,3 +27,7 @@ export function createRecordHref(type: RecordType): Href {
 export function editRecordHref(id: string): Href {
   return { pathname: '/record/edit', params: { id } };
 }
+
+export function detailRecordHref(id: string): Href {
+  return { pathname: '/record/detail', params: { id } };
+}

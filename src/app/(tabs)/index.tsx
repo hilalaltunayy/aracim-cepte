@@ -37,7 +37,7 @@ import {
 } from '@/shared/utils/analytics';
 import { formatCurrency, formatNumber } from '@/shared/utils/format';
 import { getDashboardShortcutAccessibilityLabel } from '@/shared/utils/accessibility';
-import { createRecordHref, editRecordHref } from '@/shared/utils/routeParams';
+import { createRecordHref, detailRecordHref } from '@/shared/utils/routeParams';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
 import {
@@ -226,7 +226,7 @@ export default function DashboardScreen() {
               <RecordCard
                 key={record.id}
                 record={record}
-                onPress={() => router.navigate(editRecordHref(record.id))}
+                onPress={() => router.navigate(detailRecordHref(record.id))}
               />
             ))}
           </View>

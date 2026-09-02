@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createRecordHref,
+  detailRecordHref,
   editRecordHref,
   firstRouteParam,
   safeEntityId,
@@ -20,6 +21,10 @@ describe('safe record routes', () => {
     });
     expect(editRecordHref('record-id')).toEqual({
       pathname: '/record/edit',
+      params: { id: 'record-id' },
+    });
+    expect(detailRecordHref('record-id')).toEqual({
+      pathname: '/record/detail',
       params: { id: 'record-id' },
     });
   });
