@@ -30,11 +30,23 @@ vi.mock('expo-linking', () => ({
 
 vi.mock('react-native', () => ({
   Alert: { alert: vi.fn() },
+  Animated: { View: 'Animated.View', Value: class {}, timing: () => ({ start: vi.fn(), stop: vi.fn() }) },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: vi.fn(async () => true),
+    addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+  },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   Text: 'Text',
   View: 'View',
 }));
+
+vi.mock('@/shared/components/AutomotiveBackdrop', () => ({ AutomotiveBackdrop: () => null }));
+vi.mock('@/shared/components/BrandLogo', () => ({ BrandLogo: () => null }));
+vi.mock('@/shared/components/Reveal', async () => {
+  const React = await import('react');
+  return { Reveal: ({ children }: { children: ReactNode }) => React.createElement('Reveal', null, children) };
+});
 
 vi.mock('@/shared/theme', () => {
   const colors = new Proxy({}, { get: (_target, key) => String(key) });
@@ -44,6 +56,7 @@ vi.mock('@/shared/theme', () => {
   return {
     spacing: metrics,
     typography: textStyles,
+    fontFamilies: new Proxy({}, { get: () => 'Inter' }),
     useThemedStyles: (factory: (value: typeof theme) => unknown) => factory(theme),
   };
 });
@@ -78,6 +91,8 @@ vi.mock('@/shared/components/ui', async () => {
     AppInput: host('AppInput'),
     Card: host('Card'),
     ErrorBanner: host('ErrorBanner'),
+    FeedbackBanner: host('FeedbackBanner'),
+    FloatingField: host('FloatingField'),
     FormSection: host('FormSection'),
     PasswordInput: host('PasswordInput'),
     Screen: host('Screen'),

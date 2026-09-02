@@ -53,7 +53,7 @@ describe('buildRecordDetailView', () => {
       ...base,
       recordType: 'maintenance',
       category: 'Periyodik bakım',
-      serviceType: 'periodic',
+      serviceType: 'authorized_service',
       serviceName: 'Usta Ali',
       partsCost: 600,
       laborCost: 300,

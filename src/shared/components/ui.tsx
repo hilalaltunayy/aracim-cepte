@@ -309,7 +309,9 @@ export function PasswordInput({
 }: TextInputProps & { label: string; error?: string | null }) {
   const { colors } = useAppTheme();
   const styles = useStyles();
+  const reducedMotion = useReducedMotion();
   const [visible, setVisible] = useState(false);
+  const [eyeAnim] = useState(() => new Animated.Value(1));
   const hide = () => setVisible(isPasswordVisibleAfter('cancel'));
 
   useEffect(() => {
@@ -319,9 +321,15 @@ export function PasswordInput({
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => {
+    if (reducedMotion) return;
+    eyeAnim.setValue(0.6);
+    Animated.spring(eyeAnim, { toValue: 1, friction: 5, tension: 140, useNativeDriver: true }).start();
+  }, [eyeAnim, reducedMotion, visible]);
+
   return (
     <View style={styles.passwordField}>
-      <AppInput
+      <FloatingField
         {...props}
         label={label}
         error={error}
@@ -342,11 +350,22 @@ export function PasswordInput({
         onResponderTerminate={hide}
         style={({ pressed }) => [styles.passwordEye, pressed && styles.pressed]}
       >
-        <Ionicons
-          name={visible ? 'eye-off-outline' : 'eye-outline'}
-          size={21}
-          color={colors.muted}
-        />
+        <Animated.View
+          style={{
+            transform: [
+              { scale: eyeAnim },
+              {
+                rotate: eyeAnim.interpolate({ inputRange: [0.6, 1], outputRange: ['-18deg', '0deg'] }),
+              },
+            ],
+          }}
+        >
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={21}
+            color={colors.muted}
+          />
+        </Animated.View>
       </Pressable>
     </View>
   );

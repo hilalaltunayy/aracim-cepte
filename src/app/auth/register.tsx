@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href, useFocusEffect } from 'expo-router';
 import {
   AppButton,
-  AppInput,
   ErrorBanner,
+  FeedbackBanner,
+  FloatingField,
   FormSection,
   PasswordInput,
   Screen,
 } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
+import { BrandLogo } from '@/shared/components/BrandLogo';
+import { Reveal } from '@/shared/components/Reveal';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
-import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import { fontFamilies, spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { isValidEmail } from '@/shared/utils/validation';
+import { useShakeAnimation } from '@/shared/hooks/useShakeAnimation';
 import {
   REGISTRATION_LEGAL_LINKS,
   REGISTRATION_LEGAL_NOTICE,
@@ -41,6 +46,7 @@ export default function RegisterScreen() {
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [resendAttempts, setResendAttempts] = useState(0);
   const { signUp, resendConfirmation, busy, error, clearError } = useAuthStore();
+  const { shake, style: shakeStyle } = useShakeAnimation();
   useFocusEffect(
     useCallback(() => {
       clearError();
@@ -48,7 +54,10 @@ export default function RegisterScreen() {
   );
   const valid = isValidEmail(email) && password.length >= 8 && password === confirmation;
   const submit = async () => {
-    if (!valid) return;
+    if (!valid) {
+      shake();
+      return;
+    }
     if (await signUp(email, password, name)) {
       setPassword('');
       setConfirmation('');
@@ -56,6 +65,8 @@ export default function RegisterScreen() {
       const nextAllowedAt = Date.now() + CONFIRMATION_RESEND_COOLDOWN_MS;
       setCooldownUntil(nextAllowedAt);
       setCooldownSeconds(getConfirmationCooldownSeconds(nextAllowedAt));
+    } else {
+      shake();
     }
   };
 
@@ -88,11 +99,13 @@ export default function RegisterScreen() {
 
   if (registeredEmail) {
     return (
-      <Screen style={styles.successScreen}>
+      <Screen style={styles.successScreen} backdrop={<AutomotiveBackdrop />}>
         <FormSection title={REGISTRATION_SUCCESS.title}>
           <Text style={styles.successMessage}>{REGISTRATION_SUCCESS.message}</Text>
           {error ? <ErrorBanner message={error} /> : null}
-          {resendMessage ? <Text style={styles.resendSuccess}>{resendMessage}</Text> : null}
+          {resendMessage ? (
+            <FeedbackBanner tone="success" message={resendMessage} />
+          ) : null}
           {resendAttempts >= CONFIRMATION_RESEND_MAX_ATTEMPTS ? (
             <ErrorBanner message={CONFIRMATION_RESEND_LIMIT_MESSAGE} />
           ) : null}
@@ -121,18 +134,21 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen style={styles.screen}>
-      <View style={styles.intro}>
+    <Screen style={styles.screen} backdrop={<AutomotiveBackdrop />}>
+      <Reveal order={0} style={styles.logoRow}>
+        <BrandLogo size={52} />
+      </Reveal>
+      <Reveal order={1} style={styles.intro}>
         <Text style={styles.title}>Aracınız için güvenli bir alan</Text>
         <Text style={styles.subtitle}>
           Kayıtlarınız hesabınıza bağlı tutulur ve yalnızca size görünür.
         </Text>
-      </View>
+      </Reveal>
       {error ? <ErrorBanner message={error} /> : null}
-      <FormSection>
-        <AppInput label="Adınız" value={name} onChangeText={setName} />
-        <AppInput
-          label="E-posta"
+      <Reveal order={2} style={styles.form}>
+        <FloatingField label="Adınız" value={name} onChangeText={setName} autoComplete="name" />
+        <FloatingField
+          label="E-posta adresiniz"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -140,7 +156,7 @@ export default function RegisterScreen() {
           keyboardType="email-address"
         />
         <PasswordInput
-          label="Şifre"
+          label="Şifreniz"
           value={password}
           onChangeText={setPassword}
           autoComplete="new-password"
@@ -149,7 +165,7 @@ export default function RegisterScreen() {
           }
         />
         <PasswordInput
-          label="Şifre tekrar"
+          label="Şifrenizi tekrar girin"
           value={confirmation}
           onChangeText={setConfirmation}
           autoComplete="new-password"
@@ -165,42 +181,48 @@ export default function RegisterScreen() {
                 key={link.href}
                 accessibilityRole="link"
                 accessibilityLabel={link.accessibilityLabel}
+                style={({ pressed }) => [styles.legalChip, pressed && styles.pressed]}
                 onPress={() => void openLegalLink(link, () => router.push(link.href as Href))}
               >
-                <Text style={styles.legalLink}>{link.title}</Text>
+                <Text style={styles.legalChipText}>{link.title}</Text>
               </Pressable>
             ))}
           </View>
         </View>
-        <AppButton
-          title="Hesap oluştur"
-          loading={busy}
-          disabled={!isSupabaseConfigured || !valid}
-          onPress={submit}
-        />
-      </FormSection>
+        <Animated.View style={shakeStyle}>
+          <AppButton
+            title="Hesap oluştur"
+            loading={busy}
+            disabled={!isSupabaseConfigured || !valid}
+            onPress={submit}
+          />
+        </Animated.View>
+      </Reveal>
     </Screen>
   );
 }
 
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
-    screen: { gap: spacing.xl },
+    screen: { gap: spacing.lg },
+    logoRow: { alignItems: 'flex-start' },
     successScreen: { justifyContent: 'center', gap: spacing.xl },
     intro: { gap: spacing.sm },
+    form: { gap: spacing.lg },
     title: { color: colors.navy, ...typography.sectionTitle },
     subtitle: { color: colors.muted, ...typography.body },
-    legalNotice: {
-      gap: spacing.sm,
-      padding: spacing.md,
+    legalNotice: { gap: spacing.sm },
+    legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+    legalLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    legalChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: 999,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 14,
       backgroundColor: colors.surfaceMuted,
     },
-    legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-    legalLinks: { gap: spacing.sm },
-    legalLink: { color: colors.primary, ...typography.bodyMedium, textDecorationLine: 'underline' },
+    legalChipText: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 13 },
+    pressed: { opacity: 0.65 },
     successMessage: { color: colors.muted, ...typography.body },
-    resendSuccess: { color: colors.success, ...typography.bodyMedium },
   });
