@@ -3,6 +3,7 @@ import {
   REGISTRATION_LEGAL_LINKS,
   REGISTRATION_LEGAL_NOTICE,
   REGISTRATION_SUCCESS,
+  classifyRegistrationResponse,
   createRegistrationAuthOptions,
   createLoginPrefillHref,
   getLoginPrefillEmail,
@@ -13,7 +14,7 @@ describe('registration completion flow', () => {
     expect(REGISTRATION_SUCCESS).toEqual({
       title: 'E-postanızı doğrulayın',
       message:
-        'Doğrulama bağlantısını e-posta adresinize gönderdik. Hesabınızı etkinleştirmek için bağlantıya dokunun.',
+        'Hesabınız oluşturuldu. Doğrulama bağlantısı birkaç dakika içinde gelmezse spam klasörünü kontrol edin veya yeniden gönderin.',
       action: 'Giriş ekranına dön',
     });
   });
@@ -36,6 +37,18 @@ describe('registration completion flow', () => {
       emailRedirectTo: 'aracimcepte://auth/confirm-email',
       data: { display_name: 'Hilal' },
     });
+  });
+
+  it('does not confuse account creation with email delivery or disabled confirmation', () => {
+    expect(classifyRegistrationResponse({ hasUser: true, hasSession: false })).toBe(
+      'verification_pending',
+    );
+    expect(classifyRegistrationResponse({ hasUser: true, hasSession: true })).toBe(
+      'confirmation_disabled',
+    );
+    expect(classifyRegistrationResponse({ hasUser: false, hasSession: false })).toBe(
+      'missing_user',
+    );
   });
 
   it('keeps legal copy informational and links to canonical app routes', () => {

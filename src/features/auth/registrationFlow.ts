@@ -3,7 +3,7 @@ import { LEGAL_LINKS } from '@/features/legal/legalLinks';
 export const REGISTRATION_SUCCESS = {
   title: 'E-postanızı doğrulayın',
   message:
-    'Doğrulama bağlantısını e-posta adresinize gönderdik. Hesabınızı etkinleştirmek için bağlantıya dokunun.',
+    'Hesabınız oluşturuldu. Doğrulama bağlantısı birkaç dakika içinde gelmezse spam klasörünü kontrol edin veya yeniden gönderin.',
   action: 'Giriş ekranına dön',
 } as const;
 
@@ -24,6 +24,20 @@ export function createRegistrationAuthOptions(displayName: string, emailRedirect
     emailRedirectTo,
     data: { display_name: displayName.trim() || undefined },
   };
+}
+
+export type RegistrationResponseState =
+  | 'verification_pending'
+  | 'missing_user'
+  | 'confirmation_disabled';
+
+/** A signup response can confirm account creation, never inbox delivery. */
+export function classifyRegistrationResponse(input: {
+  hasUser: boolean;
+  hasSession: boolean;
+}): RegistrationResponseState {
+  if (!input.hasUser) return 'missing_user';
+  return input.hasSession ? 'confirmation_disabled' : 'verification_pending';
 }
 
 export function createLoginPrefillHref(email: string) {

@@ -48,6 +48,7 @@ import {
   setNotificationLeadDays,
 } from '@/features/reminders/notificationPreferences';
 import { validateReminderDateTime } from '@/features/reminders/reminderDateTimeValidation';
+import { createDataAccessError } from './dataAccessError';
 
 async function ownerId(): Promise<string> {
   const { data, error } = await getSupabaseClient().auth.getUser();
@@ -69,7 +70,7 @@ export class SupabaseAppRepository implements AppRepository {
       .select('*')
       .is('archived_at', null)
       .order('created_at');
-    if (error) throw error;
+    if (error) throw createDataAccessError('vehicles.list', error);
     const vehicleRows = data ?? [];
     if (!vehicleRows.length) return [];
     const vehicleIds = vehicleRows.map((vehicle) => vehicle.id);
@@ -85,8 +86,12 @@ export class SupabaseAppRepository implements AppRepository {
         .in('vehicle_id', vehicleIds)
         .eq('parent_type', 'vehicle_photo'),
     ]);
-    if (photoResult.error) throw photoResult.error;
-    if (attachmentResult.error) throw attachmentResult.error;
+    if (photoResult.error) {
+      throw createDataAccessError('vehicles.primary-photos', photoResult.error);
+    }
+    if (attachmentResult.error) {
+      throw createDataAccessError('vehicles.photo-attachments', attachmentResult.error);
+    }
     const attachmentById = new Map(
       (attachmentResult.data ?? []).map((attachment) => [attachment.id, mapAttachment(attachment)]),
     );
@@ -284,19 +289,21 @@ export class SupabaseAppRepository implements AppRepository {
         .order('updated_at', { ascending: false }),
       client.from('vehicle_documents').select('*').eq('vehicle_id', vehicleId).order('expiry_date'),
     ]);
-    const error =
-      records.error ??
-      maintenanceItems.error ??
-      maintenanceTemplates.error ??
-      reminders.error ??
-      body.error ??
-      bodyValues.error ??
-      expertise.error ??
-      vehiclePhotos.error ??
-      attachments.error ??
-      notes.error ??
-      documents.error;
-    if (error) throw error;
+    const failures: (readonly [string, unknown])[] = [
+      ['vehicle-data.records', records.error],
+      ['vehicle-data.maintenance-items', maintenanceItems.error],
+      ['vehicle-data.maintenance-templates', maintenanceTemplates.error],
+      ['vehicle-data.reminders', reminders.error],
+      ['vehicle-data.body-conditions', body.error],
+      ['vehicle-data.body-condition-values', bodyValues.error],
+      ['vehicle-data.expertise', expertise.error],
+      ['vehicle-data.photos', vehiclePhotos.error],
+      ['vehicle-data.attachments', attachments.error],
+      ['vehicle-data.notes', notes.error],
+      ['vehicle-data.documents', documents.error],
+    ];
+    const failure = failures.find((entry) => entry[1]);
+    if (failure) throw createDataAccessError(failure[0], failure[1]);
     const mappedReminders = (reminders.data ?? []).map(mapReminder);
     const mappedItems = (maintenanceItems.data ?? []).map(mapMaintenanceItem);
     const itemsByRecord = new Map<string, typeof mappedItems>();

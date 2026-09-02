@@ -110,3 +110,12 @@ ile:
 
 Bu kontroller gerçek e-posta teslimi, Supabase Dashboard durumu, Android intent çözümleme ve release
 artifact gerektirdiğinden otomatik testlerle Passed sayılamaz.
+
+## 1 Eylül 2026 P0 doğrulama notu
+
+Public Auth probu email provider'ın açık ve auto-confirm'in kapalı olduğunu doğruladı; buna karşın
+Dashboard Redirect URL listesi, e-posta şablonu, SMTP handover/delivery logları public API ile
+okunamaz. Gerçek cihazda recovery linkinin Login'e düşmesi, kodun gönderdiği exact recovery URI'ının
+Dashboard allow-list/template zincirinde korunmadığını gösterir. Signup API başarısı da inbox
+teslimi kanıtlamaz. Exact Dashboard, SMTP ve Auth Logs adımları
+[`docs/bugs/p0-auth-vehicle-remediation.md`](bugs/p0-auth-vehicle-remediation.md) belgesindedir.
