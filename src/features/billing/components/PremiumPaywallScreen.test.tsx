@@ -13,6 +13,9 @@ vi.mock('@expo/vector-icons', async () => {
   const React = await import('react');
   return { Ionicons: (props: object) => React.createElement('Ionicons', props) };
 });
+vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
+vi.mock('@/shared/components/AutomotiveBackdrop', () => ({ AutomotiveBackdrop: () => null }));
+vi.mock('@/features/legal/legalLinkOpener', () => ({ openLegalLink: vi.fn() }));
 vi.mock('@/shared/theme', () => {
   const theme = { colors: new Proxy({}, { get: (_target, key) => String(key) }) };
   return {

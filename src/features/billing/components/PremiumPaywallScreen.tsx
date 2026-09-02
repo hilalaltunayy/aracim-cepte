@@ -1,6 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppHeader, Card, Screen, StatusBadge } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
+import { REGISTRATION_LEGAL_LINKS } from '@/features/auth/registrationFlow';
+import { openLegalLink } from '@/features/legal/legalLinkOpener';
 import {
   radii,
   spacing,
@@ -57,7 +61,7 @@ export function PremiumPaywallScreen({
   const selectedPackage = offering?.packages.find((item) => item.id === selectedPackageId) ?? null;
 
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <AppHeader
         title="Aracım Cepte Premium"
         subtitle="Araçlarınızı daha geniş limitlerle, aynı güvenli deneyimde yönetin."
@@ -121,9 +125,14 @@ export function PremiumPaywallScreen({
                     ]}
                   >
                     <View style={styles.packageText}>
-                      <Text style={styles.packageTitle}>
-                        {packageLabel(item.packageType, item.title)}
-                      </Text>
+                      <View style={styles.packageTitleRow}>
+                        <Text style={styles.packageTitle}>
+                          {packageLabel(item.packageType, item.title)}
+                        </Text>
+                        {item.packageType === 'annual' ? (
+                          <StatusBadge label="En avantajlı" tone="success" />
+                        ) : null}
+                      </View>
                       <Text style={styles.packageSubtitle}>{item.title}</Text>
                     </View>
                     <Text style={styles.packagePrice}>{item.priceString}</Text>
@@ -165,6 +174,19 @@ export function PremiumPaywallScreen({
           <Text style={styles.disclaimer}>
             Satın alma yalnız mağaza ve RevenueCat doğrulamasından sonra Premium erişim sağlar.
           </Text>
+          <View style={styles.legalRow}>
+            {REGISTRATION_LEGAL_LINKS.map((link) => (
+              <Pressable
+                key={link.href}
+                accessibilityRole="link"
+                accessibilityLabel={link.accessibilityLabel}
+                style={({ pressed }) => [styles.legalChip, pressed && styles.pressed]}
+                onPress={() => void openLegalLink(link, () => router.push(link.href as Href))}
+              >
+                <Text style={styles.legalChipText}>{link.title}</Text>
+              </Pressable>
+            ))}
+          </View>
         </Card>
       ) : subscription.willRenew === false ? (
         <Card style={styles.noticeCard}>
@@ -212,7 +234,8 @@ const createStyles = ({ colors }: AppTheme) =>
       gap: spacing.md,
     },
     packageSelected: { borderColor: colors.primaryAction, backgroundColor: colors.paleAqua },
-    packageText: { flex: 1, minWidth: 0 },
+    packageText: { flex: 1, minWidth: 0, gap: 2 },
+    packageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
     packageTitle: { color: colors.textPrimary, ...typography.cardTitle },
     packageSubtitle: { color: colors.textSecondary, ...typography.caption },
     packagePrice: { color: colors.textPrimary, ...typography.bodyMedium, flexShrink: 0 },
@@ -227,5 +250,14 @@ const createStyles = ({ colors }: AppTheme) =>
     noticeText: { color: colors.textSecondary, ...typography.body, flex: 1 },
     message: { color: colors.textSecondary, ...typography.caption },
     disclaimer: { color: colors.textSecondary, ...typography.caption, textAlign: 'center' },
+    legalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'center' },
+    legalChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    legalChipText: { color: colors.primaryAction, ...typography.caption },
     pressed: { opacity: 0.78 },
   });
