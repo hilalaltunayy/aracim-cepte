@@ -5,6 +5,7 @@ const { authMock } = vi.hoisted(() => ({
   authMock: {
     signUp: vi.fn(),
     signOut: vi.fn(async () => ({ error: null })),
+    signInWithPassword: vi.fn(async () => ({ error: null })),
   },
 }));
 
@@ -61,5 +62,20 @@ describe('auth store signup confirmation boundary', () => {
     ).resolves.toBe(false);
     expect(authMock.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(useAuthStore.getState().error).toContain('E-posta doğrulaması');
+  });
+
+  it('arms the one-shot Home intro on a successful sign-in and clears it on sign-out', async () => {
+    useAuthStore.setState({ homeIntroPending: false });
+    await expect(
+      useAuthStore.getState().signIn('test@example.com', 'guvenli-123'),
+    ).resolves.toBe(true);
+    expect(useAuthStore.getState().homeIntroPending).toBe(true);
+
+    useAuthStore.getState().consumeHomeIntro();
+    expect(useAuthStore.getState().homeIntroPending).toBe(false);
+
+    useAuthStore.setState({ homeIntroPending: true });
+    await useAuthStore.getState().signOut();
+    expect(useAuthStore.getState().homeIntroPending).toBe(false);
   });
 });

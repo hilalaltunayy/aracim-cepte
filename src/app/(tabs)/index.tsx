@@ -1,5 +1,5 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,8 @@ import {
 } from '@/shared/components/ui';
 import { RecordCard } from '@/shared/components/entityCards';
 import { MiniBarChart } from '@/shared/components/MiniBarChart';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
+import { HomeIntroOverlay } from '@/shared/components/HomeIntroOverlay';
 import { useDataStore } from '@/store/dataStore';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -53,6 +55,12 @@ export default function DashboardScreen() {
     const value = state.session?.user.user_metadata?.display_name;
     return typeof value === 'string' ? value.trim().split(/\s+/)[0] : '';
   });
+  const homeIntroPending = useAuthStore((state) => state.homeIntroPending);
+  const consumeHomeIntro = useAuthStore((state) => state.consumeHomeIntro);
+  const [introVisible, setIntroVisible] = useState(homeIntroPending);
+  useEffect(() => {
+    if (homeIntroPending) consumeHomeIntro();
+  }, [homeIntroPending, consumeHomeIntro]);
   const {
     vehicles,
     activeVehicleId,
@@ -103,30 +111,25 @@ export default function DashboardScreen() {
     { label: 'Masraf', icon: 'receipt-outline', type: 'expense' },
     { label: 'Hatırlat', icon: 'notifications-outline', route: '/reminder/edit' },
   ] as const;
+  const contextLine = `${vehicle.brand} ${vehicle.model} bugün nasıl?`;
   return (
     <View style={styles.root}>
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <AppHeader
           title={displayName ? `Merhaba ${displayName}` : 'Merhaba'}
-          subtitle={`${vehicle.brand} ${vehicle.model} bugün nasıl?`}
+          subtitle={contextLine}
           action={
-            <Pressable
-              accessibilityRole={vehicles.length > 1 ? 'button' : undefined}
-              accessibilityLabel={vehicles.length > 1 ? 'Aktif aracı değiştir' : undefined}
-              style={({ pressed }) => [
-                styles.headerIcon,
-                pressed && vehicles.length > 1 && styles.headerPressed,
-              ]}
-              disabled={vehicles.length <= 1}
-              onPress={() => setSwitcherOpen(true)}
-            >
-              <Ionicons
-                name="car-sport-outline"
-                size={24}
-                color={colors.primary}
-                accessible={false}
-              />
-            </Pressable>
+            vehicles.length > 1 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Aktif aracı değiştir"
+                style={({ pressed }) => [styles.switchChip, pressed && styles.headerPressed]}
+                onPress={() => setSwitcherOpen(true)}
+              >
+                <Ionicons name="swap-horizontal" size={16} color={colors.primary} accessible={false} />
+                <Text style={styles.switchChipText}>Araç değiştir</Text>
+              </Pressable>
+            ) : undefined
           }
         />
         {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
@@ -196,7 +199,12 @@ export default function DashboardScreen() {
           ))}
         </View>
         <Card>
-          <MiniBarChart data={monthly} />
+          <MiniBarChart
+            data={monthly}
+            footer={
+              fuelLiters > 0 ? `Toplam yakıt · ${formatNumber(fuelLiters, 1)} L` : undefined
+            }
+          />
           {comparison === null ? (
             <Text style={styles.insight}>Karşılaştırma için önceki ay verisi gerekiyor.</Text>
           ) : (
@@ -207,14 +215,6 @@ export default function DashboardScreen() {
             </Text>
           )}
         </Card>
-        <View style={styles.detailMetrics}>
-          <Card style={styles.detailMetric}>
-            <Text style={styles.detailValue}>
-              {fuelLiters > 0 ? `${formatNumber(fuelLiters, 1)} L` : '—'}
-            </Text>
-            <Text style={styles.metricLabel}>Toplam yakıt</Text>
-          </Card>
-        </View>
         <SectionHeader
           title="Son hareketler"
           actionLabel="Tümünü gör"
@@ -260,6 +260,13 @@ export default function DashboardScreen() {
       >
         <Ionicons name="sparkles" size={21} color={colors.onBrand} accessible={false} />
       </Pressable>
+      {introVisible ? (
+        <HomeIntroOverlay
+          name={displayName}
+          contextLine={contextLine}
+          onDone={() => setIntroVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -267,14 +274,16 @@ export default function DashboardScreen() {
 const createStyles = ({ colors, shadows }: AppTheme) =>
   StyleSheet.create({
     root: { flex: 1 },
-    headerIcon: {
-      width: 46,
-      height: 46,
-      borderRadius: 16,
-      backgroundColor: colors.paleAqua,
+    switchChip: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: 999,
+      backgroundColor: colors.paleAqua,
     },
+    switchChipText: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 12 },
     headerPressed: { opacity: 0.72 },
     hero: {
       width: '100%',
@@ -330,9 +339,6 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     metricLabel: { color: colors.muted, ...typography.caption },
     metricValue: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 13 },
     insight: { color: colors.muted, ...typography.caption, marginTop: spacing.md },
-    detailMetrics: { flexDirection: 'row', gap: spacing.md },
-    detailMetric: { flex: 1, gap: spacing.xs },
-    detailValue: { color: colors.navy, ...typography.cardTitle },
     list: { gap: spacing.md },
     assistantFab: {
       position: 'absolute',

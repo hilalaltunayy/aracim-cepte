@@ -34,6 +34,9 @@ interface AuthState {
   error: string | null;
   sessionNotice: string | null;
   hasSignedInBefore: boolean;
+  /** Transient: play the Home welcome intro once after a fresh login / cold authenticated launch. */
+  homeIntroPending: boolean;
+  consumeHomeIntro: () => void;
   initialize: () => Promise<() => void>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signUp: (email: string, password: string, displayName: string) => Promise<boolean>;
@@ -57,6 +60,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
   sessionNotice: null,
   hasSignedInBefore: false,
+  homeIntroPending: false,
+
+  consumeHomeIntro: () => set({ homeIntroPending: false }),
 
   initialize: async () => {
     if (!isSupabaseConfigured) {
@@ -74,6 +80,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       session: data.session,
       ready: true,
       hasSignedInBefore,
+      homeIntroPending: Boolean(data.session),
       sessionNotice: error && isSessionExpiredError(error) ? SESSION_EXPIRED_MESSAGE : null,
     });
     const subscription = client.auth.onAuthStateChange((event, session) => {
@@ -107,7 +114,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (error) throw error;
       await markHasSignedInBefore();
-      set({ busy: false, hasSignedInBefore: true });
+      set({ busy: false, hasSignedInBefore: true, homeIntroPending: true });
       return true;
     } catch (error) {
       set({ busy: false, error: getFriendlyError(error) });
@@ -207,7 +214,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       intentionalSessionEnd = true;
       const { error: signOutError } = await client.auth.signOut({ scope: 'global' });
       if (signOutError) await client.auth.signOut({ scope: 'local' });
-      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
+      set({
+        busy: false,
+        session: null,
+        recoveryMode: false,
+        sessionNotice: null,
+        homeIntroPending: false,
+      });
       intentionalSessionEnd = false;
       return true;
     } catch (error) {
@@ -228,7 +241,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       intentionalSessionEnd = true;
       await client.auth.signOut({ scope: 'local' });
-      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
+      set({
+        busy: false,
+        session: null,
+        recoveryMode: false,
+        sessionNotice: null,
+        homeIntroPending: false,
+      });
       intentionalSessionEnd = false;
       return true;
     } catch (error) {
@@ -245,12 +264,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await getSupabaseClient().auth.signOut();
     } finally {
       intentionalSessionEnd = false;
-      set({ busy: false, session: null, recoveryMode: false, sessionNotice: null });
+      set({
+        busy: false,
+        session: null,
+        recoveryMode: false,
+        sessionNotice: null,
+        homeIntroPending: false,
+      });
     }
   },
 
   markSessionExpired: () => {
-    set({ session: null, recoveryMode: false, sessionNotice: SESSION_EXPIRED_MESSAGE });
+    set({
+      session: null,
+      recoveryMode: false,
+      sessionNotice: SESSION_EXPIRED_MESSAGE,
+      homeIntroPending: false,
+    });
     if (!isSupabaseConfigured) return;
     intentionalSessionEnd = true;
     void getSupabaseClient()

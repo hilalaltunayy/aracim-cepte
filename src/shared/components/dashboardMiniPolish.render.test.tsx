@@ -84,7 +84,7 @@ describe('TASK-012 narrow dashboard and body-header polish', () => {
         ]}
       />,
     );
-    const caption = findText(renderer.root, 'Altı aylık toplam gider');
+    const caption = findText(renderer.root, 'Aylık gider');
     expect(caption.props.style).toMatchObject({
       flexShrink: 1,
       maxWidth: '46%',
