@@ -24,12 +24,14 @@ export function parseEmailConfirmationCallback(
     if (params.get('error') || params.get('error_description')) {
       return { kind: 'error', message: EMAIL_CONFIRMATION_INVALID_MESSAGE };
     }
-    if (params.get('type') !== 'signup') {
-      return { kind: 'error', message: EMAIL_CONFIRMATION_INVALID_MESSAGE };
-    }
 
+    // PKCE verify redirects carry `?code=` and may omit `type`; the address is
+    // already the dedicated confirm-email route, so a code here is a signup
+    // confirmation that Supabase completed server-side before redirecting.
     const hasPkceCode = Boolean(params.get('code'));
-    const hasImplicitSession = Boolean(params.get('access_token') && params.get('refresh_token'));
+    const hasImplicitSession =
+      params.get('type') === 'signup' &&
+      Boolean(params.get('access_token') && params.get('refresh_token'));
     return hasPkceCode || hasImplicitSession
       ? { kind: 'success' }
       : { kind: 'error', message: EMAIL_CONFIRMATION_INVALID_MESSAGE };

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import * as Linking from 'expo-linking';
 import {
   AppButton,
   ErrorBanner,
@@ -10,7 +9,7 @@ import {
   PasswordInput,
   Screen,
 } from '@/shared/components/ui';
-import { getIncomingRecoveryUrl } from '@/features/auth/recoveryRedirect';
+import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
@@ -19,9 +18,9 @@ type Phase = 'loading' | 'ready' | 'success' | 'error';
 
 export default function ResetPasswordScreen() {
   const styles = useThemedStyles(createStyles);
-  const incomingUrl = Linking.useURL();
-  const processing = useRef<Promise<boolean> | null>(null);
-  const [phase, setPhase] = useState<Phase>('loading');
+  const incoming = useIncomingAuthCallbackUrl();
+  const processed = useRef(false);
+  const [establishPhase, setEstablishPhase] = useState<Phase | null>(null);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -29,23 +28,22 @@ export default function ResetPasswordScreen() {
   const validationError = validateNewPassword(password, confirmation);
 
   useEffect(() => {
-    let active = true;
-    processing.current ??= getIncomingRecoveryUrl(incomingUrl).then((url) =>
-      establishRecovery(url),
+    if (processed.current || !incoming.url) return;
+    processed.current = true;
+    void establishRecovery(incoming.url).then((ready) =>
+      setEstablishPhase(ready ? 'ready' : 'error'),
     );
-    void processing.current.then((ready) => {
-      if (active) setPhase(ready ? 'ready' : 'error');
-    });
-    return () => {
-      active = false;
-    };
-  }, [establishRecovery, incomingUrl]);
+  }, [establishRecovery, incoming.url]);
+
+  // A settled deep link with no auth params means there is nothing to verify.
+  const phase: Phase =
+    establishPhase ?? (incoming.settled && !incoming.url ? 'error' : 'loading');
 
   const submit = async () => {
     setSubmitted(true);
     if (validationError) return;
     clearError();
-    if (await updateRecoveredPassword(password)) setPhase('success');
+    if (await updateRecoveredPassword(password)) setEstablishPhase('success');
   };
 
   if (phase === 'loading') return <LoadingScreen />;
@@ -54,9 +52,7 @@ export default function ResetPasswordScreen() {
     return (
       <Screen style={styles.screen}>
         <FormSection title="Şifreniz yenilendi">
-          <Text style={styles.body}>
-            Yeni şifreniz kaydedildi ve kurtarma oturumu güvenli şekilde kapatıldı.
-          </Text>
+          <Text style={styles.body}>Şifreniz yenilendi. Yeni şifrenizle giriş yapabilirsiniz.</Text>
           <AppButton title="Giriş ekranına dön" onPress={() => router.replace('/auth/login')} />
         </FormSection>
       </Screen>
@@ -117,7 +113,7 @@ export default function ResetPasswordScreen() {
           error={submitted && validationError?.includes('eşleşmiyor') ? validationError : null}
         />
         <AppButton
-          title="Şifreyi güncelle"
+          title="Şifreyi yenile"
           loading={busy}
           disabled={Boolean(validationError)}
           onPress={submit}

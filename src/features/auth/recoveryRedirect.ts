@@ -25,12 +25,3 @@ export function getPasswordRecoveryRedirectUrl(): string {
     nativeUrl: getAuthRedirectUrl(AUTH_REDIRECT_PATHS.passwordRecovery),
   });
 }
-
-export async function getIncomingAuthUrl(currentUrl: string | null): Promise<string | null> {
-  if (Platform.OS === 'web' && typeof globalThis.location?.href === 'string') {
-    return globalThis.location.href;
-  }
-  return currentUrl ?? Linking.getInitialURL();
-}
-
-export const getIncomingRecoveryUrl = getIncomingAuthUrl;

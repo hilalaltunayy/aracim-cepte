@@ -27,6 +27,11 @@ export function getSupabaseClient(): SupabaseClient<Database> {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        // PKCE keeps auth-callback material in the query string. Implicit-flow
+        // fragments (`#access_token=...`) are dropped by Android when Chrome
+        // redirects a verify response to the app's custom scheme, which made
+        // fresh recovery/confirmation links land on the "invalid link" screen.
+        flowType: 'pkce',
       },
     });
   }

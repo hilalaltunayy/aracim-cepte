@@ -1,32 +1,26 @@
-import { useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
-import * as Linking from 'expo-linking';
 import { AppButton, ErrorBanner, FormSection, LoadingScreen, Screen } from '@/shared/components/ui';
 import {
   EMAIL_CONFIRMATION_INVALID_MESSAGE,
   parseEmailConfirmationCallback,
 } from '@/features/auth/emailConfirmation';
-import { getIncomingAuthUrl } from '@/features/auth/recoveryRedirect';
+import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 
 type Phase = 'loading' | 'success' | 'error';
 
 export default function ConfirmEmailScreen() {
   const styles = useThemedStyles(createStyles);
-  const incomingUrl = Linking.useURL();
-  const [phase, setPhase] = useState<Phase>('loading');
+  const incoming = useIncomingAuthCallbackUrl();
 
-  useEffect(() => {
-    let active = true;
-    void getIncomingAuthUrl(incomingUrl).then((url) => {
-      if (!active) return;
-      setPhase(parseEmailConfirmationCallback(url).kind === 'success' ? 'success' : 'error');
-    });
-    return () => {
-      active = false;
-    };
-  }, [incomingUrl]);
+  const phase: Phase = incoming.url
+    ? parseEmailConfirmationCallback(incoming.url).kind === 'success'
+      ? 'success'
+      : 'error'
+    : incoming.settled
+      ? 'error'
+      : 'loading';
 
   if (phase === 'loading') return <LoadingScreen />;
 

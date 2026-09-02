@@ -22,6 +22,7 @@ vi.mock('expo-linking', () => ({
   useURL: () => linkingState.url,
   getInitialURL: vi.fn(async () => linkingState.url),
   createURL: (path: string) => `aracimcepte://${path}`,
+  addEventListener: vi.fn(() => ({ remove: vi.fn() })),
 }));
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
@@ -104,7 +105,7 @@ describe('password recovery route', () => {
       confirmation.props.onChangeText('guvenli-123');
     });
     const submit = renderer.root.find(
-      (node) => (node.type as unknown) === 'AppButton' && node.props.title === 'Şifreyi güncelle',
+      (node) => (node.type as unknown) === 'AppButton' && node.props.title === 'Şifreyi yenile',
     );
     await act(async () => submit.props.onPress());
 

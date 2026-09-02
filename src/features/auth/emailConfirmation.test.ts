@@ -14,6 +14,10 @@ describe('email confirmation callback', () => {
     expect(
       parseEmailConfirmationCallback('aracimcepte://auth/confirm-email?code=redacted&type=signup'),
     ).toEqual({ kind: 'success' });
+    // PKCE verify redirects can omit `type`; a code on the confirm-email route is a signup.
+    expect(
+      parseEmailConfirmationCallback('aracimcepte://auth/confirm-email?code=redacted'),
+    ).toEqual({ kind: 'success' });
   });
 
   it('rejects missing, malformed, expired and recovery callbacks without exposing details', () => {

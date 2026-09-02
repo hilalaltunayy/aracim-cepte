@@ -12,6 +12,7 @@ vi.mock('expo-router', () => ({ router: routerMock }));
 vi.mock('expo-linking', () => ({
   useURL: () => linkingState.url,
   getInitialURL: vi.fn(async () => linkingState.url),
+  addEventListener: vi.fn(() => ({ remove: vi.fn() })),
 }));
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
