@@ -78,6 +78,14 @@ test('fails closed unless enablement, privacy approval and key all exist', () =>
   assert.equal(provider?.id, 'gemini');
 });
 
+test('generate_content request disables thinking for 2.5 and omits it otherwise', () => {
+  const flash25 = buildGenerateContentRequest(input, 'gemini-2.5-flash');
+  assert.equal(flash25.generationConfig.thinkingConfig.thinkingBudget, 0);
+  assert.equal(flash25.generationConfig.maxOutputTokens, 2048);
+  const flash20 = buildGenerateContentRequest(input, 'gemini-2.0-flash');
+  assert.equal('thinkingConfig' in flash20.generationConfig, false);
+});
+
 test('generate_content style calls :generateContent and parses candidate JSON', async () => {
   const request = buildGenerateContentRequest(input);
   assert.equal(request.generationConfig.responseMimeType, 'application/json');
@@ -100,12 +108,36 @@ test('generate_content style calls :generateContent and parses candidate JSON', 
   assert.equal(seen.url, 'https://example.test/v1beta/models/gemini-x:generateContent');
 });
 
-test('parseGenerateContentResponse rejects blocked or empty output', () => {
+test('parseGenerateContentResponse rejects blocked, empty and MAX_TOKENS-empty output', () => {
   assert.throws(
     () => parseGenerateContentResponse({ promptFeedback: { blockReason: 'SAFETY' } }),
     VehicleAssistantProviderError,
   );
   assert.throws(() => parseGenerateContentResponse({ candidates: [] }), VehicleAssistantProviderError);
+  // finishReason MAX_TOKENS with no text (all budget spent thinking) -> not usable.
+  assert.throws(
+    () =>
+      parseGenerateContentResponse({
+        candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }],
+      }),
+    (error) => error instanceof VehicleAssistantProviderError && error.category === 'malformed',
+  );
+  assert.throws(
+    () =>
+      parseGenerateContentResponse({
+        candidates: [{ finishReason: 'SAFETY', content: { parts: [{ text: '{}' }] } }],
+      }),
+    (error) => error instanceof VehicleAssistantProviderError && error.category === 'unavailable',
+  );
+});
+
+test('parseGenerateContentResponse tolerates a ```json fence', () => {
+  assert.deepEqual(
+    parseGenerateContentResponse({
+      candidates: [{ content: { parts: [{ text: '```json\n{"answer":"x"}\n```' }] } }],
+    }),
+    { answer: 'x' },
+  );
 });
 
 function generateContentProvider(fetchImpl) {
@@ -186,6 +218,28 @@ test('reports ok:true only on a clean parsed answer', async () => {
   await provider.generateVehicleAssistantResponse(input, undefined, (d) => diagnostics.push(d));
   assert.equal(diagnostics.at(-1).ok, true);
   assert.equal(diagnostics.at(-1).httpStatus, 200);
+});
+
+test('a 200 with finishReason MAX_TOKENS and no text is a redacted malformed failure', async () => {
+  const diagnostics = [];
+  const provider = generateContentProvider(async () =>
+    new Response(
+      JSON.stringify({
+        candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }],
+        usageMetadata: { thoughtsTokenCount: 2048 },
+      }),
+      { status: 200 },
+    ),
+  );
+  await assert.rejects(
+    () => provider.generateVehicleAssistantResponse(input, undefined, (d) => diagnostics.push(d)),
+    (error) => error.category === 'malformed',
+  );
+  const trace = diagnostics.at(-1);
+  assert.equal(trace.finishReason, 'MAX_TOKENS');
+  assert.equal(trace.hasText, false);
+  assert.equal(trace.ok, false);
+  assert.equal(JSON.stringify(trace).includes('maintenanceFacts'), false);
 });
 
 test('uses the backend key only in the provider request header and sanitizes failures', async () => {

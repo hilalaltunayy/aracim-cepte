@@ -2,20 +2,30 @@
 
 **As of:** 2026-09-03 (post physical go-live attempt, function ACTIVE v4).
 
-## Physical-test failure — root cause
+## Physical-test failure — two provider root causes
 
-The Gemini secrets were set correctly. The call failed because the **default
-model `gemini-3.6-flash` is not a real Generative Language API model** — the app
-built `POST …/v1beta/models/gemini-3.6-flash:generateContent`, Google returned
-**404 NOT_FOUND**, the provider mapped it to `unavailable`, and the handler
-returned `503`. The default is now **`gemini-2.5-flash`** (real, JSON-capable,
-free-tier). Any account-specific model can still be set with `GEMINI_MODEL`.
+1. **Invalid model.** The old default `gemini-3.6-flash` is not a real
+   Generative Language API model → `POST …/models/gemini-3.6-flash:generateContent`
+   → **404 NOT_FOUND** → `unavailable` → `503`. Default is now
+   **`gemini-2.5-flash`** (real, JSON-capable, free-tier).
 
-The redeployed function also logs a redacted trace line per call —
+2. **Thinking budget starvation.** `gemini-2.5-flash` is a *thinking* model. With
+   `maxOutputTokens` and no `thinkingConfig` it can spend the entire output
+   budget on hidden reasoning and return `finishReason: MAX_TOKENS` with an
+   **empty answer**, which the app then maps to "unavailable". The request now
+   sends `thinkingConfig: { thinkingBudget: 0 }` for 2.5 models and a generous
+   `maxOutputTokens: 2048`; the parser also tolerates a ` ```json ` fence and
+   reports `finishReason` + `hasText` in the trace.
+
+Any account-specific model can still be set with `GEMINI_MODEL` (thinkingConfig
+is sent only for `gemini-2.5*` / `*-latest`).
+
+The redeployed function logs a redacted trace line per call —
 `[ai:assistant:trace] {"stage":"provider","style":…,"model":…,"httpStatus":…,
-"providerStatus":"NOT_FOUND",…}` — no key, prompt, context, tokens or output.
-Read it in the Edge Function logs if it still fails; `providerStatus` tells you
-exactly which secret to fix.
+"providerStatus":"NOT_FOUND","finishReason":"MAX_TOKENS","hasText":false,…}` —
+no key, prompt, context, tokens or output. Read it in the Edge Function logs if
+it still fails: `providerStatus` names the wrong secret; `finishReason` +
+`hasText` show a model/output problem.
 
 ## 1. Get a Gemini API key (Google AI Studio)
 

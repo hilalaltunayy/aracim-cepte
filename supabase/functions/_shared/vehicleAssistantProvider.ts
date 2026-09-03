@@ -32,6 +32,10 @@ export interface ProviderCallDiagnostic {
   httpStatus: number | null;
   /** Provider-reported error status such as NOT_FOUND / PERMISSION_DENIED / INVALID_ARGUMENT. */
   providerStatus: string | null;
+  /** candidates[0].finishReason on a 200 (STOP / MAX_TOKENS / SAFETY / …). */
+  finishReason: string | null;
+  /** Whether the model returned any answer text at all. */
+  hasText: boolean;
   category: VehicleAssistantProviderError['category'] | null;
   elapsedMs: number;
   ok: boolean;
@@ -71,17 +75,46 @@ function promptText(input: AiVehicleAssistantProviderInput): string {
   ].join('\n\n');
 }
 
-/** Standard Gemini `:generateContent` request (no unsupported schema keywords). */
-export function buildGenerateContentRequest(input: AiVehicleAssistantProviderInput) {
+/**
+ * Standard Gemini `:generateContent` request.
+ *
+ * - No unsupported schema keywords (`additionalProperties` etc.).
+ * - `thinkingBudget: 0` disables the 2.5-flash "thinking" pass. Without it the
+ *   model spends the whole `maxOutputTokens` budget on hidden reasoning and
+ *   returns `finishReason: MAX_TOKENS` with an EMPTY answer — which the app then
+ *   maps to "unavailable". This was a real go-live failure mode.
+ * - `maxOutputTokens` is generous so a full grounded JSON answer always fits.
+ */
+export function buildGenerateContentRequest(
+  input: AiVehicleAssistantProviderInput,
+  model = GEMINI_DEFAULT_MODEL,
+) {
+  // Only the 2.5 "thinking" family understands (and needs) thinkingConfig;
+  // sending it to 1.5/2.0 models is a 400.
+  const thinking = /gemini-2\.5|gemini-flash-latest|gemini-pro-latest/i.test(model)
+    ? { thinkingConfig: { thinkingBudget: 0 } }
+    : {};
   return {
     systemInstruction: { parts: [{ text: VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION }] },
     contents: [{ role: 'user', parts: [{ text: promptText(input) }] }],
     generationConfig: {
       responseMimeType: 'application/json',
-      maxOutputTokens: 900,
+      maxOutputTokens: 2048,
       temperature: 0.2,
+      ...thinking,
     },
   } as const;
+}
+
+/** Gemini occasionally wraps JSON in a ```json fence even in JSON mode. */
+function stripJsonFence(text: string): string {
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(text.trim());
+  return fenced ? fenced[1].trim() : text.trim();
+}
+
+export function extractGenerateContentFinishReason(payload: unknown): string | null {
+  const candidate = (payload as { candidates?: { finishReason?: unknown }[] } | null)?.candidates?.[0];
+  return typeof candidate?.finishReason === 'string' ? candidate.finishReason : null;
 }
 
 export function parseGenerateContentResponse(payload: unknown): unknown {
@@ -90,14 +123,18 @@ export function parseGenerateContentResponse(payload: unknown): unknown {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     promptFeedback?: { blockReason?: string };
   };
-  if (response.promptFeedback?.blockReason) {
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (response.promptFeedback?.blockReason || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
     throw new VehicleAssistantProviderError('unavailable');
   }
-  const text = (response.candidates ?? [])
-    .flatMap((candidate) => candidate.content?.parts ?? [])
-    .map((part) => part.text ?? '')
-    .join('')
-    .trim();
+  const text = stripJsonFence(
+    (response.candidates ?? [])
+      .flatMap((candidate) => candidate.content?.parts ?? [])
+      .map((part) => part.text ?? '')
+      .join(''),
+  );
+  // Empty output (typically finishReason MAX_TOKENS after thinking) is not a
+  // usable answer.
   if (!text) throw new VehicleAssistantProviderError('malformed');
   try {
     return JSON.parse(text) as VehicleAssistantResponse;
@@ -185,6 +222,8 @@ export class GeminiVehicleAssistantProvider implements AiVehicleAssistantProvide
       model: this.config.model,
       httpStatus: null as number | null,
       providerStatus: null as string | null,
+      finishReason: null as string | null,
+      hasText: false,
     };
     const report = (
       extra: Partial<ProviderCallDiagnostic> & Pick<ProviderCallDiagnostic, 'ok'>,
@@ -208,7 +247,7 @@ export class GeminiVehicleAssistantProvider implements AiVehicleAssistantProvide
     const body =
       this.config.style === 'interactions'
         ? buildGeminiInteractionRequest(input)
-        : buildGenerateContentRequest(input);
+        : buildGenerateContentRequest(input, this.config.model);
     let response: Response;
     try {
       response = await this.fetchImplementation(this.endpoint(), {
@@ -241,6 +280,15 @@ export class GeminiVehicleAssistantProvider implements AiVehicleAssistantProvide
       );
     }
     const payload = await response.json().catch(() => null);
+    if (this.config.style === 'generate_content') {
+      base.finishReason = extractGenerateContentFinishReason(payload);
+      const anyText = ((payload as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      } | null)?.candidates ?? [])
+        .flatMap((candidate) => candidate.content?.parts ?? [])
+        .some((part) => Boolean(part.text && part.text.trim()));
+      base.hasText = anyText;
+    }
     try {
       const parsed =
         this.config.style === 'interactions'
