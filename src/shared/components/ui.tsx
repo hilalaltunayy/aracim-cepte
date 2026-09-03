@@ -365,38 +365,37 @@ export function FloatingField({
   error,
   value,
   multiline,
+  placeholder,
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
   const { colors } = useAppTheme();
   const styles = useStyles();
   const [focused, setFocused] = useState(false);
   const visibleLabel = withoutOptionalSuffix(label);
-  const floated = focused || Boolean(value && String(value).length > 0);
+  const floated = focused || Boolean(value !== undefined && value !== null && String(value).length > 0);
   const [progress] = useState(() => new Animated.Value(floated ? 1 : 0));
 
   useEffect(() => {
     Animated.timing(progress, {
       toValue: floated ? 1 : 0,
-      duration: 140,
+      duration: 130,
       useNativeDriver: false,
     }).start();
   }, [floated, progress]);
 
+  const restingTop = multiline ? 16 : 17;
   return (
     <View style={styles.field}>
-      <View style={[styles.floatingWrap, multiline && styles.multiline]}>
+      <View style={styles.floatingWrap}>
         <Animated.Text
+          numberOfLines={1}
           pointerEvents="none"
           style={[
             styles.floatingLabel,
             {
-              top: progress.interpolate({ inputRange: [0, 1], outputRange: [17, 7] }),
-              fontSize: progress.interpolate({ inputRange: [0, 1], outputRange: [15, 11] }),
-              color: error
-                ? colors.error
-                : floated
-                  ? colors.primaryAction
-                  : colors.muted,
+              top: progress.interpolate({ inputRange: [0, 1], outputRange: [restingTop, 6] }),
+              fontSize: progress.interpolate({ inputRange: [0, 1], outputRange: [15, 12] }),
+              color: error ? colors.error : floated ? colors.primaryAction : colors.muted,
             },
           ]}
         >
@@ -405,6 +404,10 @@ export function FloatingField({
         <TextInput
           placeholderTextColor={colors.muted}
           {...props}
+          // The resting label already acts as the placeholder; only show the
+          // native placeholder once the label has floated up, so the two never
+          // overlap (ROUND2-004B).
+          placeholder={floated ? placeholder : undefined}
           value={value}
           multiline={multiline}
           accessibilityLabel={props.accessibilityLabel ?? visibleLabel}
@@ -418,7 +421,7 @@ export function FloatingField({
           }}
           style={[
             styles.input,
-            styles.floatingInput,
+            multiline ? styles.floatingInputMultiline : styles.floatingInput,
             focused && styles.inputFocused,
             multiline && styles.multiline,
             error && styles.inputError,
@@ -1119,15 +1122,17 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     buttonTextDisabled: { color: colors.disabledText },
     field: { gap: 7 },
     fieldLabel: { color: colors.textPrimary, ...typography.label },
-    floatingWrap: { position: 'relative', justifyContent: 'center' },
+    floatingWrap: { position: 'relative' },
     floatingLabel: {
       position: 'absolute',
       left: spacing.lg,
+      right: spacing.lg,
       fontFamily: fontFamilies.medium,
       backgroundColor: 'transparent',
       zIndex: 1,
     },
-    floatingInput: { paddingTop: 18, paddingBottom: 4 },
+    floatingInput: { minHeight: 56, paddingTop: 22, paddingBottom: 8 },
+    floatingInputMultiline: { paddingTop: 26, paddingBottom: 10 },
     input: {
       minHeight: 54,
       borderWidth: 1,
@@ -1150,7 +1155,15 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     errorText: { color: colors.error, ...typography.caption },
     passwordField: { position: 'relative' },
     passwordInput: { paddingRight: 52 },
-    passwordEye: { position: 'absolute', right: 16, top: 40 },
+    passwordEye: {
+      position: 'absolute',
+      right: 14,
+      top: 15,
+      width: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     select: {
       minHeight: 54,
       borderWidth: 1,
