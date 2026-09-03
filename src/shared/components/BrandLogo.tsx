@@ -1,13 +1,50 @@
+import { useEffect, useState } from 'react';
+import { Animated, Easing } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
+
+const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
 /**
  * The real Aracım Cepte brand mark (mirrors assets/brand/app-icon.svg), drawn
  * with react-native-svg so it scales crisply and follows the app palette-neutral
  * brand colours. Replaces the previous generic Ionicons car glyph on auth.
  */
-export function BrandLogo({ size = 72 }: { size?: number }) {
+export function BrandLogo({
+  size = 72,
+  animateOnMount = false,
+}: {
+  size?: number;
+  animateOnMount?: boolean;
+}) {
+  const reducedMotion = useReducedMotion();
+  const [progress] = useState(() => new Animated.Value(animateOnMount ? 0 : 1));
+
+  useEffect(() => {
+    if (!animateOnMount) return;
+    if (reducedMotion) {
+      progress.setValue(1);
+      return;
+    }
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 460,
+      easing: Easing.out(Easing.back(1.4)),
+      useNativeDriver: true,
+    }).start();
+  }, [animateOnMount, progress, reducedMotion]);
+
   return (
-    <Svg
+    <AnimatedSvg
+      style={{
+        opacity: progress,
+        transform: [
+          { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }) },
+          {
+            rotate: progress.interpolate({ inputRange: [0, 1], outputRange: ['-8deg', '0deg'] }),
+          },
+        ],
+      }}
       width={size}
       height={size}
       viewBox="0 0 1024 1024"
@@ -44,6 +81,6 @@ export function BrandLogo({ size = 72 }: { size?: number }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </Svg>
+    </AnimatedSvg>
   );
 }

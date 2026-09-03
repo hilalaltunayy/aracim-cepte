@@ -25,9 +25,14 @@ vi.mock('react-native', () => {
 vi.mock('react-native-svg', () => ({
   default: 'Svg',
   Circle: 'Circle',
+  Defs: 'Defs',
   G: 'G',
+  Line: 'Line',
+  LinearGradient: 'LinearGradient',
   Path: 'Path',
+  Pattern: 'Pattern',
   Rect: 'Rect',
+  Stop: 'Stop',
 }));
 
 vi.mock('@/shared/theme', () => {

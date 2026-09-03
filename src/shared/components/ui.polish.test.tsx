@@ -33,6 +33,7 @@ vi.mock('react-native', () => ({
   View: 'View',
   useWindowDimensions: () => ({ height: 800 }),
 }));
+vi.mock('@/shared/components/PasswordMascot', () => ({ PasswordMascot: () => null }));
 vi.mock('@expo/vector-icons', async () => {
   const React = await import('react');
   return { Ionicons: (props: object) => React.createElement('Ionicons', props) };

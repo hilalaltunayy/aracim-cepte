@@ -300,37 +300,77 @@ function ProceduralVehicle({
   const wheelX = profile.width * 0.51;
   const wheelZ = profile.wheelBase / 2;
   const wheelWidth = profile.wheelRadius * 0.42;
+  const cabinMidZ = (profile.cabinStart + profile.cabinEnd) / 2;
+  const cabinLength = Math.abs(profile.cabinStart - profile.cabinEnd);
+  const glassColor = '#101B22';
   return (
     <group position={[0, -0.27, 0]}>
       <mesh geometry={mainBody} castShadow>
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           color={vehicleColor}
-          metalness={0.5}
-          roughness={0.32}
-          envMapIntensity={0.9}
+          metalness={0.55}
+          roughness={0.28}
+          clearcoat={0.7}
+          clearcoatRoughness={0.2}
+          envMapIntensity={1}
           side={DoubleSide}
         />
       </mesh>
       <mesh geometry={cabin}>
-        <meshStandardMaterial
-          color={profile.openRoof ? '#202A30' : '#1C2A33'}
-          metalness={0.1}
-          roughness={0.12}
+        <meshPhysicalMaterial
+          color={profile.openRoof ? '#1B242A' : glassColor}
+          metalness={0.2}
+          roughness={0.08}
           transparent
-          opacity={profile.openRoof ? 1 : 0.82}
+          opacity={profile.openRoof ? 1 : 0.72}
           side={DoubleSide}
         />
       </mesh>
       {roof ? (
         <mesh geometry={roof}>
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color={vehicleColor}
-            metalness={0.5}
-            roughness={0.32}
+            metalness={0.55}
+            roughness={0.28}
+            clearcoat={0.7}
             side={DoubleSide}
           />
         </mesh>
       ) : null}
+      {/* side + front + rear window glass panels */}
+      {!profile.openRoof
+        ? ([-1, 1] as const).map((side) => (
+            <mesh
+              key={`sideglass:${side}`}
+              position={[side * profile.width * 0.44, profile.roofHeight - 0.18, cabinMidZ]}
+            >
+              <boxGeometry args={[0.02, 0.34, cabinLength * 0.78]} />
+              <meshPhysicalMaterial
+                color={glassColor}
+                roughness={0.05}
+                metalness={0.1}
+                transparent
+                opacity={0.6}
+              />
+            </mesh>
+          ))
+        : null}
+      <mesh position={[0, profile.roofHeight - 0.14, profile.cabinStart + 0.02]} rotation={[0.42, 0, 0]}>
+        <boxGeometry args={[profile.width * 0.74, 0.36, 0.02]} />
+        <meshPhysicalMaterial color={glassColor} roughness={0.04} transparent opacity={0.55} />
+      </mesh>
+      {/* beltline accent */}
+      {([-1, 1] as const).map((side) => (
+        <mesh key={`belt:${side}`} position={[side * profile.width * 0.5, profile.bodyHeight * 0.78, cabinMidZ]}>
+          <boxGeometry args={[0.015, 0.025, cabinLength + 0.4]} />
+          <meshStandardMaterial color="#0F171C" roughness={0.5} metalness={0.4} />
+        </mesh>
+      ))}
+      {/* grille */}
+      <mesh position={[0, 0.5, profile.length / 2 - 0.03]}>
+        <boxGeometry args={[profile.width * 0.44, 0.16, 0.03]} />
+        <meshStandardMaterial color="#161D22" roughness={0.55} metalness={0.5} />
+      </mesh>
       {/* front + rear bumpers */}
       {[profile.length / 2 - 0.02, -profile.length / 2 + 0.02].map((z, index) => (
         <mesh key={index} position={[0, 0.42, z]}>
@@ -354,14 +394,31 @@ function ProceduralVehicle({
           <meshStandardMaterial color="#26363C" roughness={0.78} />
         </mesh>
       ) : null}
-      <mesh position={[0, profile.bodyHeight * 0.65, profile.length * 0.498]}>
-        <boxGeometry args={[profile.width * 0.55, 0.14, 0.035]} />
-        <meshStandardMaterial color="#EEF7F5" emissive="#B7DDD8" emissiveIntensity={0.22} />
-      </mesh>
-      <mesh position={[0, profile.bodyHeight * 0.62, -profile.length * 0.498]}>
-        <boxGeometry args={[profile.width * 0.5, 0.12, 0.035]} />
-        <meshStandardMaterial color="#A33C3C" emissive="#6A1616" emissiveIntensity={0.24} />
-      </mesh>
+      {/* headlights */}
+      {([-1, 1] as const).map((side) => (
+        <mesh
+          key={`head:${side}`}
+          position={[side * profile.width * 0.38, profile.bodyHeight * 0.66, profile.length * 0.495]}
+        >
+          <sphereGeometry args={[0.11, 16, 12]} />
+          <meshStandardMaterial
+            color="#F4FBFB"
+            emissive="#CDECE8"
+            emissiveIntensity={0.5}
+            roughness={0.15}
+          />
+        </mesh>
+      ))}
+      {/* taillights */}
+      {([-1, 1] as const).map((side) => (
+        <mesh
+          key={`tail:${side}`}
+          position={[side * profile.width * 0.4, profile.bodyHeight * 0.64, -profile.length * 0.495]}
+        >
+          <boxGeometry args={[profile.width * 0.22, 0.1, 0.04]} />
+          <meshStandardMaterial color="#B23A3A" emissive="#7C1B1B" emissiveIntensity={0.55} />
+        </mesh>
+      ))}
       {([-1, 1] as const).flatMap((side) =>
         [wheelZ, -wheelZ].map((z) => (
           <Wheel
@@ -405,8 +462,12 @@ export default function Sedan3DScene({
   const gesture = useMemo(() => {
     const pan = Gesture.Pan()
       .maxPointers(1)
-      .minDistance(2)
       .averageTouches(true)
+      // Claim the drag as soon as the finger moves a few pixels in ANY
+      // direction so the parent ScrollView cannot steal a vertical orbit.
+      .activeOffsetX([-6, 6])
+      .activeOffsetY([-6, 6])
+      .shouldCancelWhenOutside(false)
       .onBegin(beginInteraction)
       .onChange((event) => handlePan(event.changeX, event.changeY))
       .onFinalize(endInteraction)
@@ -416,7 +477,7 @@ export default function Sedan3DScene({
         beginInteraction();
         handlePinchBegin();
       })
-      .onUpdate((event) => handlePinch(event.scale))
+      .onChange((event) => handlePinch(event.scale))
       .onFinalize(endInteraction)
       .runOnJS(true);
     return Gesture.Simultaneous(pan, pinch);
@@ -436,11 +497,13 @@ export default function Sedan3DScene({
           gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         >
           <color attach="background" args={[colors.diagramBackground]} />
-          <hemisphereLight args={['#ffffff', '#3a4750', 0.85]} />
-          <ambientLight intensity={0.35} />
+          <hemisphereLight args={['#ffffff', '#354049', 0.8]} />
+          <ambientLight intensity={0.32} />
           <directionalLight position={[5, 8, 5]} intensity={1.9} castShadow />
-          <directionalLight position={[-6, 4, -4]} intensity={0.5} color="#cfe6ff" />
-          <spotLight position={[0, 6, -6]} angle={0.6} penumbra={1} intensity={0.5} />
+          <directionalLight position={[-6, 4, -4]} intensity={0.55} color="#cfe6ff" />
+          {/* rim light for silhouette pop */}
+          <directionalLight position={[0, 3, -7]} intensity={0.8} color="#eaf4ff" />
+          <spotLight position={[0, 6, -6]} angle={0.6} penumbra={1} intensity={0.45} />
           <ProceduralVehicle profile={profile} vehicleColor={vehicleColor} />
           {/* studio floor */}
           <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>

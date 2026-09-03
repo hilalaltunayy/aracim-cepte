@@ -59,7 +59,7 @@ export default function ResetPasswordScreen() {
 
   if (phase === 'success') {
     return (
-      <Screen style={styles.screen}>
+      <Screen style={styles.screen} centered>
         <FormSection title="Şifreniz yenilendi">
           <Text style={styles.body}>Şifreniz yenilendi. Yeni şifrenizle giriş yapabilirsiniz.</Text>
           <AppButton title="Giriş ekranına dön" onPress={() => router.replace('/auth/login')} />
@@ -70,7 +70,7 @@ export default function ResetPasswordScreen() {
 
   if (phase === 'error') {
     return (
-      <Screen style={styles.screen}>
+      <Screen style={styles.screen} centered>
         <ErrorBanner
           message={
             error ?? 'Şifre yenileme bağlantısı kullanılamıyor. Lütfen yeni bir bağlantı isteyin.'
@@ -96,7 +96,7 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <Screen style={styles.screen}>
+    <Screen style={styles.screen} centered>
       <View style={styles.intro}>
         <Text style={styles.title}>Yeni şifrenizi belirleyin</Text>
         <Text style={styles.body}>
@@ -111,6 +111,7 @@ export default function ResetPasswordScreen() {
           onChangeText={setPassword}
           autoComplete="new-password"
           maxLength={72}
+          mascot
           error={submitted && validationError && !matchError ? validationError : null}
         />
         <PasswordInput
@@ -119,6 +120,7 @@ export default function ResetPasswordScreen() {
           onChangeText={setConfirmation}
           autoComplete="new-password"
           maxLength={72}
+          mascot
           error={submitted && matchError ? validationError : null}
         />
         <Text style={styles.hint}>{PASSWORD_POLICY_HINT}</Text>

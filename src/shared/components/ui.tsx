@@ -34,6 +34,7 @@ import {
 } from '@/shared/theme';
 import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
 import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
+import { PasswordMascot } from '@/shared/components/PasswordMascot';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
 import {
   formatDate,
@@ -59,11 +60,14 @@ export function Screen({
   backgroundColor,
   scrollEnabled = true,
   backdrop,
+  centered = false,
 }: PropsWithChildren<{
   scroll?: boolean;
   style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
   scrollEnabled?: boolean;
+  /** Vertically centre short content in the viewport (auth screens). */
+  centered?: boolean;
   /**
    * Fixed decorative layer rendered behind (and outside) the scroll area so it
    * never parallaxes. Callers pass `<AutomotiveBackdrop />`.
@@ -80,6 +84,7 @@ export function Screen({
       style={styles.flex}
       contentContainerStyle={[
         styles.screenContent,
+        centered && styles.screenContentCentered,
         { paddingBottom: screenContentPaddingBottom },
         style,
       ]}
@@ -289,8 +294,9 @@ export function PasswordInput({
   error,
   style,
   onBlur,
+  mascot = false,
   ...props
-}: TextInputProps & { label: string; error?: string | null }) {
+}: TextInputProps & { label: string; error?: string | null; mascot?: boolean }) {
   const { colors } = useAppTheme();
   const styles = useStyles();
   const reducedMotion = useReducedMotion();
@@ -334,22 +340,29 @@ export function PasswordInput({
         onResponderTerminate={hide}
         style={({ pressed }) => [styles.passwordEye, pressed && styles.pressed]}
       >
-        <Animated.View
-          style={{
-            transform: [
-              { scale: eyeAnim },
-              {
-                rotate: eyeAnim.interpolate({ inputRange: [0.6, 1], outputRange: ['-18deg', '0deg'] }),
-              },
-            ],
-          }}
-        >
-          <Ionicons
-            name={visible ? 'eye-off-outline' : 'eye-outline'}
-            size={21}
-            color={colors.muted}
-          />
-        </Animated.View>
+        {mascot ? (
+          <PasswordMascot visible={visible} size={24} />
+        ) : (
+          <Animated.View
+            style={{
+              transform: [
+                { scale: eyeAnim },
+                {
+                  rotate: eyeAnim.interpolate({
+                    inputRange: [0.6, 1],
+                    outputRange: ['-18deg', '0deg'],
+                  }),
+                },
+              ],
+            }}
+          >
+            <Ionicons
+              name={visible ? 'eye-off-outline' : 'eye-outline'}
+              size={21}
+              color={colors.muted}
+            />
+          </Animated.View>
+        )}
       </Pressable>
     </View>
   );
@@ -1070,6 +1083,7 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
   StyleSheet.create({
     flex: { flex: 1 },
     safe: { flex: 1, backgroundColor: colors.screenBackground },
+    screenContentCentered: { flexGrow: 1, justifyContent: 'center', maxWidth: 460 },
     screenContent: {
       width: '100%',
       maxWidth: 720,

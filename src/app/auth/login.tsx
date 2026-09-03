@@ -50,9 +50,9 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen style={styles.screen} backdrop={<AutomotiveBackdrop />}>
+    <Screen style={styles.screen} centered backdrop={<AutomotiveBackdrop />}>
       <Reveal order={0} style={styles.logoRow}>
-        <BrandLogo size={66} />
+        <BrandLogo size={64} animateOnMount />
       </Reveal>
       <Reveal order={1} style={styles.heading}>
         <Text style={styles.title}>
@@ -88,8 +88,11 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           autoComplete="current-password"
+          mascot
         />
         <Pressable
+          accessibilityRole="link"
+          hitSlop={8}
           style={({ pressed }) => [styles.forgot, pressed && styles.pressed]}
           onPress={() => router.push('/auth/forgot-password')}
         >
@@ -117,15 +120,20 @@ export default function LoginScreen() {
 
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
-    screen: { justifyContent: 'center', gap: spacing.lg, paddingBottom: spacing.xxl },
-    logoRow: { alignItems: 'flex-start' },
-    heading: { gap: spacing.sm },
-    title: { color: colors.navy, ...typography.screenTitle },
-    subtitle: { color: colors.muted, ...typography.body },
-    form: { gap: spacing.lg },
-    forgot: { alignSelf: 'flex-end' },
+    screen: { gap: spacing.xl, paddingVertical: spacing.xl },
+    logoRow: { alignItems: 'center' },
+    heading: { gap: spacing.sm, alignItems: 'center' },
+    title: { color: colors.navy, textAlign: 'center', ...typography.screenTitle },
+    subtitle: { color: colors.muted, textAlign: 'center', ...typography.body },
+    form: { gap: spacing.md },
+    forgot: { alignSelf: 'flex-end', paddingVertical: spacing.xs },
     pressed: { opacity: 0.65 },
     link: { color: colors.primary, fontFamily: fontFamilies.semibold, fontSize: 14 },
-    register: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
+    register: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingTop: spacing.sm,
+    },
     muted: { color: colors.muted, ...typography.body },
   });

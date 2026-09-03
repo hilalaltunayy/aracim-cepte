@@ -136,9 +136,9 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen style={styles.screen} backdrop={<AutomotiveBackdrop />}>
+    <Screen style={styles.screen} centered backdrop={<AutomotiveBackdrop />}>
       <Reveal order={0} style={styles.logoRow}>
-        <BrandLogo size={52} />
+        <BrandLogo size={56} animateOnMount />
       </Reveal>
       <Reveal order={1} style={styles.intro}>
         <Text style={styles.title}>Aracınız için güvenli bir alan</Text>
@@ -163,6 +163,7 @@ export default function RegisterScreen() {
           onChangeText={setPassword}
           autoComplete="new-password"
           maxLength={72}
+          mascot
           error={password.length > 0 && !passwordPolicy.valid ? passwordPolicy.message : null}
         />
         <Text style={styles.legalCaption}>{PASSWORD_POLICY_HINT}</Text>
@@ -172,6 +173,7 @@ export default function RegisterScreen() {
           onChangeText={setConfirmation}
           autoComplete="new-password"
           maxLength={72}
+          mascot
           error={
             confirmation.length > 0 && confirmation !== password ? 'Şifreler eşleşmiyor.' : null
           }
@@ -207,13 +209,13 @@ export default function RegisterScreen() {
 
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
-    screen: { gap: spacing.lg },
-    logoRow: { alignItems: 'flex-start' },
+    screen: { gap: spacing.lg, paddingVertical: spacing.xl },
+    logoRow: { alignItems: 'center' },
     successScreen: { justifyContent: 'center', gap: spacing.xl },
-    intro: { gap: spacing.sm },
-    form: { gap: spacing.lg },
-    title: { color: colors.navy, ...typography.sectionTitle },
-    subtitle: { color: colors.muted, ...typography.body },
+    intro: { gap: spacing.sm, alignItems: 'center' },
+    form: { gap: spacing.md },
+    title: { color: colors.navy, textAlign: 'center', ...typography.sectionTitle },
+    subtitle: { color: colors.muted, textAlign: 'center', ...typography.body },
     legalNotice: { gap: spacing.sm },
     legalCaption: { color: colors.muted, fontSize: 12, lineHeight: 18 },
     legalLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

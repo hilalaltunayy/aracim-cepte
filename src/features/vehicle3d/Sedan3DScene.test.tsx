@@ -45,8 +45,18 @@ vi.mock('react-native-gesture-handler', async () => {
       maxPointers: () => builder,
       minDistance: () => builder,
       averageTouches: () => builder,
-      onChange: (callback: (event: { changeX: number; changeY: number }) => void) => {
-        if (kind === 'pan') gestureCallbacks.panChange = callback;
+      activeOffsetX: () => builder,
+      activeOffsetY: () => builder,
+      shouldCancelWhenOutside: () => builder,
+      onChange: (callback: (event: never) => void) => {
+        if (kind === 'pan') {
+          gestureCallbacks.panChange = callback as (event: {
+            changeX: number;
+            changeY: number;
+          }) => void;
+        } else {
+          gestureCallbacks.pinchUpdate = callback as (event: { scale: number }) => void;
+        }
         return builder;
       },
       onBegin: (callback: () => void) => {

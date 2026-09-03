@@ -16,7 +16,7 @@ export default function ForgotPasswordScreen() {
       );
   };
   return (
-    <Screen>
+    <Screen centered>
       {error ? <ErrorBanner message={error} /> : null}
       <AppInput
         label="E-posta"
