@@ -71,20 +71,22 @@ describe('password recovery callback parsing', () => {
     ).toBe('error');
   });
 
-  it('requires a PASSWORD_RECOVERY event for an untyped PKCE callback', async () => {
-    const rejected = await establishPasswordRecoverySession(
-      authClient({ event: 'SIGNED_IN' }),
-      'http://localhost:8082/auth/reset-password?code=ordinary-code',
-    );
-    expect(rejected.session).toBeNull();
-    expect(rejected.error).toMatch(/geçersiz|eksik/);
-
+  it('accepts a PKCE code exchange on the reset route even without a type param or event', async () => {
+    // Android drops `type=recovery` on the browser->app redirect and a cold
+    // start can deliver PASSWORD_RECOVERY a tick late; a successful exchange on
+    // the dedicated reset route is the recovery flow.
     const accepted = await establishPasswordRecoverySession(
-      authClient({ event: 'PASSWORD_RECOVERY' }),
+      authClient({ event: 'SIGNED_IN' }),
       'http://localhost:8082/auth/reset-password?code=recovery-code',
     );
     expect(accepted.session?.user.id).toBe('qa-user');
     expect(accepted.error).toBeNull();
+  });
+
+  it('accepts a token_hash callback with no explicit type param', () => {
+    expect(
+      parsePasswordRecoveryCallback('aracimcepte://auth/reset-password?token_hash=hash'),
+    ).toEqual({ kind: 'token_hash', tokenHash: 'hash' });
   });
 
   it('maps used or expired exchanges to a safe Turkish error', async () => {
@@ -99,10 +101,13 @@ describe('password recovery callback parsing', () => {
 });
 
 describe('password recovery validation and redirect URLs', () => {
-  it('validates length, confirmation and a valid password', () => {
-    expect(validateNewPassword('short', 'short')).toMatch(/8 karakter/);
-    expect(validateNewPassword('guvenli-123', 'farkli-123')).toMatch(/eşleşmiyor/);
-    expect(validateNewPassword('guvenli-123', 'guvenli-123')).toBeNull();
+  it('enforces the strength policy, then the confirmation match', () => {
+    expect(validateNewPassword('Guv-1a', 'Guv-1a')).toMatch(/8 karakter/);
+    expect(validateNewPassword('guvenli123!', 'guvenli123!')).toMatch(/büyük harf/);
+    expect(validateNewPassword('Guvenlixx!', 'Guvenlixx!')).toMatch(/rakam/);
+    expect(validateNewPassword('Guvenli123', 'Guvenli123')).toMatch(/özel karakter/);
+    expect(validateNewPassword('Guvenli-123!', 'Farkli-123!')).toMatch(/eşleşmiyor/);
+    expect(validateNewPassword('Guvenli-123!', 'Guvenli-123!')).toBeNull();
   });
 
   it('builds deterministic web and native recovery routes', () => {

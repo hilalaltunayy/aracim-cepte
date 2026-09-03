@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/authStore';
 import { isSupabaseConfigured } from '@/data/supabase/client';
 import { fontFamilies, spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { isValidEmail } from '@/shared/utils/validation';
+import { evaluatePasswordPolicy, PASSWORD_POLICY_HINT } from '@/shared/utils/passwordPolicy';
 import { useShakeAnimation } from '@/shared/hooks/useShakeAnimation';
 import {
   REGISTRATION_LEGAL_LINKS,
@@ -52,7 +53,8 @@ export default function RegisterScreen() {
       clearError();
     }, [clearError]),
   );
-  const valid = isValidEmail(email) && password.length >= 8 && password === confirmation;
+  const passwordPolicy = evaluatePasswordPolicy(password);
+  const valid = isValidEmail(email) && passwordPolicy.valid && password === confirmation;
   const submit = async () => {
     if (!valid) {
       shake();
@@ -160,15 +162,16 @@ export default function RegisterScreen() {
           value={password}
           onChangeText={setPassword}
           autoComplete="new-password"
-          error={
-            password.length > 0 && password.length < 8 ? 'Şifre en az 8 karakter olmalı.' : null
-          }
+          maxLength={72}
+          error={password.length > 0 && !passwordPolicy.valid ? passwordPolicy.message : null}
         />
+        <Text style={styles.legalCaption}>{PASSWORD_POLICY_HINT}</Text>
         <PasswordInput
           label="Şifrenizi tekrar girin"
           value={confirmation}
           onChangeText={setConfirmation}
           autoComplete="new-password"
+          maxLength={72}
           error={
             confirmation.length > 0 && confirmation !== password ? 'Şifreler eşleşmiyor.' : null
           }

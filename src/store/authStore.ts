@@ -13,6 +13,7 @@ import {
 import {
   getPasswordResetFriendlyError,
   logPasswordResetErrorInDevelopment,
+  logRecoveryDiagnosticInDevelopment,
 } from '@/features/auth/passwordResetError';
 import {
   getConfirmationResendError,
@@ -195,13 +196,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   establishRecovery: async (url) => {
-    set({ busy: true, error: null, recoveryMode: false });
-    const result = await establishPasswordRecoverySession(getSupabaseClient().auth, url);
+    set({ busy: true, error: null });
+    const result = await establishPasswordRecoverySession(
+      getSupabaseClient().auth,
+      url,
+      logRecoveryDiagnosticInDevelopment,
+    );
     if (result.error || !result.session) {
-      set({ busy: false, error: result.error, recoveryMode: false });
+      // Do not clear recoveryMode here: the global auth listener may still catch
+      // a late PASSWORD_RECOVERY event and unlock the form.
+      set({ busy: false, error: result.error });
       return false;
     }
-    set({ busy: false, session: result.session, recoveryMode: true });
+    set({ busy: false, session: result.session, recoveryMode: true, error: null });
     return true;
   },
 

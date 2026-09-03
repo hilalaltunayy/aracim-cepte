@@ -11,6 +11,7 @@ import {
 } from '@/shared/components/ui';
 import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
+import { PASSWORD_POLICY_HINT } from '@/shared/utils/passwordPolicy';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 
@@ -24,8 +25,10 @@ export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const { establishRecovery, updateRecoveredPassword, busy, error, clearError } = useAuthStore();
+  const { establishRecovery, updateRecoveredPassword, busy, error, clearError, recoveryMode } =
+    useAuthStore();
   const validationError = validateNewPassword(password, confirmation);
+  const matchError = validationError === 'Şifreler eşleşmiyor.';
 
   useEffect(() => {
     if (processed.current || !incoming.url) return;
@@ -36,8 +39,14 @@ export default function ResetPasswordScreen() {
   }, [establishRecovery, incoming.url]);
 
   // A settled deep link with no auth params means there is nothing to verify.
+  // recoveryMode wins over a stale error: the global auth listener can still
+  // catch a late PASSWORD_RECOVERY event after establishRecovery resolved false.
   const phase: Phase =
-    establishPhase ?? (incoming.settled && !incoming.url ? 'error' : 'loading');
+    establishPhase === 'success'
+      ? 'success'
+      : recoveryMode
+        ? 'ready'
+        : (establishPhase ?? (incoming.settled && !incoming.url ? 'error' : 'loading'));
 
   const submit = async () => {
     setSubmitted(true);
@@ -91,7 +100,7 @@ export default function ResetPasswordScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>Yeni şifrenizi belirleyin</Text>
         <Text style={styles.body}>
-          Hesabınızı korumak için en az 8 karakterli, başka yerde kullanmadığınız bir şifre seçin.
+          Başka yerde kullanmadığınız güçlü bir şifre seçin.
         </Text>
       </View>
       {error ? <ErrorBanner message={error} /> : null}
@@ -102,7 +111,7 @@ export default function ResetPasswordScreen() {
           onChangeText={setPassword}
           autoComplete="new-password"
           maxLength={72}
-          error={submitted && validationError?.includes('en az') ? validationError : null}
+          error={submitted && validationError && !matchError ? validationError : null}
         />
         <PasswordInput
           label="Yeni şifre tekrar"
@@ -110,8 +119,9 @@ export default function ResetPasswordScreen() {
           onChangeText={setConfirmation}
           autoComplete="new-password"
           maxLength={72}
-          error={submitted && validationError?.includes('eşleşmiyor') ? validationError : null}
+          error={submitted && matchError ? validationError : null}
         />
+        <Text style={styles.hint}>{PASSWORD_POLICY_HINT}</Text>
         <AppButton
           title="Şifreyi yenile"
           loading={busy}
@@ -129,4 +139,5 @@ const createStyles = ({ colors }: AppTheme) =>
     intro: { gap: spacing.sm },
     title: { color: colors.navy, ...typography.sectionTitle },
     body: { color: colors.muted, ...typography.body },
+    hint: { color: colors.muted, ...typography.caption, marginTop: -spacing.xs },
   });

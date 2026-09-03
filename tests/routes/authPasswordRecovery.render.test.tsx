@@ -9,6 +9,7 @@ const { authState, linkingState, routerMock } = vi.hoisted(() => ({
     updateRecoveredPassword: vi.fn(async () => true),
     busy: false,
     error: null as string | null,
+    recoveryMode: false,
     clearError: vi.fn(),
   },
   linkingState: {
@@ -101,15 +102,15 @@ describe('password recovery route', () => {
     const password = passwordInputs[0]!;
     const confirmation = passwordInputs[1]!;
     await act(async () => {
-      password.props.onChangeText('guvenli-123');
-      confirmation.props.onChangeText('guvenli-123');
+      password.props.onChangeText('Guvenli-123!');
+      confirmation.props.onChangeText('Guvenli-123!');
     });
     const submit = renderer.root.find(
       (node) => (node.type as unknown) === 'AppButton' && node.props.title === 'Şifreyi yenile',
     );
     await act(async () => submit.props.onPress());
 
-    expect(authState.updateRecoveredPassword).toHaveBeenCalledWith('guvenli-123');
+    expect(authState.updateRecoveredPassword).toHaveBeenCalledWith('Guvenli-123!');
     expect(JSON.stringify(renderer.toJSON())).toContain('Şifreniz yenilendi');
     const login = renderer.root.find(
       (node) => (node.type as unknown) === 'AppButton' && node.props.title === 'Giriş ekranına dön',

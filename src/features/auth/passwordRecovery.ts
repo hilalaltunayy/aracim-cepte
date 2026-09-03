@@ -1,10 +1,17 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { evaluatePasswordPolicy } from '@/shared/utils/passwordPolicy';
 
 export type RecoveryCallback =
   | { kind: 'pkce'; code: string; explicitlyRecovery: boolean }
   | { kind: 'token_hash'; tokenHash: string }
   | { kind: 'implicit'; accessToken: string; refreshToken: string }
   | { kind: 'error'; message: string };
+
+/** Dev-only redacted trace of which recovery branch ran; never receives a token. */
+export type RecoveryDiagnostic =
+  | { stage: 'parse'; kind: RecoveryCallback['kind']; hasType: boolean }
+  | { stage: 'exchange'; kind: 'pkce' | 'token_hash' | 'implicit'; ok: boolean }
+  | { stage: 'result'; ok: boolean; recoveryEventSeen: boolean };
 
 export interface RecoveryAuthClient {
   exchangeCodeForSession: (
@@ -52,6 +59,10 @@ export function parsePasswordRecoveryCallback(input: string | null | undefined):
     if (authError) return { kind: 'error', message: expiredLinkMessage };
 
     const type = params.get('type');
+    // A `type` that is explicitly something other than recovery (e.g. `signup`)
+    // is not a password-recovery callback.
+    if (type && type !== 'recovery') return { kind: 'error', message: invalidLinkMessage };
+
     const code = params.get('code');
     if (code) {
       return {
@@ -61,8 +72,11 @@ export function parsePasswordRecoveryCallback(input: string | null | undefined):
       };
     }
 
+    // `token_hash` is the most reliable native flow (direct app open, no browser
+    // redirect that can strip query params). Accept it when `type` is recovery
+    // or absent — some Supabase email templates omit `type`.
     const tokenHash = params.get('token_hash');
-    if (tokenHash && type === 'recovery') return { kind: 'token_hash', tokenHash };
+    if (tokenHash) return { kind: 'token_hash', tokenHash };
 
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
@@ -79,8 +93,14 @@ export function parsePasswordRecoveryCallback(input: string | null | undefined):
 export async function establishPasswordRecoverySession(
   client: RecoveryAuthClient,
   input: string | null | undefined,
+  onDiagnostic?: (diagnostic: RecoveryDiagnostic) => void,
 ): Promise<RecoverySessionResult> {
   const callback = parsePasswordRecoveryCallback(input);
+  onDiagnostic?.({
+    stage: 'parse',
+    kind: callback.kind,
+    hasType: /(?:[?#&]|^)type=/.test(input ?? ''),
+  });
   if (callback.kind === 'error') return { session: null, error: callback.message };
 
   let recoveryEventSeen = false;
@@ -88,14 +108,26 @@ export async function establishPasswordRecoverySession(
     if (event === 'PASSWORD_RECOVERY') recoveryEventSeen = true;
   });
 
+  const finish = (result: RecoverySessionResult): RecoverySessionResult => {
+    onDiagnostic?.({ stage: 'result', ok: Boolean(result.session), recoveryEventSeen });
+    return result;
+  };
+
   try {
     if (callback.kind === 'pkce') {
       const { data, error } = await client.exchangeCodeForSession(callback.code);
-      if (error || !data.session) return { session: null, error: expiredLinkMessage };
-      if (!callback.explicitlyRecovery && !recoveryEventSeen) {
-        return { session: null, error: invalidLinkMessage };
-      }
-      return { session: data.session, error: null };
+      onDiagnostic?.({ stage: 'exchange', kind: 'pkce', ok: Boolean(data.session && !error) });
+      // A successful code exchange on the dedicated reset route is the recovery
+      // flow: the code came from the recovery email and the resulting session is
+      // only used to call updateUser({password}). The PASSWORD_RECOVERY event and
+      // an explicit `type=recovery` param are positive signals but must not be a
+      // hard gate — on Android the browser->app redirect can drop `type`, and a
+      // cold-start race can deliver the event a tick late.
+      return finish(
+        error || !data.session
+          ? { session: null, error: expiredLinkMessage }
+          : { session: data.session, error: null },
+      );
     }
 
     if (callback.kind === 'token_hash') {
@@ -103,28 +135,38 @@ export async function establishPasswordRecoverySession(
         token_hash: callback.tokenHash,
         type: 'recovery',
       });
-      return error || !data.session
-        ? { session: null, error: expiredLinkMessage }
-        : { session: data.session, error: null };
+      onDiagnostic?.({
+        stage: 'exchange',
+        kind: 'token_hash',
+        ok: Boolean(data.session && !error),
+      });
+      return finish(
+        error || !data.session
+          ? { session: null, error: expiredLinkMessage }
+          : { session: data.session, error: null },
+      );
     }
 
     const { data, error } = await client.setSession({
       access_token: callback.accessToken,
       refresh_token: callback.refreshToken,
     });
-    return error || !data.session
-      ? { session: null, error: expiredLinkMessage }
-      : { session: data.session, error: null };
+    onDiagnostic?.({ stage: 'exchange', kind: 'implicit', ok: Boolean(data.session && !error) });
+    return finish(
+      error || !data.session
+        ? { session: null, error: expiredLinkMessage }
+        : { session: data.session, error: null },
+    );
   } catch {
-    return { session: null, error: expiredLinkMessage };
+    return finish({ session: null, error: expiredLinkMessage });
   } finally {
     listener.data.subscription.unsubscribe();
   }
 }
 
 export function validateNewPassword(password: string, confirmation: string): string | null {
-  if (password.length < 8) return 'Yeni şifre en az 8 karakter olmalıdır.';
-  if (password.length > 72) return 'Yeni şifre en fazla 72 karakter olabilir.';
+  const policy = evaluatePasswordPolicy(password);
+  if (!policy.valid) return policy.message;
   if (password !== confirmation) return 'Şifreler eşleşmiyor.';
   return null;
 }

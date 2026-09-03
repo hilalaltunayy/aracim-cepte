@@ -54,3 +54,14 @@ export function logPasswordResetErrorInDevelopment(error: unknown): void {
 
   console.warn('[auth:password-reset]', getSafeAuthErrorDetails(error));
 }
+
+/**
+ * Dev-only redacted trace of the recovery deep-link handling so a physical
+ * Android test tells us exactly which branch fails (parse / exchange / result).
+ * Never receives a token or email.
+ */
+export function logRecoveryDiagnosticInDevelopment(diagnostic: unknown): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+
+  console.warn('[auth:password-reset:trace]', diagnostic);
+}
