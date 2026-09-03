@@ -5,8 +5,10 @@ import {
   GeminiVehicleAssistantProvider,
   VehicleAssistantProviderError,
   buildGeminiInteractionRequest,
+  buildGenerateContentRequest,
   createConfiguredVehicleAssistantProvider,
   parseGeminiInteractionResponse,
+  parseGenerateContentResponse,
 } from './vehicleAssistantProvider.ts';
 
 const input = {
@@ -74,6 +76,36 @@ test('fails closed unless enablement, privacy approval and key all exist', () =>
   values.set('AI_PROVIDER_PRIVACY_APPROVED', 'true');
   const provider = createConfiguredVehicleAssistantProvider({ get: (key) => values.get(key) });
   assert.equal(provider?.id, 'gemini');
+});
+
+test('generate_content style calls :generateContent and parses candidate JSON', async () => {
+  const request = buildGenerateContentRequest(input);
+  assert.equal(request.generationConfig.responseMimeType, 'application/json');
+  assert.equal(request.contents[0].role, 'user');
+  assert.equal('additionalProperties' in JSON.parse(JSON.stringify(request)), false);
+
+  const seen = {};
+  const provider = new GeminiVehicleAssistantProvider(
+    { apiKey: 'k', model: 'gemini-x', baseUrl: 'https://example.test', style: 'generate_content' },
+    async (url) => {
+      seen.url = url;
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }] }),
+        { status: 200 },
+      );
+    },
+  );
+  const result = await provider.generateVehicleAssistantResponse(input);
+  assert.deepEqual(result, { answer: 'ok' });
+  assert.equal(seen.url, 'https://example.test/v1beta/models/gemini-x:generateContent');
+});
+
+test('parseGenerateContentResponse rejects blocked or empty output', () => {
+  assert.throws(
+    () => parseGenerateContentResponse({ promptFeedback: { blockReason: 'SAFETY' } }),
+    VehicleAssistantProviderError,
+  );
+  assert.throws(() => parseGenerateContentResponse({ candidates: [] }), VehicleAssistantProviderError);
 });
 
 test('uses the backend key only in the provider request header and sanitizes failures', async () => {

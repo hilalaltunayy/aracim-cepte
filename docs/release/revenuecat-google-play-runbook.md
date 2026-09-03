@@ -1,10 +1,25 @@
 # RevenueCat + Google Play Premium — Activation Runbook
 
-**Status:** Code-side complete (REV-009). The steps below require Google Play
-Console, RevenueCat dashboard and Supabase Edge secrets — external human actions.
-Nothing here is performed automatically. Do not publish to production.
+**Status:** Code-side complete (REV-009 + ROUND2-003). The steps below require
+Google Play Console, RevenueCat dashboard and Supabase Edge secrets — external
+human actions. Nothing here is performed automatically. Do not publish to
+production.
 
-**As of:** 2026-09-02. Re-verify remote state before each step.
+**As of:** 2026-09-03. Re-verify remote state before each step.
+
+**Why the paywall currently says "Premium satın alma şu anda kullanıma açık
+değil":** `getRevenueCatPublicConfig()` returns `enabled:false` because
+`EXPO_PUBLIC_REVENUECAT_PURCHASES_ENABLED` / `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY`
+are not set (step 6) and there is no live Offering (steps 4–5). This is correct
+fail-closed behaviour, not a bug.
+
+**Code audit (ROUND2-003):** purchase / restore / cancellation / pending /
+account-switch guard / native `CustomerInfoUpdateListener` / real
+`product.priceString` are all implemented. Premium is authoritative from
+`user_entitlements` only — no client toggle. After a successful store purchase
+the paywall now shows a calm "Premium doğrulanıyor" state and polls
+`user_entitlements` (5 attempts, backoff) while the webhook lands. Nothing else
+is missing on the client.
 
 ## Fixed identifiers (do not change)
 

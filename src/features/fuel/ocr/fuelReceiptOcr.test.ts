@@ -74,6 +74,38 @@ describe('fuel receipt OCR parser', () => {
     });
   });
 
+  it('reconciles the real receipt: plate prefix never becomes the total (ROUND2-004)', () => {
+    const receipt = [
+      'OPET AKARYAKIT',
+      'PLAKA: 42 ABC 123',
+      'TARIH: 02-09-2026',
+      'SAAT: 14:45',
+      '6,550 LT x 76,35 TL/L',
+      'TOPLAM',
+      '500,00 TL',
+      'FIS NO: 0142',
+    ].join('\n');
+    const result = parseFuelReceiptOcrText(receipt);
+    const fields = Object.fromEntries(result.suggestions.map((s) => [s.fieldId, s.value]));
+    expect(fields).toMatchObject({
+      total: '500',
+      liters: '6,55',
+      pricePerLiter: '76,35',
+      recordDate: '2026-09-02',
+      receiptTime: '14:45',
+      documentNumber: '0142',
+      stationBrand: 'opet',
+    });
+    expect(result.inconsistent).toBe(false);
+  });
+
+  it('drops a loose number far from litres x price and uses the computed total', () => {
+    const result = parseFuelReceiptOcrText('42 ABC 123\n6,550 LT x 76,35\nODEME 42 TL');
+    const fields = Object.fromEntries(result.suggestions.map((s) => [s.fieldId, s.value]));
+    expect(fields.total).toBe('500,09');
+    expect(result.inconsistent).toBe(true);
+  });
+
   it('does not treat KDV or receipt identifiers as a total while retaining the optional receipt number', () => {
     expect(values('KDV Tutar: 120,00\nFiş No: 9912\nTerminal: 17')).toEqual({
       documentNumber: '9912',

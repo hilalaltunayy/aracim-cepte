@@ -150,6 +150,22 @@ describe('PremiumPaywallScreen', () => {
     expect(onRestore).toHaveBeenCalledOnce();
   });
 
+  it('shows a calm reconciling state after a store purchase before the webhook lands', async () => {
+    const renderer = await mount({
+      ...base,
+      authoritativePlanId: 'free',
+      reconciling: true,
+      subscription: { status: 'premium', entitlementActive: true },
+    });
+    expect(texts(renderer)).toContain('Premium doğrulanıyor');
+    // No purchase or restore buttons while the entitlement is syncing.
+    expect(
+      renderer.root.findAll(
+        (node) => String(node.type) === 'AppButton' && node.props.title === 'Satın alımları geri yükle',
+      ),
+    ).toHaveLength(0);
+  });
+
   it('shows authoritative Premium as active without rendering purchase controls', async () => {
     const renderer = await mount({
       ...base,

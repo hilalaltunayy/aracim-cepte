@@ -37,6 +37,7 @@ export function PremiumPaywallScreen({
   offering,
   selectedPackageId,
   loading,
+  reconciling = false,
   message,
   onSelectPackage,
   onPurchase,
@@ -49,6 +50,7 @@ export function PremiumPaywallScreen({
   offering: BillingOffering | null;
   selectedPackageId: string | null;
   loading: boolean;
+  reconciling?: boolean;
   message: string | null;
   onSelectPackage: (packageId: string) => void;
   onPurchase: () => void;
@@ -58,6 +60,10 @@ export function PremiumPaywallScreen({
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const premiumActive = authoritativePlanId === 'premium';
+  // Store confirmed the purchase but the trusted webhook -> user_entitlements
+  // sync has not landed yet.
+  const awaitingServerSync =
+    !premiumActive && (reconciling || subscription.entitlementActive);
   const selectedPackage = offering?.packages.find((item) => item.id === selectedPackageId) ?? null;
 
   return (
@@ -96,7 +102,15 @@ export function PremiumPaywallScreen({
         </View>
       </Card>
 
-      {!premiumActive ? (
+      {awaitingServerSync ? (
+        <Card style={styles.noticeCard}>
+          <Text style={styles.sectionTitle}>Premium doğrulanıyor</Text>
+          <Text style={styles.noticeText}>
+            Satın alma mağazada onaylandı. Hesap yetkileriniz birkaç saniye içinde eşitlenecek;
+            bu ekranı kapatıp yeniden açabilirsiniz.
+          </Text>
+        </Card>
+      ) : !premiumActive ? (
         <Card style={styles.purchaseCard}>
           <Text style={styles.sectionTitle}>Planınızı seçin</Text>
           {!billingEnabled ? (
