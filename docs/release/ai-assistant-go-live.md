@@ -1,20 +1,29 @@
 # AI Vehicle Assistant — Go-Live Runbook
 
-**Status:** Code-side complete and fail-closed (ROUND2-002). The assistant returns
-"Araç Asistanı şu anda kullanılamıyor" purely because the Edge Function has **no
-Gemini configuration** — `createConfiguredVehicleAssistantProvider` returns
-`null`, so `handleVehicleAssistant` throws `503 AI_ASSISTANT_UNAVAILABLE` before
-any provider call. Nothing else is wrong in the request path.
+**As of:** 2026-09-03 (post physical go-live attempt, function ACTIVE v4).
 
-**As of:** 2026-09-03. `20260902120000_ai_daily_quota.sql` is already applied
-(Local = Remote). The `vehicle-ai-assistant` function is already deployed (v1).
+## Physical-test failure — root cause
+
+The Gemini secrets were set correctly. The call failed because the **default
+model `gemini-3.6-flash` is not a real Generative Language API model** — the app
+built `POST …/v1beta/models/gemini-3.6-flash:generateContent`, Google returned
+**404 NOT_FOUND**, the provider mapped it to `unavailable`, and the handler
+returned `503`. The default is now **`gemini-2.5-flash`** (real, JSON-capable,
+free-tier). Any account-specific model can still be set with `GEMINI_MODEL`.
+
+The redeployed function also logs a redacted trace line per call —
+`[ai:assistant:trace] {"stage":"provider","style":…,"model":…,"httpStatus":…,
+"providerStatus":"NOT_FOUND",…}` — no key, prompt, context, tokens or output.
+Read it in the Edge Function logs if it still fails; `providerStatus` tells you
+exactly which secret to fix.
 
 ## 1. Get a Gemini API key (Google AI Studio)
 
-- Create an API key at Google AI Studio (or a Verti/Vertex key if that is the
-  chosen account). Note the **model name** your key can call (e.g.
-  `gemini-2.5-flash`, `gemini-3.6-flash`, …) — the app defaults to
-  `gemini-3.6-flash` but the model is overridable, see step 2.
+- Create an API key at Google AI Studio. Confirm the model you will use is
+  listed for your key: `GET https://generativelanguage.googleapis.com/v1beta/models`
+  with header `x-goog-api-key: <key>`. Pick a `*-flash` model that supports
+  `generateContent` and `responseMimeType: application/json` (e.g.
+  `gemini-2.5-flash` or `gemini-flash-latest`).
 
 ## 2. Set the Edge Function secrets (Supabase)
 
@@ -28,7 +37,7 @@ server-only; never add them to the mobile app, `EXPO_PUBLIC_*`, logs or docs.
 | `AI_PROVIDER_PRIVACY_APPROVED` | `true` — your attestation that provider use is privacy/commercially approved | yes |
 | `AI_VEHICLE_ASSISTANT_PROVIDER` | `gemini` | optional (default `gemini`) |
 | `GEMINI_API_KEY` | the key from step 1 | yes |
-| `GEMINI_MODEL` | e.g. `gemini-2.5-flash` | optional (default `gemini-3.6-flash`) |
+| `GEMINI_MODEL` | e.g. `gemini-2.5-flash` / `gemini-flash-latest` | optional (default `gemini-2.5-flash`) |
 | `GEMINI_API_STYLE` | `generate_content` (standard `:generateContent`) or `interactions` | optional (default `generate_content`) |
 | `GEMINI_API_BASE_URL` | override only for a non-default host | optional |
 
@@ -36,16 +45,65 @@ Only `AI_VEHICLE_ASSISTANT_ENABLED=true` **and** `AI_PROVIDER_PRIVACY_APPROVED=t
 **and** a non-empty `GEMINI_API_KEY` together open the provider. Any one missing
 keeps it fail-closed.
 
-## 3. Redeploy the function (only if code changed)
+## 3. Apply the migration + redeploy the function
 
-The `_shared` provider code changed in this batch (added the standard
-`generate_content` request/response path + env overrides), so redeploy once:
+New migration `20260903120000_ai_quota_reservation_hardening.sql` (additive):
+cuts the reservation TTL 2 min → 45 s and splits the reserve error so an
+in-flight reservation raises `AI_USAGE_IN_PROGRESS` (409), never
+`AI_MONTHLY_QUOTA_EXCEEDED`. Apply after `migration list` review:
+
+```
+npx supabase db push
+```
+
+Then redeploy the function (the `_shared` handler/provider changed — real model
+default, redacted trace, retried release):
 
 ```
 npx supabase functions deploy vehicle-ai-assistant
+npx supabase functions list
 ```
 
-Then confirm: `npx supabase functions list` shows a new version.
+## 3b. Clean up the failed physical-test reservation (only if needed)
+
+Only a validated answer ever reaches `commit`, so the failed test **cannot**
+have spent the daily quota. The perceived "used" was almost certainly a
+`reserved` row briefly holding the slot — those auto-release (expired sweep) and
+need no action.
+
+Confirm with a **read-only** check for the tester's user id and today (UTC):
+
+```sql
+select id, operation_id, status, period_start, created_at, responded_at
+from public.ai_usage_reservations
+where user_id = '<tester-user-uuid>'
+  and period_start = (now() at time zone 'utc')::date
+order by created_at;
+```
+
+- If every row is `released`/`reserved` (expired): nothing to do.
+- If a stale `reserved` row is still non-expired and you want it gone now:
+
+  ```sql
+  update public.ai_usage_reservations
+  set status = 'released', updated_at = now()
+  where user_id = '<tester-user-uuid>'
+    and period_start = (now() at time zone 'utc')::date
+    and status = 'reserved';
+  ```
+
+- Only if a `committed` row exists **and** the Edge logs show no `200`
+  provider response for that `operation_id` (i.e. it was never a real answer),
+  release that one row by id:
+
+  ```sql
+  update public.ai_usage_reservations
+  set status = 'released', updated_at = now()
+  where id = '<that-committed-row-id>' and user_id = '<tester-user-uuid>';
+  ```
+
+Never touch other users, other dates, or rows with a `responded_at` matching a
+logged successful answer.
 
 ## 4. Verify
 

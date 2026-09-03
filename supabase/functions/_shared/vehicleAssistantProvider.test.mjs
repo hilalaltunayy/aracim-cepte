@@ -30,9 +30,9 @@ const input = {
   allowedEvidenceCodes: ['maintenanceFacts.kmSinceLast'],
 };
 
-test('builds the current stateless Gemini 3.6 Interactions request', () => {
+test('builds the stateless Gemini Interactions request with the default model', () => {
   const request = buildGeminiInteractionRequest(input);
-  assert.equal(request.model, 'gemini-3.6-flash');
+  assert.equal(request.model, 'gemini-2.5-flash');
   assert.equal(request.store, false);
   assert.equal(request.response_format.type, 'text');
   assert.equal(request.response_format.mime_type, 'application/json');
@@ -106,6 +106,86 @@ test('parseGenerateContentResponse rejects blocked or empty output', () => {
     VehicleAssistantProviderError,
   );
   assert.throws(() => parseGenerateContentResponse({ candidates: [] }), VehicleAssistantProviderError);
+});
+
+function generateContentProvider(fetchImpl) {
+  return new GeminiVehicleAssistantProvider(
+    { apiKey: 'k', model: 'gemini-2.5-flash', baseUrl: 'https://example.test', style: 'generate_content' },
+    fetchImpl,
+  );
+}
+
+test('reports a redacted diagnostic on a 404 with the provider error status and no body text', async () => {
+  const diagnostics = [];
+  const provider = generateContentProvider(async () =>
+    new Response(
+      JSON.stringify({
+        error: { code: 404, status: 'NOT_FOUND', message: 'models/gemini-2.5-flash prompt leak' },
+      }),
+      { status: 404 },
+    ),
+  );
+  await assert.rejects(
+    () => provider.generateVehicleAssistantResponse(input, undefined, (d) => diagnostics.push(d)),
+    VehicleAssistantProviderError,
+  );
+  const trace = diagnostics.at(-1);
+  assert.equal(trace.ok, false);
+  assert.equal(trace.httpStatus, 404);
+  assert.equal(trace.providerStatus, 'NOT_FOUND');
+  assert.equal(trace.category, 'unavailable');
+  assert.equal(trace.model, 'gemini-2.5-flash');
+  assert.equal(JSON.stringify(trace).includes('prompt leak'), false);
+  assert.equal(JSON.stringify(trace).includes('maintenanceFacts'), false);
+});
+
+test('maps 429 to rate_limit, 5xx to unavailable, abort to timeout, non-JSON body to malformed', async () => {
+  for (const [status, category] of [
+    [429, 'rate_limit'],
+    [500, 'unavailable'],
+    [503, 'unavailable'],
+  ]) {
+    const diagnostics = [];
+    const provider = generateContentProvider(async () => new Response('{}', { status }));
+    await assert.rejects(() =>
+      provider.generateVehicleAssistantResponse(input, undefined, (d) => diagnostics.push(d)),
+    );
+    assert.equal(diagnostics.at(-1).category, category);
+  }
+
+  const timeoutDiag = [];
+  const aborting = generateContentProvider(async () => {
+    throw new DOMException('aborted', 'AbortError');
+  });
+  await assert.rejects(
+    () => aborting.generateVehicleAssistantResponse(input, undefined, (d) => timeoutDiag.push(d)),
+    (error) => error.category === 'timeout',
+  );
+  assert.equal(timeoutDiag.at(-1).category, 'timeout');
+
+  const malformedDiag = [];
+  const garbage = generateContentProvider(async () =>
+    new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'not json' }] } }] }), {
+      status: 200,
+    }),
+  );
+  await assert.rejects(
+    () => garbage.generateVehicleAssistantResponse(input, undefined, (d) => malformedDiag.push(d)),
+    (error) => error.category === 'malformed',
+  );
+  assert.equal(malformedDiag.at(-1).category, 'malformed');
+});
+
+test('reports ok:true only on a clean parsed answer', async () => {
+  const diagnostics = [];
+  const provider = generateContentProvider(async () =>
+    new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }] }), {
+      status: 200,
+    }),
+  );
+  await provider.generateVehicleAssistantResponse(input, undefined, (d) => diagnostics.push(d));
+  assert.equal(diagnostics.at(-1).ok, true);
+  assert.equal(diagnostics.at(-1).httpStatus, 200);
 });
 
 test('uses the backend key only in the provider request header and sanitizes failures', async () => {

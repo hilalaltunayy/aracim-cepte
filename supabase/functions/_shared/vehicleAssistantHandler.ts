@@ -8,7 +8,19 @@ import {
   type VehicleAssistantContext,
   type VehicleAssistantResult,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
-import type { AiVehicleAssistantProvider } from './vehicleAssistantProvider.ts';
+import type {
+  AiVehicleAssistantProvider,
+  ProviderCallDiagnostic,
+} from './vehicleAssistantProvider.ts';
+
+/** Redacted lifecycle trace. Never carries key, prompt, context, tokens or output. */
+export type AssistantHandlerDiagnostic =
+  | { stage: 'gate'; kind: string }
+  | { stage: 'reserve'; ok: boolean }
+  | ({ stage: 'provider' } & ProviderCallDiagnostic)
+  | { stage: 'commit'; ok: boolean }
+  | { stage: 'release'; attempted: boolean; confirmed: boolean }
+  | { stage: 'result'; outcome: 'committed' | 'local' | 'failed'; code?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -40,9 +52,11 @@ export interface VehicleAssistantHandlerDependencies {
   getQuota(): Promise<QuotaRow>;
   reserveQuota(operationId: string, vehicleId: string): Promise<QuotaRow>;
   commitQuota(operationId: string): Promise<QuotaRow>;
-  releaseQuota(operationId: string): Promise<void>;
+  /** Best-effort; resolves `true` only when the reservation is confirmed released. */
+  releaseQuota(operationId: string): Promise<boolean>;
   provider: AiVehicleAssistantProvider | null;
   signal?: AbortSignal;
+  onDiagnostic?: (diagnostic: AssistantHandlerDiagnostic) => void;
 }
 
 export function parseVehicleAssistantRequest(value: unknown): VehicleAssistantRequestBody {
@@ -90,8 +104,12 @@ export async function handleVehicleAssistant(
     throw new VehicleAssistantHttpError(403, 'VEHICLE_FORBIDDEN');
   }
 
+  const trace = dependencies.onDiagnostic ?? (() => undefined);
+
   const gate = classifyQuestion(request.question);
   if (gate.kind !== 'pass') {
+    trace({ stage: 'gate', kind: gate.kind });
+    trace({ stage: 'result', outcome: 'local' });
     return {
       response: gate.response,
       quota: quotaState(await dependencies.getQuota()),
@@ -101,9 +119,11 @@ export async function handleVehicleAssistant(
   if (!dependencies.provider) throw new VehicleAssistantHttpError(503, 'AI_ASSISTANT_UNAVAILABLE');
 
   let reserved = false;
+  let committedOk = false;
   try {
     await dependencies.reserveQuota(request.operationId, request.vehicleId);
     reserved = true;
+    trace({ stage: 'reserve', ok: true });
     const allowedEvidenceCodes = canonicalEvidenceCodes(context);
     const rawResponse = await dependencies.provider.generateVehicleAssistantResponse(
       {
@@ -112,6 +132,7 @@ export async function handleVehicleAssistant(
         allowedEvidenceCodes: [...allowedEvidenceCodes].sort(),
       },
       dependencies.signal,
+      (diagnostic) => trace({ stage: 'provider', ...diagnostic }),
     );
     const validated = validateVehicleAssistantResponse(rawResponse, allowedEvidenceCodes);
     if (!validated) throw new VehicleAssistantHttpError(502, 'AI_RESPONSE_INVALID');
@@ -123,16 +144,38 @@ export async function handleVehicleAssistant(
     if (dependencies.signal?.aborted) {
       throw new VehicleAssistantHttpError(499, 'AI_REQUEST_CANCELLED');
     }
+    // Only a validated, safety-checked answer reaches commit.
     const committed = await dependencies.commitQuota(request.operationId);
+    committedOk = true;
     reserved = false;
+    trace({ stage: 'commit', ok: true });
+    trace({ stage: 'result', outcome: 'committed' });
     return { response, quota: quotaState(committed), source: 'provider' };
   } catch (error) {
-    if (reserved) await dependencies.releaseQuota(request.operationId).catch(() => undefined);
-    if (error instanceof VehicleAssistantHttpError) throw error;
+    // Any exit before a confirmed commit must return the reservation.
+    if (reserved && !committedOk) {
+      const confirmed = await dependencies.releaseQuota(request.operationId).catch(() => false);
+      trace({ stage: 'release', attempted: true, confirmed });
+    }
+    if (error instanceof VehicleAssistantHttpError) {
+      trace({ stage: 'result', outcome: 'failed', code: error.code });
+      throw error;
+    }
     const message = error instanceof Error ? error.message : '';
-    if (message.includes('AI_MONTHLY_QUOTA_EXCEEDED')) {
+    // A reservation-window conflict is NOT a spent quota — surface it distinctly
+    // so it never reads as "daily limit reached".
+    if (message.includes('AI_USAGE_IN_PROGRESS')) {
+      trace({ stage: 'result', outcome: 'failed', code: 'AI_USAGE_IN_PROGRESS' });
+      throw new VehicleAssistantHttpError(409, 'AI_USAGE_IN_PROGRESS');
+    }
+    if (
+      message.includes('AI_MONTHLY_QUOTA_EXCEEDED') ||
+      message.includes('AI_DAILY_QUOTA_EXCEEDED')
+    ) {
+      trace({ stage: 'result', outcome: 'failed', code: 'AI_MONTHLY_QUOTA_EXCEEDED' });
       throw new VehicleAssistantHttpError(429, 'AI_MONTHLY_QUOTA_EXCEEDED');
     }
+    trace({ stage: 'result', outcome: 'failed', code: 'AI_ASSISTANT_UNAVAILABLE' });
     throw new VehicleAssistantHttpError(503, 'AI_ASSISTANT_UNAVAILABLE');
   }
 }

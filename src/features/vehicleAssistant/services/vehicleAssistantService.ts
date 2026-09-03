@@ -51,6 +51,13 @@ export async function askVehicleAssistant(
     if (code === 'AI_MONTHLY_QUOTA_EXCEEDED') {
       throw new AppError('Bugünkü Araç Asistanı kullanım sınırınıza ulaştınız.', 'AI_QUOTA');
     }
+    // A reservation is still in flight — the daily quota is NOT spent.
+    if (code === 'AI_USAGE_IN_PROGRESS') {
+      throw new AppError(
+        'Önceki isteğiniz hâlâ işleniyor. Birkaç saniye sonra tekrar deneyin.',
+        'AI_IN_PROGRESS',
+      );
+    }
     if (code === 'VEHICLE_FORBIDDEN' || code === 'AUTH_REQUIRED') {
       throw new AppError('Bu araç için asistan erişimi doğrulanamadı.', 'AUTH');
     }

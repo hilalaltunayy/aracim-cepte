@@ -42,10 +42,23 @@ export default {
     const controller = new AbortController();
     request.signal.addEventListener('abort', () => controller.abort(), { once: true });
     const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+    // Best-effort release with one retry. The reservation window is short
+    // (see migration), so an unreleased row self-clears quickly regardless.
+    const releaseQuota = async (operationId: string): Promise<boolean> => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const { data, error } = await context.supabase.rpc('release_ai_usage', {
+          p_operation_id: operationId,
+        });
+        if (!error) return data === true;
+      }
+      return false;
+    };
     try {
       const result = await handleVehicleAssistant(userData.user.id, body, {
         provider,
         signal: controller.signal,
+        onDiagnostic: (diagnostic) =>
+          console.log('[ai:assistant:trace]', JSON.stringify(diagnostic)),
         loadContext: async (vehicleId, userId) =>
           (await loadVehicleAssistantContext(context.supabase, vehicleId, userId))?.context ?? null,
         getQuota: async () => {
@@ -65,12 +78,7 @@ export default {
           });
           return firstRow(data, error);
         },
-        releaseQuota: async (operationId) => {
-          const { error } = await context.supabase.rpc('release_ai_usage', {
-            p_operation_id: operationId,
-          });
-          if (error) throw new Error('AI_QUOTA_RELEASE_FAILED');
-        },
+        releaseQuota,
       });
       return jsonResponse(200, result as unknown as Record<string, unknown>);
     } catch (error) {

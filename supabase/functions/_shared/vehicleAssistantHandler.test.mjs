@@ -48,6 +48,7 @@ function dependencies(overrides = {}) {
     },
     releaseQuota: async () => {
       calls.release += 1;
+      return true;
     },
     provider: {
       id: 'mock',
@@ -186,7 +187,7 @@ test('fails closed before reservation when provider privacy configuration is una
   assert.equal(calls.reserve, 0);
 });
 
-test('maps the authoritative monthly quota boundary without committing', async () => {
+test('maps the authoritative daily quota boundary without committing', async () => {
   const { deps, calls } = dependencies({
     reserveQuota: async () => {
       calls.reserve += 1;
@@ -198,4 +199,71 @@ test('maps the authoritative monthly quota boundary without committing', async (
     (error) => error instanceof VehicleAssistantHttpError && error.status === 429,
   );
   assert.equal(calls.commit, 0);
+  assert.equal(calls.release, 0);
+});
+
+test('an in-flight reservation conflict is 409 AI_USAGE_IN_PROGRESS, never 429', async () => {
+  const { deps } = dependencies({
+    reserveQuota: async () => {
+      throw new Error('AI_USAGE_IN_PROGRESS');
+    },
+  });
+  await assert.rejects(
+    () => handleVehicleAssistant('user-a', body, deps),
+    (error) =>
+      error instanceof VehicleAssistantHttpError &&
+      error.status === 409 &&
+      error.code === 'AI_USAGE_IN_PROGRESS',
+  );
+});
+
+for (const [label, fail] of [
+  ['provider 4xx', () => Promise.reject(new Error('AI_PROVIDER_UNAVAILABLE'))],
+  ['provider 5xx', () => Promise.reject(new Error('AI_PROVIDER_UNAVAILABLE'))],
+  ['provider timeout', () => Promise.reject(new Error('AI_PROVIDER_TIMEOUT'))],
+  ['invalid provider response', () => Promise.resolve({ answer: 42 })],
+]) {
+  test(`${label} releases the reservation and consumes zero`, async () => {
+    const { deps, calls } = dependencies({
+      provider: { id: 'mock', generateVehicleAssistantResponse: fail },
+    });
+    await assert.rejects(() => handleVehicleAssistant('user-a', body, deps));
+    assert.equal(calls.reserve, 1);
+    assert.equal(calls.commit, 0);
+    assert.equal(calls.release, 1);
+  });
+}
+
+test('a retry after a failed call still reserves, and a successful retry commits exactly once', async () => {
+  let attempt = 0;
+  const { deps, calls } = dependencies();
+  deps.provider = {
+    id: 'mock',
+    generateVehicleAssistantResponse: async () => {
+      attempt += 1;
+      calls.provider += 1;
+      if (attempt === 1) throw new Error('AI_PROVIDER_UNAVAILABLE');
+      return response;
+    },
+  };
+  await assert.rejects(() => handleVehicleAssistant('user-a', body, deps));
+  const ok = await handleVehicleAssistant(
+    'user-a',
+    { ...body, operationId: 'a3520000-0000-4000-8000-000000000002' },
+    deps,
+  );
+  assert.equal(ok.source, 'provider');
+  assert.deepEqual(calls, { reserve: 2, commit: 1, release: 1, provider: 2 });
+});
+
+test('the redacted lifecycle trace never carries the prompt, context or output', async () => {
+  const lines = [];
+  const { deps } = dependencies({ onDiagnostic: (d) => lines.push(JSON.stringify(d)) });
+  await handleVehicleAssistant('user-a', body, deps);
+  const blob = lines.join(' ');
+  assert.equal(blob.includes('Bakım durumumu'), false);
+  assert.equal(blob.includes('Kia Sportage'), false);
+  assert.equal(blob.includes('9400'), false);
+  assert.match(blob, /"stage":"commit"/);
+  assert.match(blob, /"outcome":"committed"/);
 });

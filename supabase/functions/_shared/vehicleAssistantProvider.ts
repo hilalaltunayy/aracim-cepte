@@ -4,7 +4,13 @@ import {
   type VehicleAssistantResponse,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 
-export const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
+/**
+ * A real, currently-available Generative Language API model. The previous
+ * default `gemini-3.6-flash` is not a valid model id and returns 404 NOT_FOUND
+ * on `:generateContent`, which was the physical-device go-live failure. Override
+ * with the `GEMINI_MODEL` secret if the account exposes a different one.
+ */
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 export const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 export const GEMINI_INTERACTIONS_URL = `${GEMINI_DEFAULT_BASE_URL}/v1beta/interactions`;
 /** @deprecated use {@link GEMINI_DEFAULT_MODEL} */
@@ -19,6 +25,18 @@ export interface GeminiProviderConfig {
   style: GeminiApiStyle;
 }
 
+/** Redacted trace of one provider call. Never carries key, prompt, context or output. */
+export interface ProviderCallDiagnostic {
+  style: GeminiApiStyle;
+  model: string;
+  httpStatus: number | null;
+  /** Provider-reported error status such as NOT_FOUND / PERMISSION_DENIED / INVALID_ARGUMENT. */
+  providerStatus: string | null;
+  category: VehicleAssistantProviderError['category'] | null;
+  elapsedMs: number;
+  ok: boolean;
+}
+
 export interface AiVehicleAssistantProviderInput {
   question: string;
   context: VehicleAssistantContext;
@@ -30,6 +48,7 @@ export interface AiVehicleAssistantProvider {
   generateVehicleAssistantResponse(
     input: AiVehicleAssistantProviderInput,
     signal?: AbortSignal,
+    onDiagnostic?: (diagnostic: ProviderCallDiagnostic) => void,
   ): Promise<unknown>;
 }
 
@@ -158,7 +177,34 @@ export class GeminiVehicleAssistantProvider implements AiVehicleAssistantProvide
   async generateVehicleAssistantResponse(
     input: AiVehicleAssistantProviderInput,
     signal?: AbortSignal,
+    onDiagnostic?: (diagnostic: ProviderCallDiagnostic) => void,
   ): Promise<unknown> {
+    const startedAt = Date.now();
+    const base = {
+      style: this.config.style,
+      model: this.config.model,
+      httpStatus: null as number | null,
+      providerStatus: null as string | null,
+    };
+    const report = (
+      extra: Partial<ProviderCallDiagnostic> & Pick<ProviderCallDiagnostic, 'ok'>,
+    ) => {
+      onDiagnostic?.({
+        ...base,
+        category: null,
+        elapsedMs: Date.now() - startedAt,
+        ...extra,
+      });
+    };
+    const fail = (
+      category: VehicleAssistantProviderError['category'],
+      httpStatus: number | null,
+      providerStatus: string | null,
+    ): never => {
+      report({ ok: false, category, httpStatus, providerStatus });
+      throw new VehicleAssistantProviderError(category);
+    };
+
     const body =
       this.config.style === 'interactions'
         ? buildGeminiInteractionRequest(input)
@@ -173,16 +219,40 @@ export class GeminiVehicleAssistantProvider implements AiVehicleAssistantProvide
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new VehicleAssistantProviderError('timeout');
+        return fail('timeout', null, null);
       }
-      throw new VehicleAssistantProviderError('unavailable');
+      return fail('unavailable', null, null);
     }
-    if (response.status === 429) throw new VehicleAssistantProviderError('rate_limit');
-    if (!response.ok) throw new VehicleAssistantProviderError('unavailable');
+    base.httpStatus = response.status;
+    if (!response.ok) {
+      // Pull only the provider error *status* (NOT_FOUND, PERMISSION_DENIED, …);
+      // never the message body (could echo prompt fragments).
+      const errorStatus = await response
+        .json()
+        .then((payload) => {
+          const value = (payload as { error?: { status?: unknown } } | null)?.error?.status;
+          return typeof value === 'string' ? value : null;
+        })
+        .catch(() => null);
+      return fail(
+        response.status === 429 ? 'rate_limit' : 'unavailable',
+        response.status,
+        errorStatus,
+      );
+    }
     const payload = await response.json().catch(() => null);
-    return this.config.style === 'interactions'
-      ? parseGeminiInteractionResponse(payload)
-      : parseGenerateContentResponse(payload);
+    try {
+      const parsed =
+        this.config.style === 'interactions'
+          ? parseGeminiInteractionResponse(payload)
+          : parseGenerateContentResponse(payload);
+      report({ ok: true, httpStatus: response.status });
+      return parsed;
+    } catch (error) {
+      const category =
+        error instanceof VehicleAssistantProviderError ? error.category : 'malformed';
+      return fail(category, response.status, null);
+    }
   }
 }
 

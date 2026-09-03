@@ -46,6 +46,11 @@ export default function VehicleAssistantRoute() {
       entitlementLimit={policy.dailyQuota}
       enabled={policy.enabled}
       onAsk={(question) => askVehicleAssistant(vehicle.id, question)}
+      onSyncQuota={async () => {
+        const fresh = await loadAiAssistantQuota();
+        setQuota(fresh);
+        return fresh;
+      }}
       onUpgrade={() => router.push('/premium' as never)}
     />
   );

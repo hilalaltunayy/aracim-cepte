@@ -45,6 +45,8 @@ export interface VehicleAssistantScreenProps {
   entitlementLimit: number;
   enabled: boolean;
   onAsk(question: string): Promise<VehicleAssistantResult>;
+  /** Re-reads the server-authoritative quota so the chip never shows stale state. */
+  onSyncQuota?(): Promise<AssistantQuotaState | null>;
   onUpgrade?(): void;
 }
 
@@ -55,6 +57,7 @@ export function VehicleAssistantScreen({
   entitlementLimit,
   enabled,
   onAsk,
+  onSyncQuota,
   onUpgrade,
 }: VehicleAssistantScreenProps) {
   const { colors } = useAppTheme();
@@ -114,6 +117,13 @@ export function VehicleAssistantScreen({
             : message,
         ),
       );
+      // A failed answer must not leave a misleading quota chip: re-read the
+      // server-authoritative committed usage.
+      if (onSyncQuota) {
+        void onSyncQuota()
+          .then((fresh) => fresh && setQuota(fresh))
+          .catch(() => undefined);
+      }
     } finally {
       setLoading(false);
       scrollToEnd();
