@@ -1,7 +1,7 @@
 import {
-  VEHICLE_ASSISTANT_RESPONSE_SCHEMA,
+  VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA,
+  type ModelVehicleAssistantResponse,
   type VehicleAssistantContext,
-  type VehicleAssistantResponse,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 
 /**
@@ -67,7 +67,24 @@ export class VehicleAssistantProviderError extends Error {
   }
 }
 
-export const VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION = `Sen “Aracım Cepte Araç Asistanı”sın. Türkçe, kısa, profesyonel ve pratik yanıt ver. Kullanıcıya özel her iddiada yalnızca sağlanan TASK-034 araç facts/signals bağlamını kullan. Fact, possibility ve action ayrımını koru. Araç geçmişi, güncel dış veri veya kesin mekanik teşhis uydurma. Güvenlik kritik belirtilerde sürüşe devam etmeme ve profesyonel kontrol önerisini uygun ölçüde belirt. Araçla ilgisiz soruları reddet. Güncel fiyat, yakın istasyon/tamirci, trafik veya yol bilgisi bağlı araç olmadan verilemez; externalDataRequired=true olmalı. Evidence dizisindeki her öğe yalnızca {"factCode": "..."} biçiminde olmalı; factCode yalnızca sağlanan allowlist değerlerinden biri olabilir, label/value ekleme, kanıt yoksa boş dizi kullan. İç sağlık skorlarını gösterme. Yanıtı yalnızca istenen JSON şemasında üret.`;
+/**
+ * Names EVERY model-owned field, and only those. It must stay in lockstep with
+ * VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA (sent as `responseSchema`) and with
+ * validateModelVehicleAssistantResponse. Backend-owned fields
+ * (`evidence[].label`, `evidence[].value`, `safetyEscalation`) are explicitly
+ * NOT requested.
+ */
+export const VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION = `Sen “Aracım Cepte Araç Asistanı”sın. Türkçe, kısa, profesyonel ve pratik yanıt ver. Kullanıcıya özel her iddiada yalnızca sağlanan TASK-034 araç facts/signals bağlamını kullan. Fact, possibility ve action ayrımını koru. Araç geçmişi, güncel dış veri veya kesin mekanik teşhis uydurma. Güvenlik kritik belirtilerde sürüşe devam etmeme ve profesyonel kontrol önerisini uygun ölçüde belirt. Araçla ilgisiz soruları reddet. İç sağlık skorlarını gösterme.
+
+Yanıtı yalnızca şu JSON nesnesi olarak üret ve bu altı alanın HEPSİNİ doldur:
+- "answer": string. Kullanıcıya gösterilecek Türkçe cevap. Boş olamaz.
+- "domain": şu değerlerden biri: "maintenance" | "fuel" | "documents" | "cost" | "general" | "safety" | "out_of_domain" | "external_data".
+- "severity": şu değerlerden biri: "info" | "low" | "medium" | "high".
+- "suggestions": string dizisi. Önerilen sonraki adımlar; öneri yoksa boş dizi [].
+- "evidence": dizi. Her öğe yalnızca {"factCode": "..."} biçiminde olur; factCode yalnızca sana verilen allowlist değerlerinden biri olabilir; kanıt yoksa boş dizi []. "label" veya "value" EKLEME, onları sistem kendisi üretir.
+- "externalDataRequired": boolean. Güncel fiyat, yakın istasyon/tamirci, trafik veya yol bilgisi bağlı araç olmadan verilemez; böyle bir şey istendiyse true olmalı.
+
+"safetyEscalation" alanını üretme; güvenlik kararını sistem deterministik olarak verir. Şemada olmayan başka alan ekleme.`;
 
 function promptText(input: AiVehicleAssistantProviderInput): string {
   return [
@@ -77,10 +94,46 @@ function promptText(input: AiVehicleAssistantProviderInput): string {
   ].join('\n\n');
 }
 
+type JsonSchemaNode = {
+  type: string;
+  enum?: readonly string[];
+  required?: readonly string[];
+  properties?: Readonly<Record<string, JsonSchemaNode>>;
+  items?: JsonSchemaNode;
+};
+
+/**
+ * Gemini's `responseSchema` accepts an OpenAPI 3.0 subset: type, enum,
+ * properties, required and items. `additionalProperties` is NOT in that subset
+ * and makes the request a 400, so it is stripped here while everything else is
+ * carried over verbatim from the one canonical model schema.
+ */
+export function toGeminiResponseSchema(node: JsonSchemaNode): JsonSchemaNode {
+  const sanitized: JsonSchemaNode = { type: node.type };
+  if (node.enum) sanitized.enum = [...node.enum];
+  if (node.required) sanitized.required = [...node.required];
+  if (node.properties) {
+    sanitized.properties = Object.fromEntries(
+      Object.entries(node.properties).map(([key, child]) => [key, toGeminiResponseSchema(child)]),
+    );
+  }
+  if (node.items) sanitized.items = toGeminiResponseSchema(node.items);
+  return sanitized;
+}
+
+export const GEMINI_RESPONSE_SCHEMA = toGeminiResponseSchema(
+  VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA as unknown as JsonSchemaNode,
+);
+
 /**
  * Standard Gemini `:generateContent` request.
  *
- * - No unsupported schema keywords (`additionalProperties` etc.).
+ * - `responseSchema` makes the model-owned contract structurally enforced by
+ *   the API instead of merely described in prose. Prose alone produced only
+ *   {answer, evidence, externalDataRequired} and every answer was rejected as
+ *   AI_RESPONSE_INVALID — the fields the prompt did not name were simply never
+ *   generated. Schema keywords the API rejects are stripped by
+ *   {@link toGeminiResponseSchema}.
  * - `thinkingBudget: 0` disables the legacy 2.5-flash "thinking" pass. Without
  *   it that family spends the whole `maxOutputTokens` budget on hidden
  *   reasoning and returns `finishReason: MAX_TOKENS` with an EMPTY answer —
@@ -103,6 +156,7 @@ export function buildGenerateContentRequest(
     contents: [{ role: 'user', parts: [{ text: promptText(input) }] }],
     generationConfig: {
       responseMimeType: 'application/json',
+      responseSchema: GEMINI_RESPONSE_SCHEMA,
       maxOutputTokens: 2048,
       temperature: 0.2,
       ...thinking,
@@ -141,7 +195,7 @@ export function parseGenerateContentResponse(payload: unknown): unknown {
   // usable answer.
   if (!text) throw new VehicleAssistantProviderError('malformed');
   try {
-    return JSON.parse(text) as VehicleAssistantResponse;
+    return JSON.parse(text) as ModelVehicleAssistantResponse;
   } catch {
     throw new VehicleAssistantProviderError('malformed');
   }
@@ -159,7 +213,7 @@ export function buildGeminiInteractionRequest(input: AiVehicleAssistantProviderI
     response_format: {
       type: 'text',
       mime_type: 'application/json',
-      schema: VEHICLE_ASSISTANT_RESPONSE_SCHEMA,
+      schema: VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA,
     },
     generation_config: { thinking_level: 'low', max_output_tokens: 900 },
     store: false,
@@ -184,7 +238,7 @@ export function parseGeminiInteractionResponse(payload: unknown): unknown {
       .join('');
   if (!outputText) throw new VehicleAssistantProviderError('malformed');
   try {
-    return JSON.parse(outputText) as VehicleAssistantResponse;
+    return JSON.parse(outputText) as ModelVehicleAssistantResponse;
   } catch {
     throw new VehicleAssistantProviderError('malformed');
   }

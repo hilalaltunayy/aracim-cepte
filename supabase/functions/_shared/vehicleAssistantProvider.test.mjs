@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   GEMINI_INTERACTIONS_URL,
   GeminiVehicleAssistantProvider,
+  VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION,
   VehicleAssistantProviderError,
   buildGeminiInteractionRequest,
   buildGenerateContentRequest,
@@ -10,6 +11,7 @@ import {
   parseGeminiInteractionResponse,
   parseGenerateContentResponse,
 } from './vehicleAssistantProvider.ts';
+import { MODEL_OWNED_RESPONSE_FIELDS } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 
 const input = {
   question: 'Bakım durumum nedir?',
@@ -88,6 +90,31 @@ test('generate_content request disables thinking for legacy 2.5 and omits it oth
   const defaultModel = buildGenerateContentRequest(input);
   assert.equal(defaultModel.generationConfig.responseMimeType, 'application/json');
   assert.equal('thinkingConfig' in defaultModel.generationConfig, false);
+});
+
+test('generate_content sends the model-owned responseSchema, Gemini-safe', () => {
+  const schema = buildGenerateContentRequest(input).generationConfig.responseSchema;
+  // The API rejects keywords outside its OpenAPI subset; additionalProperties
+  // anywhere in the tree would make the whole request a 400.
+  assert.equal(JSON.stringify(schema).includes('additionalProperties'), false);
+  assert.deepEqual(schema.required, [...MODEL_OWNED_RESPONSE_FIELDS]);
+  assert.deepEqual(Object.keys(schema.properties), [...MODEL_OWNED_RESPONSE_FIELDS]);
+  // Backend-owned fields are never requested from the model.
+  assert.deepEqual(Object.keys(schema.properties.evidence.items.properties), ['factCode']);
+  assert.equal('safetyEscalation' in schema.properties, false);
+  assert.deepEqual(schema.properties.severity.enum, ['info', 'low', 'medium', 'high']);
+});
+
+test('the system instruction names every model-owned field and no backend-owned one', () => {
+  for (const field of MODEL_OWNED_RESPONSE_FIELDS) {
+    assert.ok(
+      VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION.includes(`"${field}"`),
+      `system instruction must name ${field}`,
+    );
+  }
+  // safetyEscalation is only mentioned to forbid it; label/value are forbidden too.
+  assert.match(VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION, /"safetyEscalation" alanını üretme/);
+  assert.match(VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION, /"label" veya "value" EKLEME/);
 });
 
 test('generate_content style calls :generateContent and parses candidate JSON', async () => {

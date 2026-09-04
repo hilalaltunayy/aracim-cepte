@@ -146,6 +146,46 @@ test('releases quota for malformed or fabricated-evidence output', async () => {
   assert.equal(calls.release, 1);
 });
 
+test('rejects the exact production payload and names the missing model-owned fields', async () => {
+  const lines = [];
+  const { deps, calls } = dependencies({ onDiagnostic: (d) => lines.push(d) });
+  deps.provider = {
+    id: 'mock',
+    generateVehicleAssistantResponse: async () => {
+      calls.provider += 1;
+      // Verbatim shape from the failing physical trace.
+      return {
+        answer: 'Bakım yaklaşıyor.',
+        evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
+        externalDataRequired: false,
+      };
+    },
+  };
+  await assert.rejects(
+    () => handleVehicleAssistant('user-a', body, deps),
+    (error) => error.status === 502 && error.code === 'AI_RESPONSE_INVALID',
+  );
+  const validateLine = lines.find((line) => line.stage === 'validate');
+  assert.deepEqual(validateLine.missingFields, ['severity', 'suggestions']);
+  assert.equal(validateLine.parseSucceeded, true);
+  // Invalid output never commits, and the reservation always comes back.
+  assert.deepEqual(calls, { reserve: 1, commit: 0, release: 1, provider: 1 });
+});
+
+test('traces the normalization stage and final validation before committing', async () => {
+  const lines = [];
+  const { deps } = dependencies({ onDiagnostic: (d) => lines.push(d) });
+  await handleVehicleAssistant('user-a', body, deps);
+  const normalizeLine = lines.find((line) => line.stage === 'normalize');
+  assert.equal(normalizeLine.normalizationStage, 'trusted');
+  assert.equal(normalizeLine.finalValidationPassed, true);
+  // Order matters: nothing commits before the final contract check passed.
+  assert.ok(
+    lines.findIndex((line) => line.stage === 'normalize') <
+      lines.findIndex((line) => line.stage === 'commit'),
+  );
+});
+
 test('accepts a real Gemini answer whose evidence carries only factCode (no label/value)', async () => {
   // This was the AI_RESPONSE_INVALID root cause: the model is only ever asked
   // for {factCode}, but validation used to also require label/value strings.

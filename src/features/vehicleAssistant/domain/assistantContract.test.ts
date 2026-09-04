@@ -5,9 +5,13 @@ import {
   classifyQuestion,
   containsUnsupportedDefiniteDiagnosis,
   diagnoseVehicleAssistantResponse,
+  MODEL_OWNED_RESPONSE_FIELDS,
   normalizeVehicleAssistantEvidence,
   requiresSafetyEscalation,
-  validateVehicleAssistantResponse,
+  toTrustedVehicleAssistantResponse,
+  validateFinalVehicleAssistantResponse,
+  validateModelVehicleAssistantResponse,
+  VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA,
   type VehicleAssistantContext,
   type VehicleAssistantResponse,
 } from './assistantContract';
@@ -77,9 +81,6 @@ describe('vehicle assistant contract', () => {
     expect(codes.has('signals.maintenance_due_soon.facts.kmRemaining')).toBe(true);
     expect(codes.has('vehicleId')).toBe(false);
   });
-  it('accepts valid grounded structured output', () => {
-    expect(validateVehicleAssistantResponse(valid, canonicalEvidenceCodes(context))).toEqual(valid);
-  });
   it('replaces provider evidence labels and values with canonical context values', () => {
     const normalized = normalizeVehicleAssistantEvidence(
       {
@@ -96,88 +97,206 @@ describe('vehicle assistant contract', () => {
       },
     ]);
   });
-  it('rejects fabricated evidence IDs', () => {
+});
+
+// ------------------------------------------------------------------
+// A) model-owned contract (pre-normalization)
+// ------------------------------------------------------------------
+describe('model-owned assistant contract', () => {
+  const allowed = () => canonicalEvidenceCodes(context);
+  /** Exactly the six fields the prompt + responseSchema ask for. */
+  const model = {
+    answer: 'Bakım yaklaşıyor.',
+    domain: 'maintenance',
+    severity: 'medium',
+    suggestions: ['Bakım randevusu planlayın.'],
+    evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
+    externalDataRequired: false,
+  };
+
+  it('accepts a valid model-owned response with factCode-only evidence', () => {
+    expect(validateModelVehicleAssistantResponse(model, allowed())).toEqual(model);
+  });
+  it('accepts externalDataRequired in both states', () => {
+    expect(validateModelVehicleAssistantResponse(model, allowed())?.externalDataRequired).toBe(
+      false,
+    );
     expect(
-      validateVehicleAssistantResponse(
-        {
-          ...valid,
-          evidence: [{ factCode: 'facts.engine.failure', label: 'Motor', value: 'Arızalı' }],
-        },
-        canonicalEvidenceCodes(context),
+      validateModelVehicleAssistantResponse(
+        { ...model, externalDataRequired: true },
+        allowed(),
+      )?.externalDataRequired,
+    ).toBe(true);
+  });
+  it('accepts the real Gemini shape once domain is the only field missing', () => {
+    // `domain` has no consumer, so its absence must never fail a good answer.
+    const withoutDomain: Record<string, unknown> = { ...model };
+    delete withoutDomain.domain;
+    const result = validateModelVehicleAssistantResponse(withoutDomain, allowed());
+    expect(result).not.toBeNull();
+    expect(result?.domain).toBeUndefined();
+  });
+  it('rejects the exact production payload that was missing required fields', () => {
+    // The observed failure: {answer, evidence, externalDataRequired} only.
+    const observed = {
+      answer: 'Bakım yaklaşıyor.',
+      evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
+      externalDataRequired: false,
+    };
+    expect(validateModelVehicleAssistantResponse(observed, allowed())).toBeNull();
+    const diagnostic = diagnoseVehicleAssistantResponse(observed, allowed());
+    expect(diagnostic.missingFields).toEqual(['severity', 'suggestions']);
+    expect(diagnostic.unexpectedFields).toEqual([]);
+  });
+  it('rejects a missing truly-required model-owned field', () => {
+    for (const field of ['answer', 'severity', 'evidence', 'suggestions', 'externalDataRequired']) {
+      const payload: Record<string, unknown> = { ...model };
+      delete payload[field];
+      expect(validateModelVehicleAssistantResponse(payload, allowed())).toBeNull();
+    }
+  });
+  it('rejects an evidence factCode outside the canonical allowlist', () => {
+    expect(
+      validateModelVehicleAssistantResponse(
+        { ...model, evidence: [{ factCode: 'facts.engine.failure' }] },
+        allowed(),
       ),
     ).toBeNull();
   });
-  it('rejects malformed provider output', () => {
+  it('rejects unknown enum values for domain and severity', () => {
     expect(
-      validateVehicleAssistantResponse({ answer: 'Eksik' }, canonicalEvidenceCodes(context)),
+      validateModelVehicleAssistantResponse({ ...model, domain: 'not_a_real_domain' }, allowed()),
+    ).toBeNull();
+    expect(
+      validateModelVehicleAssistantResponse({ ...model, severity: 'urgent' }, allowed()),
+    ).toBeNull();
+  });
+  it('rejects wrong field types', () => {
+    expect(validateModelVehicleAssistantResponse({ ...model, answer: 42 }, allowed())).toBeNull();
+    expect(
+      validateModelVehicleAssistantResponse({ ...model, suggestions: 'tek öneri' }, allowed()),
+    ).toBeNull();
+    expect(
+      validateModelVehicleAssistantResponse({ ...model, suggestions: [42] }, allowed()),
+    ).toBeNull();
+    expect(
+      validateModelVehicleAssistantResponse({ ...model, externalDataRequired: 'false' }, allowed()),
+    ).toBeNull();
+    expect(
+      validateModelVehicleAssistantResponse({ ...model, evidence: [{ factCode: 7 }] }, allowed()),
     ).toBeNull();
   });
   it('rejects a top-level non-object payload (malformed JSON shape)', () => {
-    expect(validateVehicleAssistantResponse('not an object', canonicalEvidenceCodes(context))).toBeNull();
-    expect(validateVehicleAssistantResponse([valid], canonicalEvidenceCodes(context))).toBeNull();
-    expect(validateVehicleAssistantResponse(null, canonicalEvidenceCodes(context))).toBeNull();
+    expect(validateModelVehicleAssistantResponse('not an object', allowed())).toBeNull();
+    expect(validateModelVehicleAssistantResponse([model], allowed())).toBeNull();
+    expect(validateModelVehicleAssistantResponse(null, allowed())).toBeNull();
   });
-  it('rejects a wrong enum value even when every other field is valid', () => {
+  it('keeps safetyEscalation strict: absent is fine, a wrong type is not', () => {
+    expect(validateModelVehicleAssistantResponse(model, allowed())?.safetyEscalation).toBeUndefined();
     expect(
-      validateVehicleAssistantResponse(
-        { ...valid, domain: 'not_a_real_domain' },
-        canonicalEvidenceCodes(context),
-      ),
+      validateModelVehicleAssistantResponse({ ...model, safetyEscalation: 'evet' }, allowed()),
     ).toBeNull();
     expect(
-      validateVehicleAssistantResponse(
-        { ...valid, severity: 'urgent' },
-        canonicalEvidenceCodes(context),
-      ),
-    ).toBeNull();
+      validateModelVehicleAssistantResponse({ ...model, safetyEscalation: true }, allowed())
+        ?.safetyEscalation,
+    ).toBe(true);
   });
-  it('accepts real Gemini output that omits evidence label/value — the AI_RESPONSE_INVALID root cause', () => {
-    // The system prompt only ever asks the model for {factCode}; label/value
-    // are always rebuilt from the canonical catalog afterward. Requiring them
-    // here rejected every real answer that cited any evidence.
-    const factCodeOnly = {
-      ...valid,
-      evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
-    };
-    const result = validateVehicleAssistantResponse(factCodeOnly, canonicalEvidenceCodes(context));
-    expect(result).not.toBeNull();
-    expect(result?.evidence).toEqual([
-      { factCode: 'maintenanceFacts.kmSinceLast', label: '', value: '' },
+  it('keeps the prompt, schema and validator in lockstep', () => {
+    expect([...VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA.required]).toEqual([
+      ...MODEL_OWNED_RESPONSE_FIELDS,
     ]);
-    // And normalization still fills the real label/value from trusted context.
-    const normalized = normalizeVehicleAssistantEvidence(result as VehicleAssistantResponse, context);
-    expect(normalized.evidence).toEqual([
-      { factCode: 'maintenanceFacts.kmSinceLast', label: 'Son bakımdan beri', value: '9.400' },
+    expect(Object.keys(VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA.properties)).toEqual([
+      ...MODEL_OWNED_RESPONSE_FIELDS,
     ]);
+    // Backend-owned fields are never requested from the model.
+    const schemaBlob = JSON.stringify(VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA);
+    expect(schemaBlob.includes('safetyEscalation')).toBe(false);
+    expect(schemaBlob.includes('label')).toBe(false);
+    expect(schemaBlob.includes('"value"')).toBe(false);
   });
-  it('diagnoseVehicleAssistantResponse reports structural facts only, never content', () => {
-    const missing = diagnoseVehicleAssistantResponse(
-      { answer: 'Eksik' },
-      canonicalEvidenceCodes(context),
-    );
-    expect(missing.parseSucceeded).toBe(true);
-    expect(missing.topLevelKeys).toEqual(['answer']);
-    expect(missing.missingFields).toEqual(
-      expect.arrayContaining(['domain', 'severity', 'evidence', 'suggestions']),
-    );
-
-    const badEnum = diagnoseVehicleAssistantResponse(
-      { ...valid, domain: 'not_a_real_domain' },
-      canonicalEvidenceCodes(context),
-    );
+  it('reports structural facts only, never content', () => {
+    const badEnum = diagnoseVehicleAssistantResponse({ ...model, domain: 'nope' }, allowed());
     expect(badEnum.invalidEnumField).toBe('domain');
 
     const badEvidence = diagnoseVehicleAssistantResponse(
-      { ...valid, evidence: [{ factCode: 'facts.engine.failure' }] },
-      canonicalEvidenceCodes(context),
+      { ...model, evidence: [{ factCode: 'facts.engine.failure' }] },
+      allowed(),
     );
     expect(badEvidence.invalidFieldPath).toBe('evidence[0].factCode');
     expect(badEvidence.expectedType).toBe('allowlisted factCode');
 
-    const blob = JSON.stringify([missing, badEnum, badEvidence]);
-    expect(blob.includes('Eksik')).toBe(false);
+    const blob = JSON.stringify([badEnum, badEvidence]);
+    expect(blob.includes('Bakım yaklaşıyor')).toBe(false);
     expect(blob.includes('engine.failure')).toBe(false);
   });
+});
+
+// ------------------------------------------------------------------
+// B) final trusted contract (post-normalization)
+// ------------------------------------------------------------------
+describe('trusted assistant response normalization', () => {
+  const model = {
+    answer: 'Bakım yaklaşıyor.',
+    severity: 'medium' as const,
+    suggestions: ['Bakım randevusu planlayın.'],
+    evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
+    externalDataRequired: false,
+  };
+
+  it('produces a final response that passes the final validator', () => {
+    const trusted = toTrustedVehicleAssistantResponse(model, context, 'Bakım durumum nedir?');
+    expect(validateFinalVehicleAssistantResponse(trusted)).not.toBeNull();
+    expect(trusted.evidence).toEqual([
+      { factCode: 'maintenanceFacts.kmSinceLast', label: 'Son bakımdan beri', value: '9.400' },
+    ]);
+    // Unconsumed and unclaimed by the model -> neutral bucket, never invented.
+    expect(trusted.domain).toBe('general');
+    expect(trusted.safetyEscalation).toBe(false);
+  });
+  it('cannot invent values the trusted context does not have', () => {
+    const trusted = toTrustedVehicleAssistantResponse(
+      { ...model, evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }] },
+      { ...context, maintenanceFacts: {} },
+      'Bakım durumum nedir?',
+    );
+    // The fact is gone from context, so the evidence row is dropped, not faked.
+    expect(trusted.evidence).toEqual([]);
+  });
+  it('lets the deterministic rule raise safety escalation, and the model never lower it', () => {
+    const escalated = toTrustedVehicleAssistantResponse(model, context, 'Fren tutmuyor.');
+    expect(escalated.safetyEscalation).toBe(true);
+    expect(escalated.domain).toBe('safety');
+    expect(escalated.severity).toBe('high');
+
+    const modelRaised = toTrustedVehicleAssistantResponse(
+      { ...model, safetyEscalation: true },
+      context,
+      'Bakım durumum nedir?',
+    );
+    expect(modelRaised.safetyEscalation).toBe(true);
+  });
+  it('marks external data when the question needs live data', () => {
+    const trusted = toTrustedVehicleAssistantResponse(
+      model,
+      context,
+      'Arabamı yorumla ve bugün yakıt litre fiyatını söyle',
+      true,
+    );
+    expect(trusted.externalDataRequired).toBe(true);
+  });
+  it('rejects a final response with a broken evidence row', () => {
+    expect(
+      validateFinalVehicleAssistantResponse({
+        ...valid,
+        evidence: [{ factCode: 'maintenanceFacts.kmSinceLast', label: 'X' }],
+      }),
+    ).toBeNull();
+    expect(validateFinalVehicleAssistantResponse({ ...valid, safetyEscalation: 'no' })).toBeNull();
+    expect(validateFinalVehicleAssistantResponse(valid)).toEqual(valid);
+  });
+});
+
+describe('vehicle assistant contract (continued)', () => {
   it('detects high-risk Turkish questions', () => {
     expect(requiresSafetyEscalation('Fren tutmuyor, sebebi nedir?')).toBe(true);
     expect(requiresSafetyEscalation('Bakım masrafım nedir?')).toBe(false);

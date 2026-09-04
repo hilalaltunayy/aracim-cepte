@@ -1,10 +1,10 @@
 import {
-  applyDeterministicSafety,
   canonicalEvidenceCodes,
   classifyQuestion,
   diagnoseVehicleAssistantResponse,
-  normalizeVehicleAssistantEvidence,
-  validateVehicleAssistantResponse,
+  toTrustedVehicleAssistantResponse,
+  validateFinalVehicleAssistantResponse,
+  validateModelVehicleAssistantResponse,
   type AssistantQuotaState,
   type AssistantResponseValidationDiagnostic,
   type VehicleAssistantContext,
@@ -22,6 +22,7 @@ export type AssistantHandlerDiagnostic =
   | { stage: 'reserve'; ok: boolean }
   | ({ stage: 'provider' } & ProviderCallDiagnostic)
   | ({ stage: 'validate' } & AssistantResponseValidationDiagnostic)
+  | { stage: 'normalize'; normalizationStage: string; finalValidationPassed: boolean }
   | { stage: 'commit'; ok: boolean }
   | { stage: 'release'; attempted: boolean; confirmed: boolean }
   | { stage: 'result'; outcome: 'committed' | 'local' | 'failed'; code?: string };
@@ -143,17 +144,26 @@ export async function handleVehicleAssistant(
       dependencies.signal,
       (diagnostic) => trace({ stage: 'provider', ...diagnostic }),
     );
-    const validated = validateVehicleAssistantResponse(rawResponse, allowedEvidenceCodes);
-    if (!validated) {
+    // A) model-owned contract — exactly what the prompt and responseSchema ask for.
+    const model = validateModelVehicleAssistantResponse(rawResponse, allowedEvidenceCodes);
+    if (!model) {
       // Structural-only: never the answer text, evidence values or context.
-      trace({ stage: 'validate', ...diagnoseVehicleAssistantResponse(rawResponse, allowedEvidenceCodes) });
+      trace({
+        stage: 'validate',
+        ...diagnoseVehicleAssistantResponse(rawResponse, allowedEvidenceCodes),
+      });
       throw new VehicleAssistantHttpError(502, 'AI_RESPONSE_INVALID');
     }
-    const response = applyDeterministicSafety(
-      normalizeVehicleAssistantEvidence(validated, context),
+    // B) backend enrichment -> final trusted contract, then re-validate it.
+    const response = toTrustedVehicleAssistantResponse(
+      model,
+      context,
       request.question,
       gate.externalDataMentioned,
     );
+    const finalValidationPassed = Boolean(validateFinalVehicleAssistantResponse(response));
+    trace({ stage: 'normalize', normalizationStage: 'trusted', finalValidationPassed });
+    if (!finalValidationPassed) throw new VehicleAssistantHttpError(502, 'AI_RESPONSE_INVALID');
     if (dependencies.signal?.aborted) {
       throw new VehicleAssistantHttpError(499, 'AI_REQUEST_CANCELLED');
     }

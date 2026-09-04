@@ -344,31 +344,145 @@ export function normalizeVehicleAssistantEvidence(
   };
 }
 
-/**
- * `evidence[].label` / `evidence[].value` are NOT required from the provider:
- * {@link normalizeVehicleAssistantEvidence} unconditionally rebuilds both from
- * the trusted canonical catalog right after validation and discards whatever
- * the model sent for them. The system prompt only ever asks the model for
- * `factCode`. Requiring label/value here rejected every real Gemini answer
- * that included evidence (`AI_RESPONSE_INVALID` on an otherwise-successful
- * provider call) — only `factCode` needs to be a real, allowlisted string.
- */
-function isValidEvidenceItem(
-  item: unknown,
-  allowedEvidenceCodes: ReadonlySet<string>,
-): item is { factCode: string; label?: string; value?: string } {
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
-  const candidate = item as Record<string, unknown>;
-  if (typeof candidate.factCode !== 'string' || !allowedEvidenceCodes.has(candidate.factCode))
-    return false;
-  if ('label' in candidate && typeof candidate.label !== 'string') return false;
-  if ('value' in candidate && typeof candidate.value !== 'string') return false;
-  return true;
+/* ------------------------------------------------------------------ *
+ * A) PRE-NORMALIZATION — the MODEL-OWNED contract
+ *
+ * Exactly the fields Gemini is asked for in VEHICLE_ASSISTANT_SYSTEM_INSTRUCTION
+ * and in VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA (which is sent as the
+ * `responseSchema`). Nothing else may be required here.
+ *
+ * Backend-owned, therefore deliberately NOT requested from the model:
+ *  - evidence[].label / evidence[].value — always rebuilt from
+ *    canonicalEvidenceCatalog(context); model values are never trusted.
+ *  - safetyEscalation — decided by requiresSafetyEscalation(question). A model
+ *    may still RAISE it by sending `true`, but can never lower it.
+ * ------------------------------------------------------------------ */
+
+/** The model only chooses WHICH fact it used; the human label/value are ours. */
+export interface ModelAssistantEvidence {
+  factCode: string;
 }
 
-export function validateVehicleAssistantResponse(
+export interface ModelVehicleAssistantResponse {
+  answer: string;
+  /** Requested, but never consumed by client or backend logic — defaults to 'general'. */
+  domain?: AssistantDomain;
+  severity: AssistantSeverity;
+  evidence: ModelAssistantEvidence[];
+  suggestions: string[];
+  externalDataRequired: boolean;
+  /** Optional escalation the model may raise; the deterministic rule still wins. */
+  safetyEscalation?: boolean;
+}
+
+/** Every key the model is asked for. Anything outside this set is "unexpected". */
+export const MODEL_OWNED_RESPONSE_FIELDS = [
+  'answer',
+  'domain',
+  'severity',
+  'evidence',
+  'suggestions',
+  'externalDataRequired',
+] as const;
+
+/**
+ * Strictly required from the model. `domain` is intentionally absent: it has no
+ * consumer anywhere (client or backend), so a hard requirement would only add a
+ * failure mode. Its VALUE is still strictly enum-checked when present.
+ */
+const REQUIRED_MODEL_FIELDS = [
+  'answer',
+  'severity',
+  'evidence',
+  'suggestions',
+  'externalDataRequired',
+] as const;
+
+function isValidModelEvidenceItem(
+  item: unknown,
+  allowedEvidenceCodes: ReadonlySet<string>,
+): item is ModelAssistantEvidence {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const candidate = item as Record<string, unknown>;
+  return typeof candidate.factCode === 'string' && allowedEvidenceCodes.has(candidate.factCode);
+}
+
+/** Validates the raw provider payload against the model-owned contract only. */
+export function validateModelVehicleAssistantResponse(
   value: unknown,
   allowedEvidenceCodes: ReadonlySet<string>,
+): ModelVehicleAssistantResponse | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.answer !== 'string' ||
+    !candidate.answer.trim() ||
+    !ASSISTANT_SEVERITIES.includes(candidate.severity as AssistantSeverity) ||
+    !Array.isArray(candidate.evidence) ||
+    !Array.isArray(candidate.suggestions) ||
+    typeof candidate.externalDataRequired !== 'boolean'
+  )
+    return null;
+  // Requested but not required; a wrong value is still rejected.
+  if ('domain' in candidate && !ASSISTANT_DOMAINS.includes(candidate.domain as AssistantDomain))
+    return null;
+  if ('safetyEscalation' in candidate && typeof candidate.safetyEscalation !== 'boolean')
+    return null;
+  if (
+    candidate.suggestions.some((item) => typeof item !== 'string') ||
+    !candidate.evidence.every((item) => isValidModelEvidenceItem(item, allowedEvidenceCodes))
+  )
+    return null;
+  return {
+    answer: candidate.answer.trim(),
+    ...('domain' in candidate ? { domain: candidate.domain as AssistantDomain } : {}),
+    severity: candidate.severity as AssistantSeverity,
+    evidence: (candidate.evidence as ModelAssistantEvidence[]).map((item) => ({
+      factCode: item.factCode,
+    })),
+    suggestions: candidate.suggestions as string[],
+    externalDataRequired: candidate.externalDataRequired,
+    ...(candidate.safetyEscalation === true ? { safetyEscalation: true } : {}),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * B) POST-NORMALIZATION — the FINAL TRUSTED contract
+ * ------------------------------------------------------------------ */
+
+/**
+ * Turns a validated model response into the final trusted response:
+ * canonical evidence labels/values, the deterministic safety decision, and the
+ * deterministic safety/live-data overrides. Nothing here invents an analytical
+ * value: every added field comes from trusted context or a deterministic rule.
+ */
+export function toTrustedVehicleAssistantResponse(
+  model: ModelVehicleAssistantResponse,
+  context: VehicleAssistantContext,
+  question: string,
+  externalDataMentioned = false,
+): VehicleAssistantResponse {
+  const normalized = normalizeVehicleAssistantEvidence(
+    {
+      answer: model.answer,
+      // No consumer reads `domain`; 'general' is the neutral bucket, never a
+      // claim about the vehicle. applyDeterministicSafety may still set 'safety'.
+      domain: model.domain ?? 'general',
+      severity: model.severity,
+      evidence: model.evidence.map((item) => ({ factCode: item.factCode, label: '', value: '' })),
+      suggestions: model.suggestions,
+      // Deterministic rule is authoritative; a model `true` may only raise it.
+      safetyEscalation: requiresSafetyEscalation(question) || model.safetyEscalation === true,
+      externalDataRequired: model.externalDataRequired,
+    },
+    context,
+  );
+  return applyDeterministicSafety(normalized, question, externalDataMentioned);
+}
+
+/** Last gate before commit: the object the client will actually receive. */
+export function validateFinalVehicleAssistantResponse(
+  value: unknown,
 ): VehicleAssistantResponse | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const candidate = value as Partial<VehicleAssistantResponse>;
@@ -385,38 +499,17 @@ export function validateVehicleAssistantResponse(
     return null;
   if (
     candidate.suggestions.some((item) => typeof item !== 'string') ||
-    !candidate.evidence.every((item) => isValidEvidenceItem(item, allowedEvidenceCodes))
+    candidate.evidence.some(
+      (item) =>
+        !item ||
+        typeof item.factCode !== 'string' ||
+        typeof item.label !== 'string' ||
+        typeof item.value !== 'string',
+    )
   )
     return null;
-  return {
-    answer: candidate.answer.trim(),
-    domain: candidate.domain as AssistantDomain,
-    severity: candidate.severity as AssistantSeverity,
-    // label/value are placeholders when the provider omitted them;
-    // normalizeVehicleAssistantEvidence replaces both unconditionally.
-    evidence: candidate.evidence.map((item) => {
-      const evidence = item as { factCode: string; label?: string; value?: string };
-      return {
-        factCode: evidence.factCode,
-        label: evidence.label ?? '',
-        value: evidence.value ?? '',
-      };
-    }),
-    suggestions: candidate.suggestions,
-    safetyEscalation: candidate.safetyEscalation,
-    externalDataRequired: candidate.externalDataRequired,
-  };
+  return candidate as VehicleAssistantResponse;
 }
-
-const REQUIRED_TOP_LEVEL_FIELDS = [
-  'answer',
-  'domain',
-  'severity',
-  'evidence',
-  'suggestions',
-  'safetyEscalation',
-  'externalDataRequired',
-] as const;
 
 /** Structural-only diagnostic: never carries answer text, evidence values or context. */
 export interface AssistantResponseValidationDiagnostic {
@@ -437,7 +530,10 @@ function typeName(value: unknown): string {
   return typeof value;
 }
 
-/** Computed only when {@link validateVehicleAssistantResponse} rejects a response, to trace why. */
+/**
+ * Computed only when {@link validateModelVehicleAssistantResponse} rejects a
+ * payload, to trace WHY against the model-owned contract. Structural only.
+ */
 export function diagnoseVehicleAssistantResponse(
   value: unknown,
   allowedEvidenceCodes: ReadonlySet<string>,
@@ -456,9 +552,12 @@ export function diagnoseVehicleAssistantResponse(
   if (!value || typeof value !== 'object' || Array.isArray(value)) return diagnostic;
   const candidate = value as Record<string, unknown>;
   diagnostic.topLevelKeys = Object.keys(candidate);
-  diagnostic.missingFields = REQUIRED_TOP_LEVEL_FIELDS.filter((field) => !(field in candidate));
+  // Only fields the model is actually asked for can be "missing".
+  diagnostic.missingFields = REQUIRED_MODEL_FIELDS.filter((field) => !(field in candidate));
   diagnostic.unexpectedFields = diagnostic.topLevelKeys.filter(
-    (key) => !(REQUIRED_TOP_LEVEL_FIELDS as readonly string[]).includes(key),
+    (key) =>
+      key !== 'safetyEscalation' &&
+      !(MODEL_OWNED_RESPONSE_FIELDS as readonly string[]).includes(key),
   );
 
   const markInvalid = (path: string, expected: string, received: unknown) => {
@@ -487,10 +586,11 @@ export function diagnoseVehicleAssistantResponse(
   if (!Array.isArray(candidate.evidence)) markInvalid('evidence', 'array', candidate.evidence);
   if (!Array.isArray(candidate.suggestions))
     markInvalid('suggestions', 'array', candidate.suggestions);
-  if (typeof candidate.safetyEscalation !== 'boolean')
-    markInvalid('safetyEscalation', 'boolean', candidate.safetyEscalation);
   if (typeof candidate.externalDataRequired !== 'boolean')
     markInvalid('externalDataRequired', 'boolean', candidate.externalDataRequired);
+  // Backend-owned: only a wrong TYPE is a problem, absence never is.
+  if ('safetyEscalation' in candidate && typeof candidate.safetyEscalation !== 'boolean')
+    markInvalid('safetyEscalation', 'boolean', candidate.safetyEscalation);
 
   if (!diagnostic.invalidFieldPath && Array.isArray(candidate.suggestions)) {
     const badIndex = candidate.suggestions.findIndex((item) => typeof item !== 'string');
@@ -512,33 +612,25 @@ export function diagnoseVehicleAssistantResponse(
         markInvalidLabel(`evidence[${index}].factCode`, 'allowlisted factCode', 'not_allowed');
         break;
       }
-      const label = (item as Record<string, unknown>).label;
-      if ('label' in (item as Record<string, unknown>) && typeof label !== 'string') {
-        markInvalid(`evidence[${index}].label`, 'string', label);
-        break;
-      }
-      const evidenceValueField = (item as Record<string, unknown>).value;
-      if ('value' in (item as Record<string, unknown>) && typeof evidenceValueField !== 'string') {
-        markInvalid(`evidence[${index}].value`, 'string', evidenceValueField);
-        break;
-      }
+      // label/value are backend-owned; whatever the model sends is ignored.
     }
   }
   return diagnostic;
 }
 
-export const VEHICLE_ASSISTANT_RESPONSE_SCHEMA = {
+/**
+ * The single source of truth for what the model is asked to produce. It is sent
+ * to Gemini (as `generationConfig.responseSchema` for `:generateContent`, and as
+ * `response_format.schema` for the Interactions style) AND it mirrors exactly
+ * what {@link validateModelVehicleAssistantResponse} accepts.
+ *
+ * It contains NO backend-owned field: no `evidence[].label`, no
+ * `evidence[].value`, no `safetyEscalation`.
+ */
+export const VEHICLE_ASSISTANT_MODEL_RESPONSE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: [
-    'answer',
-    'domain',
-    'severity',
-    'evidence',
-    'suggestions',
-    'safetyEscalation',
-    'externalDataRequired',
-  ],
+  required: [...MODEL_OWNED_RESPONSE_FIELDS],
   properties: {
     answer: { type: 'string' },
     domain: { type: 'string', enum: [...ASSISTANT_DOMAINS] },
@@ -548,19 +640,11 @@ export const VEHICLE_ASSISTANT_RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        // Only factCode is required from the model: label/value are always
-        // rebuilt from trusted context by normalizeVehicleAssistantEvidence,
-        // so the provider never needs to (and generally does not) send them.
         required: ['factCode'],
-        properties: {
-          factCode: { type: 'string' },
-          label: { type: 'string' },
-          value: { type: 'string' },
-        },
+        properties: { factCode: { type: 'string' } },
       },
     },
     suggestions: { type: 'array', items: { type: 'string' } },
-    safetyEscalation: { type: 'boolean' },
     externalDataRequired: { type: 'boolean' },
   },
 } as const;
