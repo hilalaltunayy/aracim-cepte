@@ -2,9 +2,11 @@ import {
   applyDeterministicSafety,
   canonicalEvidenceCodes,
   classifyQuestion,
+  diagnoseVehicleAssistantResponse,
   normalizeVehicleAssistantEvidence,
   validateVehicleAssistantResponse,
   type AssistantQuotaState,
+  type AssistantResponseValidationDiagnostic,
   type VehicleAssistantContext,
   type VehicleAssistantResult,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
@@ -19,6 +21,7 @@ export type AssistantHandlerDiagnostic =
   | { stage: 'gate'; kind: string }
   | { stage: 'reserve'; ok: boolean }
   | ({ stage: 'provider' } & ProviderCallDiagnostic)
+  | ({ stage: 'validate' } & AssistantResponseValidationDiagnostic)
   | { stage: 'commit'; ok: boolean }
   | { stage: 'release'; attempted: boolean; confirmed: boolean }
   | { stage: 'result'; outcome: 'committed' | 'local' | 'failed'; code?: string };
@@ -141,7 +144,11 @@ export async function handleVehicleAssistant(
       (diagnostic) => trace({ stage: 'provider', ...diagnostic }),
     );
     const validated = validateVehicleAssistantResponse(rawResponse, allowedEvidenceCodes);
-    if (!validated) throw new VehicleAssistantHttpError(502, 'AI_RESPONSE_INVALID');
+    if (!validated) {
+      // Structural-only: never the answer text, evidence values or context.
+      trace({ stage: 'validate', ...diagnoseVehicleAssistantResponse(rawResponse, allowedEvidenceCodes) });
+      throw new VehicleAssistantHttpError(502, 'AI_RESPONSE_INVALID');
+    }
     const response = applyDeterministicSafety(
       normalizeVehicleAssistantEvidence(validated, context),
       request.question,

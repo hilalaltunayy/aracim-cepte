@@ -146,6 +146,49 @@ test('releases quota for malformed or fabricated-evidence output', async () => {
   assert.equal(calls.release, 1);
 });
 
+test('accepts a real Gemini answer whose evidence carries only factCode (no label/value)', async () => {
+  // This was the AI_RESPONSE_INVALID root cause: the model is only ever asked
+  // for {factCode}, but validation used to also require label/value strings.
+  const { deps, calls } = dependencies();
+  deps.provider = {
+    id: 'mock',
+    generateVehicleAssistantResponse: async () => {
+      calls.provider += 1;
+      return { ...response, evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }] };
+    },
+  };
+  const result = await handleVehicleAssistant('user-a', body, deps);
+  assert.equal(result.source, 'provider');
+  assert.equal(result.response.evidence[0].label, 'Son bakımdan beri');
+  assert.deepEqual(calls, { reserve: 1, commit: 1, release: 0, provider: 1 });
+});
+
+test('provider 200 + invalid response releases quota and traces a redacted structural diagnostic', async () => {
+  const lines = [];
+  const { deps, calls } = dependencies({ onDiagnostic: (d) => lines.push(d) });
+  deps.provider = {
+    id: 'mock',
+    generateVehicleAssistantResponse: async () => {
+      calls.provider += 1;
+      return { ...response, domain: 'not_a_real_domain' };
+    },
+  };
+  await assert.rejects(
+    () => handleVehicleAssistant('user-a', body, deps),
+    (error) => error.status === 502 && error.code === 'AI_RESPONSE_INVALID',
+  );
+  assert.deepEqual(calls, { reserve: 1, commit: 0, release: 1, provider: 1 });
+  const validateLine = lines.find((line) => line.stage === 'validate');
+  assert.equal(validateLine.invalidEnumField, 'domain');
+  assert.equal(validateLine.parseSucceeded, true);
+  const blob = JSON.stringify(lines);
+  assert.equal(blob.includes(response.answer), false);
+  assert.equal(blob.includes('Kia Sportage'), false);
+});
+
+// "provider 200 + valid response commits quota exactly once" is already
+// covered by 'commits exactly once after a valid grounded provider response'.
+
 test('client cancellation before commit releases the reservation and consumes zero', async () => {
   const controller = new AbortController();
   controller.abort();

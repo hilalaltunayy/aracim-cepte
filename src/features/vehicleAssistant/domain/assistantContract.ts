@@ -344,6 +344,28 @@ export function normalizeVehicleAssistantEvidence(
   };
 }
 
+/**
+ * `evidence[].label` / `evidence[].value` are NOT required from the provider:
+ * {@link normalizeVehicleAssistantEvidence} unconditionally rebuilds both from
+ * the trusted canonical catalog right after validation and discards whatever
+ * the model sent for them. The system prompt only ever asks the model for
+ * `factCode`. Requiring label/value here rejected every real Gemini answer
+ * that included evidence (`AI_RESPONSE_INVALID` on an otherwise-successful
+ * provider call) — only `factCode` needs to be a real, allowlisted string.
+ */
+function isValidEvidenceItem(
+  item: unknown,
+  allowedEvidenceCodes: ReadonlySet<string>,
+): item is { factCode: string; label?: string; value?: string } {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const candidate = item as Record<string, unknown>;
+  if (typeof candidate.factCode !== 'string' || !allowedEvidenceCodes.has(candidate.factCode))
+    return false;
+  if ('label' in candidate && typeof candidate.label !== 'string') return false;
+  if ('value' in candidate && typeof candidate.value !== 'string') return false;
+  return true;
+}
+
 export function validateVehicleAssistantResponse(
   value: unknown,
   allowedEvidenceCodes: ReadonlySet<string>,
@@ -363,25 +385,146 @@ export function validateVehicleAssistantResponse(
     return null;
   if (
     candidate.suggestions.some((item) => typeof item !== 'string') ||
-    candidate.evidence.some(
-      (item) =>
-        !item ||
-        typeof item.factCode !== 'string' ||
-        typeof item.label !== 'string' ||
-        typeof item.value !== 'string' ||
-        !allowedEvidenceCodes.has(item.factCode),
-    )
+    !candidate.evidence.every((item) => isValidEvidenceItem(item, allowedEvidenceCodes))
   )
     return null;
   return {
     answer: candidate.answer.trim(),
     domain: candidate.domain as AssistantDomain,
     severity: candidate.severity as AssistantSeverity,
-    evidence: candidate.evidence,
+    // label/value are placeholders when the provider omitted them;
+    // normalizeVehicleAssistantEvidence replaces both unconditionally.
+    evidence: candidate.evidence.map((item) => {
+      const evidence = item as { factCode: string; label?: string; value?: string };
+      return {
+        factCode: evidence.factCode,
+        label: evidence.label ?? '',
+        value: evidence.value ?? '',
+      };
+    }),
     suggestions: candidate.suggestions,
     safetyEscalation: candidate.safetyEscalation,
     externalDataRequired: candidate.externalDataRequired,
   };
+}
+
+const REQUIRED_TOP_LEVEL_FIELDS = [
+  'answer',
+  'domain',
+  'severity',
+  'evidence',
+  'suggestions',
+  'safetyEscalation',
+  'externalDataRequired',
+] as const;
+
+/** Structural-only diagnostic: never carries answer text, evidence values or context. */
+export interface AssistantResponseValidationDiagnostic {
+  parseSucceeded: boolean;
+  topLevelType: string;
+  topLevelKeys: string[];
+  missingFields: string[];
+  unexpectedFields: string[];
+  invalidFieldPath: string | null;
+  expectedType: string | null;
+  receivedType: string | null;
+  invalidEnumField: string | null;
+}
+
+function typeName(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+/** Computed only when {@link validateVehicleAssistantResponse} rejects a response, to trace why. */
+export function diagnoseVehicleAssistantResponse(
+  value: unknown,
+  allowedEvidenceCodes: ReadonlySet<string>,
+): AssistantResponseValidationDiagnostic {
+  const diagnostic: AssistantResponseValidationDiagnostic = {
+    parseSucceeded: Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+    topLevelType: typeName(value),
+    topLevelKeys: [],
+    missingFields: [],
+    unexpectedFields: [],
+    invalidFieldPath: null,
+    expectedType: null,
+    receivedType: null,
+    invalidEnumField: null,
+  };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return diagnostic;
+  const candidate = value as Record<string, unknown>;
+  diagnostic.topLevelKeys = Object.keys(candidate);
+  diagnostic.missingFields = REQUIRED_TOP_LEVEL_FIELDS.filter((field) => !(field in candidate));
+  diagnostic.unexpectedFields = diagnostic.topLevelKeys.filter(
+    (key) => !(REQUIRED_TOP_LEVEL_FIELDS as readonly string[]).includes(key),
+  );
+
+  const markInvalid = (path: string, expected: string, received: unknown) => {
+    if (diagnostic.invalidFieldPath) return;
+    diagnostic.invalidFieldPath = path;
+    diagnostic.expectedType = expected;
+    diagnostic.receivedType = typeName(received);
+  };
+  const markInvalidLabel = (path: string, expected: string, receivedLabel: string) => {
+    if (diagnostic.invalidFieldPath) return;
+    diagnostic.invalidFieldPath = path;
+    diagnostic.expectedType = expected;
+    diagnostic.receivedType = receivedLabel;
+  };
+
+  if (typeof candidate.answer !== 'string' || !candidate.answer.trim())
+    markInvalid('answer', 'non-empty string', candidate.answer);
+  if ('domain' in candidate && !ASSISTANT_DOMAINS.includes(candidate.domain as AssistantDomain))
+    diagnostic.invalidEnumField = 'domain';
+  if (
+    !diagnostic.invalidEnumField &&
+    'severity' in candidate &&
+    !ASSISTANT_SEVERITIES.includes(candidate.severity as AssistantSeverity)
+  )
+    diagnostic.invalidEnumField = 'severity';
+  if (!Array.isArray(candidate.evidence)) markInvalid('evidence', 'array', candidate.evidence);
+  if (!Array.isArray(candidate.suggestions))
+    markInvalid('suggestions', 'array', candidate.suggestions);
+  if (typeof candidate.safetyEscalation !== 'boolean')
+    markInvalid('safetyEscalation', 'boolean', candidate.safetyEscalation);
+  if (typeof candidate.externalDataRequired !== 'boolean')
+    markInvalid('externalDataRequired', 'boolean', candidate.externalDataRequired);
+
+  if (!diagnostic.invalidFieldPath && Array.isArray(candidate.suggestions)) {
+    const badIndex = candidate.suggestions.findIndex((item) => typeof item !== 'string');
+    if (badIndex !== -1)
+      markInvalid(`suggestions[${badIndex}]`, 'string', candidate.suggestions[badIndex]);
+  }
+  if (!diagnostic.invalidFieldPath && Array.isArray(candidate.evidence)) {
+    for (const [index, item] of candidate.evidence.entries()) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        markInvalid(`evidence[${index}]`, 'object', item);
+        break;
+      }
+      const factCode = (item as Record<string, unknown>).factCode;
+      if (typeof factCode !== 'string') {
+        markInvalid(`evidence[${index}].factCode`, 'string', factCode);
+        break;
+      }
+      if (!allowedEvidenceCodes.has(factCode)) {
+        markInvalidLabel(`evidence[${index}].factCode`, 'allowlisted factCode', 'not_allowed');
+        break;
+      }
+      const label = (item as Record<string, unknown>).label;
+      if ('label' in (item as Record<string, unknown>) && typeof label !== 'string') {
+        markInvalid(`evidence[${index}].label`, 'string', label);
+        break;
+      }
+      const evidenceValueField = (item as Record<string, unknown>).value;
+      if ('value' in (item as Record<string, unknown>) && typeof evidenceValueField !== 'string') {
+        markInvalid(`evidence[${index}].value`, 'string', evidenceValueField);
+        break;
+      }
+    }
+  }
+  return diagnostic;
 }
 
 export const VEHICLE_ASSISTANT_RESPONSE_SCHEMA = {
@@ -405,7 +548,10 @@ export const VEHICLE_ASSISTANT_RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['factCode', 'label', 'value'],
+        // Only factCode is required from the model: label/value are always
+        // rebuilt from trusted context by normalizeVehicleAssistantEvidence,
+        // so the provider never needs to (and generally does not) send them.
+        required: ['factCode'],
         properties: {
           factCode: { type: 'string' },
           label: { type: 'string' },

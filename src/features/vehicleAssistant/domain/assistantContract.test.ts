@@ -4,6 +4,7 @@ import {
   canonicalEvidenceCodes,
   classifyQuestion,
   containsUnsupportedDefiniteDiagnosis,
+  diagnoseVehicleAssistantResponse,
   normalizeVehicleAssistantEvidence,
   requiresSafetyEscalation,
   validateVehicleAssistantResponse,
@@ -110,6 +111,72 @@ describe('vehicle assistant contract', () => {
     expect(
       validateVehicleAssistantResponse({ answer: 'Eksik' }, canonicalEvidenceCodes(context)),
     ).toBeNull();
+  });
+  it('rejects a top-level non-object payload (malformed JSON shape)', () => {
+    expect(validateVehicleAssistantResponse('not an object', canonicalEvidenceCodes(context))).toBeNull();
+    expect(validateVehicleAssistantResponse([valid], canonicalEvidenceCodes(context))).toBeNull();
+    expect(validateVehicleAssistantResponse(null, canonicalEvidenceCodes(context))).toBeNull();
+  });
+  it('rejects a wrong enum value even when every other field is valid', () => {
+    expect(
+      validateVehicleAssistantResponse(
+        { ...valid, domain: 'not_a_real_domain' },
+        canonicalEvidenceCodes(context),
+      ),
+    ).toBeNull();
+    expect(
+      validateVehicleAssistantResponse(
+        { ...valid, severity: 'urgent' },
+        canonicalEvidenceCodes(context),
+      ),
+    ).toBeNull();
+  });
+  it('accepts real Gemini output that omits evidence label/value — the AI_RESPONSE_INVALID root cause', () => {
+    // The system prompt only ever asks the model for {factCode}; label/value
+    // are always rebuilt from the canonical catalog afterward. Requiring them
+    // here rejected every real answer that cited any evidence.
+    const factCodeOnly = {
+      ...valid,
+      evidence: [{ factCode: 'maintenanceFacts.kmSinceLast' }],
+    };
+    const result = validateVehicleAssistantResponse(factCodeOnly, canonicalEvidenceCodes(context));
+    expect(result).not.toBeNull();
+    expect(result?.evidence).toEqual([
+      { factCode: 'maintenanceFacts.kmSinceLast', label: '', value: '' },
+    ]);
+    // And normalization still fills the real label/value from trusted context.
+    const normalized = normalizeVehicleAssistantEvidence(result as VehicleAssistantResponse, context);
+    expect(normalized.evidence).toEqual([
+      { factCode: 'maintenanceFacts.kmSinceLast', label: 'Son bakımdan beri', value: '9.400' },
+    ]);
+  });
+  it('diagnoseVehicleAssistantResponse reports structural facts only, never content', () => {
+    const missing = diagnoseVehicleAssistantResponse(
+      { answer: 'Eksik' },
+      canonicalEvidenceCodes(context),
+    );
+    expect(missing.parseSucceeded).toBe(true);
+    expect(missing.topLevelKeys).toEqual(['answer']);
+    expect(missing.missingFields).toEqual(
+      expect.arrayContaining(['domain', 'severity', 'evidence', 'suggestions']),
+    );
+
+    const badEnum = diagnoseVehicleAssistantResponse(
+      { ...valid, domain: 'not_a_real_domain' },
+      canonicalEvidenceCodes(context),
+    );
+    expect(badEnum.invalidEnumField).toBe('domain');
+
+    const badEvidence = diagnoseVehicleAssistantResponse(
+      { ...valid, evidence: [{ factCode: 'facts.engine.failure' }] },
+      canonicalEvidenceCodes(context),
+    );
+    expect(badEvidence.invalidFieldPath).toBe('evidence[0].factCode');
+    expect(badEvidence.expectedType).toBe('allowlisted factCode');
+
+    const blob = JSON.stringify([missing, badEnum, badEvidence]);
+    expect(blob.includes('Eksik')).toBe(false);
+    expect(blob.includes('engine.failure')).toBe(false);
   });
   it('detects high-risk Turkish questions', () => {
     expect(requiresSafetyEscalation('Fren tutmuyor, sebebi nedir?')).toBe(true);
