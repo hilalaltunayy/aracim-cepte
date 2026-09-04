@@ -69,6 +69,10 @@ describe('password recovery callback parsing', () => {
         'http://localhost:8082/auth/reset-password#access_token=a&refresh_token=r&type=signup',
       ).kind,
     ).toBe('error');
+    // type=recovery alone, with no token_hash/code/access_token, is nothing to verify.
+    expect(
+      parsePasswordRecoveryCallback('aracimcepte://auth/reset-password?type=recovery').kind,
+    ).toBe('error');
   });
 
   it('accepts a PKCE code exchange on the reset route even without a type param or event', async () => {
