@@ -215,7 +215,20 @@ function parseReceiptTime(text: string): string | null {
   return null;
 }
 
-/** Turkish receipt dates: dd.mm.yyyy / dd-mm-yyyy / dd/mm/yy and yyyy-mm-dd. */
+/**
+ * Turkish receipt dates: dd.mm.yyyy / dd-mm-yyyy / dd/mm/yy and yyyy-mm-dd.
+ *
+ * On-device OCR frequently merges two visually separate but closely-printed
+ * fields with no space between them — e.g. a date immediately followed by the
+ * time or the fiş/document number ("02-09-202614:45", "02-09-2026FİŞ NO:0142").
+ * A day-month-year match must not require a non-digit character right after
+ * the year: a real 4-digit year is unambiguous the moment 4 digits are seen,
+ * so it needs no trailing boundary. Only the 2-digit short-year form still
+ * needs one, so it can't be lifted out of the middle of an unrelated number.
+ * `matchAll` + trying every syntactic match keeps searching past an
+ * impossible calendar date (e.g. month 34 from an unrelated digit run)
+ * instead of giving up on the first regex hit.
+ */
 function parseReceiptDate(text: string): string | null {
   const clamp = (year: number) => (year < 100 ? 2000 + year : year);
   const toIso = (day: number, month: number, year: number): string | null => {
@@ -234,14 +247,18 @@ function parseReceiptDate(text: string): string | null {
       .toString()
       .padStart(2, '0')}`;
   };
+  const isoPattern = /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/g;
+  const dmyPattern = /(?:^|[^\d])(\d{1,2})[.\-/\s](\d{1,2})[.\-/\s](?:(\d{4})|(\d{2})(?!\d))/g;
   const scan = (source: string): string | null => {
-    const iso = /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/.exec(source);
-    if (iso) {
+    for (const iso of source.matchAll(isoPattern)) {
       const value = toIso(Number(iso[3]), Number(iso[2]), Number(iso[1]));
       if (value) return value;
     }
-    const dmy = /(?:^|[^\d])(\d{1,2})[.\-/\s](\d{1,2})[.\-/\s](\d{2,4})(?:[^\d]|$)/.exec(source);
-    if (dmy) return toIso(Number(dmy[1]), Number(dmy[2]), Number(dmy[3]));
+    for (const dmy of source.matchAll(dmyPattern)) {
+      const year = dmy[3] ?? dmy[4];
+      const value = toIso(Number(dmy[1]), Number(dmy[2]), Number(year));
+      if (value) return value;
+    }
     return null;
   };
   for (const line of text.split(/\r?\n/)) {

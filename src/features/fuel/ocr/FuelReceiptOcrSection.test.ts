@@ -46,7 +46,9 @@ vi.mock('@/shared/theme', () => ({
       },
     }),
 }));
+import { formatDate } from '@/shared/utils/format';
 import { createFuelEntryState } from '../domain/fuelEntry';
+import { parseFuelReceiptOcrText } from './fuelReceiptOcr';
 import {
   buildFuelReceiptFormPatch,
   FuelReceiptOcrSection,
@@ -86,6 +88,70 @@ describe('FuelReceiptOcrSection review safety', () => {
         { fieldId: 'recordDate', value: '', source: 'ocr' },
       ]),
     ).toEqual({ total: '2000', stationBrand: 'opet' });
+  });
+
+  it(
+    'RELEASE FIX regression: OCR-detected 02-09-2026 survives review -> Forma aktar -> ' +
+      'form date state -> displayed date, replacing today’s default',
+    () => {
+      const todayIso = '2026-09-05';
+      const receiptText = [
+        'OPET AKARYAKIT',
+        'PLAKA: 42 ABC 123',
+        'TARIH:02-09-202614:45',
+        '6,550 LT x 76,35 TL/L',
+        'TOPLAM',
+        '500,00 TL',
+        'FIS NO: 0142',
+      ].join('\n');
+
+      // OCR text -> parser -> parsed receipt result.
+      const parsed = parseFuelReceiptOcrText(receiptText);
+      expect(parsed.suggestions).toContainEqual({
+        fieldId: 'recordDate',
+        value: '2026-09-02',
+        source: 'ocr',
+      });
+
+      // parsed result -> review state (what the review screen shows/edits).
+      const reviewState = prepareFuelReceiptReviewSuggestions(
+        parsed.suggestions,
+        createFuelEntryState(),
+        '',
+        todayIso,
+      );
+
+      // "Forma aktar" -> form state patch.
+      const patch = buildFuelReceiptFormPatch(reviewState);
+      expect(patch.recordDate).toBe('2026-09-02');
+
+      // form state: the screen's `date` useState, exactly as record/edit.tsx
+      // applies it (`if (patch.recordDate !== undefined) setDate(patch.recordDate)`).
+      let formDate = todayIso;
+      if (patch.recordDate !== undefined) formDate = patch.recordDate;
+      expect(formDate).toBe('2026-09-02');
+      expect(formDate).not.toBe(todayIso);
+
+      // date picker/display + what actually gets persisted to the DB payload
+      // (`recordDate: date` in record/edit.tsx's saveRecord call) both read the
+      // same form date state, so this is the final displayed AND saved value.
+      expect(formatDate(formDate)).toBe('02 Eylül 2026');
+    },
+  );
+
+  it('keeps the current form date when OCR finds no trustworthy date', () => {
+    const todayIso = '2026-09-05';
+    const parsed = parseFuelReceiptOcrText('Toplam: 500,00\nFİŞ NO: 0142');
+    expect(parsed.suggestions.some((s) => s.fieldId === 'recordDate')).toBe(false);
+
+    const patch = buildFuelReceiptFormPatch(
+      prepareFuelReceiptReviewSuggestions(parsed.suggestions, createFuelEntryState(), '', todayIso),
+    );
+    expect(patch.recordDate).toBeUndefined();
+
+    let formDate = todayIso;
+    if (patch.recordDate !== undefined) formDate = patch.recordDate;
+    expect(formDate).toBe(todayIso);
   });
 
   it('does not change the fuel form until the user explicitly applies the reviewed result', async () => {

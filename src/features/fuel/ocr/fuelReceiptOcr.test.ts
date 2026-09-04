@@ -74,6 +74,55 @@ describe('fuel receipt OCR parser', () => {
     });
   });
 
+  it.each([
+    ['DD-MM-YYYY', 'Tarih: 02-09-2026', '2026-09-02'],
+    ['DD/MM/YYYY', 'Tarih: 02/09/2026', '2026-09-02'],
+    ['DD.MM.YYYY', 'Tarih: 02.09.2026', '2026-09-02'],
+    ['YYYY-MM-DD', 'Tarih: 2026-09-02', '2026-09-02'],
+  ])('parses the receipt date in %s format', (_format, line, expected) => {
+    expect(values(`${line}\nToplam: 500,00`)).toMatchObject({ recordDate: expected });
+  });
+
+  it('rejects a calendar-impossible date and reports no recordDate suggestion', () => {
+    expect(values('Tarih: 32-13-2026\nToplam: 500,00').recordDate).toBeUndefined();
+    expect(values('Tarih: 31-04-2026\nToplam: 500,00').recordDate).toBeUndefined();
+  });
+
+  it('never invents a date when the receipt has none', () => {
+    expect(values('Toplam: 500,00\nFİŞ NO: 0142').recordDate).toBeUndefined();
+  });
+
+  it(
+    'finds the date even when OCR glues it directly to an adjacent time or ' +
+      'document number with no separator (RELEASE FIX: fuel OCR date mapping)',
+    () => {
+      // A real physical receipt: total 500, 6.55 L, unit price, 14:45, fiş no
+      // 0142, and the date 02-09-2026 — but the date and time land on the OCR
+      // text with zero space between them, which used to defeat the
+      // day-month-year match entirely (it required a non-digit right after
+      // the year, and the very next character here is the time's leading "1").
+      const receipt = [
+        'OPET AKARYAKIT',
+        'PLAKA: 42 ABC 123',
+        'TARIH:02-09-202614:45',
+        '6,550 LT x 76,35 TL/L',
+        'TOPLAM',
+        '500,00 TL',
+        'FIS NO: 0142',
+      ].join('\n');
+      const result = parseFuelReceiptOcrText(receipt);
+      const fields = Object.fromEntries(result.suggestions.map((s) => [s.fieldId, s.value]));
+      expect(fields).toMatchObject({
+        total: '500',
+        liters: '6,55',
+        pricePerLiter: '76,35',
+        recordDate: '2026-09-02',
+        documentNumber: '0142',
+        stationBrand: 'opet',
+      });
+    },
+  );
+
   it('reconciles the real receipt: plate prefix never becomes the total (ROUND2-004)', () => {
     const receipt = [
       'OPET AKARYAKIT',
