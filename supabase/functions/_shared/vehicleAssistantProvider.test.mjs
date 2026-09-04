@@ -32,7 +32,7 @@ const input = {
 
 test('builds the stateless Gemini Interactions request with the default model', () => {
   const request = buildGeminiInteractionRequest(input);
-  assert.equal(request.model, 'gemini-2.5-flash');
+  assert.equal(request.model, 'gemini-3.1-flash-lite');
   assert.equal(request.store, false);
   assert.equal(request.response_format.type, 'text');
   assert.equal(request.response_format.mime_type, 'application/json');
@@ -78,12 +78,16 @@ test('fails closed unless enablement, privacy approval and key all exist', () =>
   assert.equal(provider?.id, 'gemini');
 });
 
-test('generate_content request disables thinking for 2.5 and omits it otherwise', () => {
+test('generate_content request disables thinking for legacy 2.5 and omits it otherwise', () => {
   const flash25 = buildGenerateContentRequest(input, 'gemini-2.5-flash');
   assert.equal(flash25.generationConfig.thinkingConfig.thinkingBudget, 0);
   assert.equal(flash25.generationConfig.maxOutputTokens, 2048);
   const flash20 = buildGenerateContentRequest(input, 'gemini-2.0-flash');
   assert.equal('thinkingConfig' in flash20.generationConfig, false);
+  // Current default: no thinkingConfig gate applies to it.
+  const defaultModel = buildGenerateContentRequest(input);
+  assert.equal(defaultModel.generationConfig.responseMimeType, 'application/json');
+  assert.equal('thinkingConfig' in defaultModel.generationConfig, false);
 });
 
 test('generate_content style calls :generateContent and parses candidate JSON', async () => {

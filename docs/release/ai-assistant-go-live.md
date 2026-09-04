@@ -1,13 +1,24 @@
 # AI Vehicle Assistant — Go-Live Runbook
 
-**As of:** 2026-09-03 (post physical go-live attempt, function ACTIVE v4).
+**As of:** 2026-09-05 (second physical go-live attempt).
 
-## Physical-test failure — two provider root causes
+## Update — 2026-09-05: `gemini-2.5-flash` also 404s on this project
+
+`[ai:assistant:trace]` from the redeployed function showed
+`providerConfigured: true`, `style: generate_content`, `model: gemini-2.5-flash`,
+`httpStatus: 404`, `providerStatus: NOT_FOUND` — the integration itself is
+working, but this Gemini project/key does not expose 2.5 generation. Default is
+now **`gemini-3.1-flash-lite`** (current low-latency Flash-Lite model). The
+thinking-budget workaround below stays but only applies when `GEMINI_MODEL` is
+overridden back to a `gemini-2.5*` id; the new default does not match that gate.
+
+## Physical-test failure — two provider root causes (2026-09-03 attempt)
 
 1. **Invalid model.** The old default `gemini-3.6-flash` is not a real
    Generative Language API model → `POST …/models/gemini-3.6-flash:generateContent`
-   → **404 NOT_FOUND** → `unavailable` → `503`. Default is now
-   **`gemini-2.5-flash`** (real, JSON-capable, free-tier).
+   → **404 NOT_FOUND** → `unavailable` → `503`. Default was then
+   `gemini-2.5-flash` (also 404 on this project — see the update above); it is
+   now `gemini-3.1-flash-lite`.
 
 2. **Thinking budget starvation.** `gemini-2.5-flash` is a *thinking* model. With
    `maxOutputTokens` and no `thinkingConfig` it can spend the entire output
@@ -18,7 +29,7 @@
    reports `finishReason` + `hasText` in the trace.
 
 Any account-specific model can still be set with `GEMINI_MODEL` (thinkingConfig
-is sent only for `gemini-2.5*` / `*-latest`).
+is sent only for `gemini-2.5*` / `*-latest`; not for the current default).
 
 The redeployed function logs a redacted trace line per call —
 `[ai:assistant:trace] {"stage":"provider","style":…,"model":…,"httpStatus":…,
@@ -33,7 +44,8 @@ it still fails: `providerStatus` names the wrong secret; `finishReason` +
   listed for your key: `GET https://generativelanguage.googleapis.com/v1beta/models`
   with header `x-goog-api-key: <key>`. Pick a `*-flash` model that supports
   `generateContent` and `responseMimeType: application/json` (e.g.
-  `gemini-2.5-flash` or `gemini-flash-latest`).
+  `gemini-3.1-flash-lite`, the current default — some projects/keys do not
+  list `gemini-2.5-flash`).
 
 ## 2. Set the Edge Function secrets (Supabase)
 
@@ -47,7 +59,7 @@ server-only; never add them to the mobile app, `EXPO_PUBLIC_*`, logs or docs.
 | `AI_PROVIDER_PRIVACY_APPROVED` | `true` — your attestation that provider use is privacy/commercially approved | yes |
 | `AI_VEHICLE_ASSISTANT_PROVIDER` | `gemini` | optional (default `gemini`) |
 | `GEMINI_API_KEY` | the key from step 1 | yes |
-| `GEMINI_MODEL` | e.g. `gemini-2.5-flash` / `gemini-flash-latest` | optional (default `gemini-2.5-flash`) |
+| `GEMINI_MODEL` | e.g. `gemini-3.1-flash-lite` / `gemini-2.5-flash` | optional (default `gemini-3.1-flash-lite`) |
 | `GEMINI_API_STYLE` | `generate_content` (standard `:generateContent`) or `interactions` | optional (default `generate_content`) |
 | `GEMINI_API_BASE_URL` | override only for a non-default host | optional |
 

@@ -12,7 +12,7 @@ Covers the Round 2 batches: ROUND2-001 (auth reset + password rules), 004B
 | --- | --- | --- |
 | Auth reset broken state | CODE FIXED / DEVICE-PENDING | PKCE + robust deep-link capture + token_hash + late-`PASSWORD_RECOVERY` safety net. Needs the Supabase redirect-allowlist + `token_hash` reset template + one physical run. |
 | Password rules (new/changed only) | DONE | 8+ / 1 upper / 1 digit / 1 special, shared `evaluatePasswordPolicy`, signup + reset; existing passwords untouched. |
-| AI assistant | CODE COMPLETE / EXTERNAL-BLOCKED | Device failure root-caused: default model `gemini-3.6-flash` is not real → 404. Default now `gemini-2.5-flash`. Needs migration `20260903120000` applied + function redeploy + (already-set) secrets. |
+| AI assistant | CODE COMPLETE / EXTERNAL-BLOCKED | Device failure root-caused twice: invalid model `gemini-3.6-flash` (404), then `gemini-2.5-flash` 404 NOT_FOUND on this project/key. Default now `gemini-3.1-flash-lite`. Needs migration `20260903120000` applied + function redeploy + (already-set) secrets. |
 | AI quota on failure | FIXED | Only a validated answer commits. Reservation TTL 2min→45s; reserve error split (`AI_USAGE_IN_PROGRESS` 409 ≠ `AI_MONTHLY_QUOTA_EXCEEDED` 429); release retried; chip re-synced after failures. |
 | Premium / RevenueCat | CODE COMPLETE / EXTERNAL-BLOCKED | Purchase/restore/pending/cancel/account-switch present; entitlement authoritative from `user_entitlements`; "Premium doğrulanıyor" reconcile state. Needs Play products/Offering/entitlement + public SDK key + webhook deploy (runbook). |
 | Fuel OCR major bug | FIXED | Plate prefix can no longer become the total; litres×price reconciliation; robust date + standalone time. Review-before-transfer + no auto-save intact. |
@@ -45,7 +45,7 @@ Covers the Round 2 batches: ROUND2-001 (auth reset + password rules), 004B
    (`supabase db push` after `migration list` review) and **redeploy**
    `vehicle-ai-assistant` (`_shared` changed).
 2. **Set `GEMINI_MODEL`** to a model the key lists (`GET /v1beta/models`) if
-   `gemini-2.5-flash` is not available; re-test the assistant end-to-end.
+   `gemini-3.1-flash-lite` is not available; re-test the assistant end-to-end.
 3. **Physical Android password-reset run** after the Supabase redirect-allowlist
    + `token_hash` reset-email template change.
 4. **RevenueCat/Play** dashboard setup + `revenuecat-webhook` deploy (runbook) —

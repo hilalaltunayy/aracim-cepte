@@ -5,12 +5,14 @@ import {
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 
 /**
- * A real, currently-available Generative Language API model. The previous
- * default `gemini-3.6-flash` is not a valid model id and returns 404 NOT_FOUND
- * on `:generateContent`, which was the physical-device go-live failure. Override
- * with the `GEMINI_MODEL` secret if the account exposes a different one.
+ * A real, currently-available Generative Language API model. Two prior
+ * defaults each failed on physical go-live: `gemini-3.6-flash` (invalid id,
+ * 404) and `gemini-2.5-flash` (404 NOT_FOUND on this project/key — some
+ * Gemini projects do not expose 2.5 generation). `gemini-3.1-flash-lite` is
+ * the current low-latency Flash-Lite model. Override with the `GEMINI_MODEL`
+ * secret if the account exposes a different one.
  */
-export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+export const GEMINI_DEFAULT_MODEL = 'gemini-3.1-flash-lite';
 export const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 export const GEMINI_INTERACTIONS_URL = `${GEMINI_DEFAULT_BASE_URL}/v1beta/interactions`;
 /** @deprecated use {@link GEMINI_DEFAULT_MODEL} */
@@ -79,18 +81,20 @@ function promptText(input: AiVehicleAssistantProviderInput): string {
  * Standard Gemini `:generateContent` request.
  *
  * - No unsupported schema keywords (`additionalProperties` etc.).
- * - `thinkingBudget: 0` disables the 2.5-flash "thinking" pass. Without it the
- *   model spends the whole `maxOutputTokens` budget on hidden reasoning and
- *   returns `finishReason: MAX_TOKENS` with an EMPTY answer — which the app then
- *   maps to "unavailable". This was a real go-live failure mode.
+ * - `thinkingBudget: 0` disables the legacy 2.5-flash "thinking" pass. Without
+ *   it that family spends the whole `maxOutputTokens` budget on hidden
+ *   reasoning and returns `finishReason: MAX_TOKENS` with an EMPTY answer —
+ *   a real go-live failure mode. The current default (`gemini-3.1-flash-lite`)
+ *   does not match this gate, so no thinkingConfig is sent for it; only a
+ *   `GEMINI_MODEL` override back to the 2.5 family needs the workaround.
  * - `maxOutputTokens` is generous so a full grounded JSON answer always fits.
  */
 export function buildGenerateContentRequest(
   input: AiVehicleAssistantProviderInput,
   model = GEMINI_DEFAULT_MODEL,
 ) {
-  // Only the 2.5 "thinking" family understands (and needs) thinkingConfig;
-  // sending it to 1.5/2.0 models is a 400.
+  // Only the legacy 2.5 "thinking" family understands (and needs)
+  // thinkingConfig; sending it to other models is a 400.
   const thinking = /gemini-2\.5|gemini-flash-latest|gemini-pro-latest/i.test(model)
     ? { thinkingConfig: { thinkingBudget: 0 } }
     : {};
