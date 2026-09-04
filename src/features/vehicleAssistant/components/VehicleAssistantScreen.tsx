@@ -72,7 +72,11 @@ export function VehicleAssistantScreen({
   const [loading, setLoading] = useState(false);
 
   const quotaLimit = quota?.limit ?? entitlementLimit;
-  const remaining = quota?.remaining ?? quotaLimit;
+  // `used` is the server-authoritative COMMITTED count (get_my_ai_usage counts
+  // only committed rows). It is never incremented locally: a reserved/released
+  // attempt must not move this number.
+  const used = Math.min(quotaLimit, Math.max(0, quota?.used ?? 0));
+  const remaining = Math.max(0, quotaLimit - used);
   const exhausted = remaining <= 0;
   const started = messages.length > 0;
 
@@ -153,11 +157,22 @@ export function VehicleAssistantScreen({
         </View>
         <View
           style={styles.quotaChip}
-          accessibilityLabel={`Bugün ${Math.max(0, remaining)} soru hakkınız kaldı`}
+          accessibilityLabel={
+            loading
+              ? 'Sorunuz işleniyor'
+              : `Bugün ${quotaLimit} hakkın ${used} tanesi kullanıldı`
+          }
         >
-          <Ionicons name="flash-outline" size={13} color={colors.primary} accessible={false} />
+          <Ionicons
+            name={loading ? 'ellipsis-horizontal' : 'flash-outline'}
+            size={13}
+            color={colors.primary}
+            accessible={false}
+          />
+          {/* Shows COMMITTED usage as used/limit. A failed or in-flight request
+              never moves it — an in-progress request shows its own state. */}
           <Text style={styles.quotaChipText}>
-            Bugün {Math.max(0, remaining)}/{quotaLimit}
+            {loading ? 'İşleniyor…' : `Bugün ${used}/${quotaLimit}`}
           </Text>
         </View>
       </View>

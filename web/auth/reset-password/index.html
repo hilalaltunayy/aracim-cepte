@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The recovery token travels in the query string; never leak it in a Referer header. -->
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Şifre yenileme — Aracım Cepte</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f2230;
+        --card: #163244;
+        --text: #edf7fa;
+        --muted: #a5b8c1;
+        --accent: #28afe0;
+        --onAccent: #06202c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      main {
+        width: 100%;
+        max-width: 420px;
+        background: var(--card);
+        border-radius: 20px;
+        padding: 28px 24px;
+        text-align: center;
+      }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+      button {
+        width: 100%;
+        min-height: 52px;
+        border: 0;
+        border-radius: 14px;
+        background: var(--accent);
+        color: var(--onAccent);
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:active { opacity: 0.85; }
+      .hint { margin: 16px 0 0; font-size: 13px; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Şifre yenileme</h1>
+      <p id="status">Aracım Cepte uygulaması açılıyor…</p>
+      <button id="open" type="button" hidden>Uygulamada aç</button>
+      <p class="hint" id="hint" hidden>
+        Uygulama açılmadıysa yukarıdaki düğmeye dokunun. Bağlantı yalnızca bir kez ve kısa süre
+        geçerlidir.
+      </p>
+      <p class="hint" id="invalid" hidden>
+        Bu bağlantı geçersiz veya eksik. Uygulamadan yeni bir şifre yenileme bağlantısı isteyin.
+      </p>
+    </main>
+    <script>
+      (function () {
+        'use strict';
+        var APP_URL = 'aracimcepte://auth/reset-password';
+        // Only the parameters the app actually needs to verify the recovery.
+        var ALLOWED = [
+          'token_hash',
+          'type',
+          'code',
+          'error',
+          'error_code',
+          'error_description',
+        ];
+
+        function collect() {
+          var out = new URLSearchParams();
+          var sources = [
+            new URLSearchParams(window.location.search),
+            new URLSearchParams((window.location.hash || '').replace(/^#/, '')),
+          ];
+          for (var i = 0; i < sources.length; i += 1) {
+            for (var j = 0; j < ALLOWED.length; j += 1) {
+              var key = ALLOWED[j];
+              var value = sources[i].get(key);
+              if (value && !out.has(key)) out.set(key, value);
+            }
+          }
+          return out;
+        }
+
+        var params = collect();
+        var type = params.get('type');
+        var hasPayload =
+          Boolean(params.get('token_hash') || params.get('code') || params.get('error'));
+        // A non-recovery callback must never be forwarded to the reset screen.
+        var usable = hasPayload && (!type || type === 'recovery');
+
+        // Drop the token from the visible URL / history as soon as it is captured.
+        try {
+          window.history.replaceState(null, '', window.location.pathname);
+        } catch (ignored) {}
+
+        var statusEl = document.getElementById('status');
+        var openEl = document.getElementById('open');
+        var hintEl = document.getElementById('hint');
+        var invalidEl = document.getElementById('invalid');
+
+        if (!usable) {
+          statusEl.hidden = true;
+          invalidEl.hidden = false;
+          return;
+        }
+
+        var target = APP_URL + '?' + params.toString();
+        function launch() {
+          window.location.href = target;
+        }
+
+        openEl.addEventListener('click', launch);
+        launch();
+
+        // If the app did not take over, surface the manual button.
+        window.setTimeout(function () {
+          statusEl.textContent = 'Uygulama otomatik açılmadıysa devam edin.';
+          openEl.hidden = false;
+          hintEl.hidden = false;
+        }, 1200);
+      })();
+    </script>
+  </body>
+</html>

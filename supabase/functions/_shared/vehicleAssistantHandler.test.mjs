@@ -179,12 +179,16 @@ test('deterministic safety override wins over provider content', async () => {
 });
 
 test('fails closed before reservation when provider privacy configuration is unavailable', async () => {
-  const { deps, calls } = dependencies({ provider: null });
+  const lines = [];
+  const { deps, calls } = dependencies({ provider: null, onDiagnostic: (d) => lines.push(d) });
   await assert.rejects(
     () => handleVehicleAssistant('user-a', body, deps),
     (error) => error.status === 503,
   );
   assert.equal(calls.reserve, 0);
+  // Logs must separate "secrets missing" from "provider errored".
+  assert.deepEqual(lines[0], { stage: 'config', providerConfigured: false });
+  assert.equal(lines.at(-1).code, 'AI_PROVIDER_NOT_CONFIGURED');
 });
 
 test('maps the authoritative daily quota boundary without committing', async () => {

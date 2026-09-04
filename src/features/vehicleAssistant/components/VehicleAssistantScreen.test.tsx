@@ -99,7 +99,8 @@ describe('VehicleAssistantScreen', () => {
     const renderer = await mount();
     expect(texts(renderer).some((text) => text.includes('Kia Sportage'))).toBe(true);
     expect(texts(renderer)).toContain('Örnek sorular');
-    expect(texts(renderer)).toContain('Bugün 1/1');
+    // used/limit, not remaining/limit — "1/1" used to read as "quota spent".
+    expect(texts(renderer)).toContain('Bugün 0/1');
   });
 
   it('uses the authenticated first name when it is available', async () => {
@@ -113,7 +114,8 @@ describe('VehicleAssistantScreen', () => {
     await askQuestion(renderer, 'Bakım durumum nedir?');
     expect(onAsk).toHaveBeenCalledWith('Bakım durumum nedir?');
     expect(texts(renderer)).toContain(success.response.answer);
-    expect(texts(renderer)).toContain('Bugün 0/1');
+    // one committed success -> 1 of 1 used
+    expect(texts(renderer)).toContain('Bugün 1/1');
     expect(renderer.root.find((node) => String(node.type) === 'StatusBadge').props.label).toBe(
       'Dikkat gerektirir',
     );
@@ -161,6 +163,47 @@ describe('VehicleAssistantScreen', () => {
     expect(
       renderer.root.findAll((node) => String(node.type) === 'AppButton' && node.props.title === 'Tekrar dene'),
     ).toHaveLength(1);
+  });
+
+  it('keeps the daily usage at 0/1 when a provider failure is released server-side', async () => {
+    // Physical-device regression: 0/1 -> provider failure -> DB row released ->
+    // the chip must still read 0/1 and sending must stay enabled.
+    const onSyncQuota = vi
+      .fn()
+      .mockResolvedValue({ used: 0, limit: 1, remaining: 1, periodStart: '2026-09-02' });
+    const renderer = await mount({
+      ...base,
+      onSyncQuota,
+      onAsk: vi.fn().mockRejectedValue(new Error('Araç Asistanı şu anda kullanılamıyor.')),
+    });
+    expect(texts(renderer)).toContain('Bugün 0/1');
+    await askQuestion(renderer, 'Araç durumum?');
+    expect(onSyncQuota).toHaveBeenCalled();
+    expect(texts(renderer)).toContain('Bugün 0/1');
+    expect(texts(renderer)).not.toContain('Bugün 1/1');
+    expect(texts(renderer)).not.toContain('Bugünkü Araç Asistanı kullanım sınırınıza ulaştınız.');
+    // Composer is still usable (not quota-blocked); it is only "disabled"
+    // because the sent text was cleared.
+    expect(input(renderer).props.editable).toBe(true);
+  });
+
+  it('shows an in-progress chip instead of a usage count while a request is pending', async () => {
+    let resolve: (value: VehicleAssistantResult) => void = () => undefined;
+    const pending = new Promise<VehicleAssistantResult>((done) => {
+      resolve = done;
+    });
+    const renderer = await mount({ ...base, onAsk: vi.fn(() => pending) });
+    await act(async () => input(renderer).props.onChangeText('Araç durumum?'));
+    await act(async () => {
+      send(renderer).props.onPress();
+      await Promise.resolve();
+    });
+    expect(texts(renderer)).toContain('İşleniyor…');
+    expect(texts(renderer)).not.toContain('Bugün 1/1');
+    await act(async () => {
+      resolve(success);
+      await pending;
+    });
   });
 
   it('renders quota exhaustion and disables sending', async () => {

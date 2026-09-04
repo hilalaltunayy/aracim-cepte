@@ -39,10 +39,28 @@ için gerekli değildir. Localhost production Site URL olarak bırakılmaz. Geli
 gerekiyorsa yalnız geliştirme süresince ayrıca allow-list'e alınır; production varsayılanı olarak
 kullanılmaz.
 
-Public domain şu anda hukuk sayfalarını barındırır. Bu repository'de doğrulanmış web auth callback
-sayfaları bulunmadığı için `/auth/confirm-email` ve `/auth/reset-password` HTTPS adresleri production
-Redirect URLs listesine eklenmez. Mobil e-posta akışlarının hedefi yukarıdaki custom-scheme
-URI'larıdır.
+### Parola sıfırlama: HTTPS köprü sayfası (2026-09-04 güncellemesi)
+
+Fiziksel Android kanıtı: Gmail içindeki doğrudan `aracimcepte://` bağlantısına dokunmak **hiçbir şey
+yapmıyor**; mail istemcileri custom-scheme anchor'ı açmıyor. Bu nedenle parola sıfırlama e-postası
+artık kendi domain'imizdeki HTTPS köprü sayfasına gider ve o sayfa aynı payload'ı uygulamaya devreder:
+
+```text
+Gmail → https://aracimcepte.hilalaltunay.com/auth/reset-password?token_hash=…&type=recovery
+      → aracimcepte://auth/reset-password?token_hash=…&type=recovery
+```
+
+Sayfa kaynağı ve yayınlama talimatı: `web/README.md` ve `web/auth/reset-password/index.html`.
+
+Reset Password e-posta şablonundaki `href` tam olarak şu olmalıdır:
+
+```text
+{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery
+```
+
+`{{ .ConfirmationURL }}` bu şablonda kullanılmaz; Supabase `/verify` üzerinden dönen tarayıcı→uygulama
+yönlendirmesi Android'de düşen adımdır. `aracimcepte://auth/reset-password` girdisi Redirect URLs
+listesinde kalır. E-posta doğrulama akışı değişmedi ve custom-scheme hedefini kullanmaya devam eder.
 
 ## Kod tarafındaki davranış
 

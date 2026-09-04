@@ -15,6 +15,7 @@ import type {
 
 /** Redacted lifecycle trace. Never carries key, prompt, context, tokens or output. */
 export type AssistantHandlerDiagnostic =
+  | { stage: 'config'; providerConfigured: boolean }
   | { stage: 'gate'; kind: string }
   | { stage: 'reserve'; ok: boolean }
   | ({ stage: 'provider' } & ProviderCallDiagnostic)
@@ -105,6 +106,7 @@ export async function handleVehicleAssistant(
   }
 
   const trace = dependencies.onDiagnostic ?? (() => undefined);
+  trace({ stage: 'config', providerConfigured: Boolean(dependencies.provider) });
 
   const gate = classifyQuestion(request.question);
   if (gate.kind !== 'pass') {
@@ -116,7 +118,11 @@ export async function handleVehicleAssistant(
       source: 'local',
     };
   }
-  if (!dependencies.provider) throw new VehicleAssistantHttpError(503, 'AI_ASSISTANT_UNAVAILABLE');
+  if (!dependencies.provider) {
+    // Distinguishes "secrets missing" from "provider errored" in the logs.
+    trace({ stage: 'result', outcome: 'failed', code: 'AI_PROVIDER_NOT_CONFIGURED' });
+    throw new VehicleAssistantHttpError(503, 'AI_ASSISTANT_UNAVAILABLE');
+  }
 
   let reserved = false;
   let committedOk = false;

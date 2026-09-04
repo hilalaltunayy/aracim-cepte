@@ -89,6 +89,22 @@ describe('password recovery callback parsing', () => {
     ).toEqual({ kind: 'token_hash', tokenHash: 'hash' });
   });
 
+  it('accepts exactly what the HTTPS email bridge forwards to the app scheme', () => {
+    // https://aracimcepte.hilalaltunay.com/auth/reset-password?token_hash=…&type=recovery
+    // is handed to the app as the custom-scheme URL below (see web/README.md).
+    expect(
+      parsePasswordRecoveryCallback(
+        'aracimcepte://auth/reset-password?token_hash=pkce_abc123&type=recovery',
+      ),
+    ).toEqual({ kind: 'token_hash', tokenHash: 'pkce_abc123' });
+    // The bridge refuses non-recovery types, and so does the app.
+    expect(
+      parsePasswordRecoveryCallback(
+        'aracimcepte://auth/reset-password?token_hash=pkce_abc123&type=signup',
+      ).kind,
+    ).toBe('error');
+  });
+
   it('maps used or expired exchanges to a safe Turkish error', async () => {
     const result = await establishPasswordRecoverySession(
       authClient({ exchangeError: new Error('raw server token error') }),
