@@ -473,6 +473,10 @@ export default function Sedan3DScene({
       .onFinalize(endInteraction)
       .runOnJS(true);
     const pinch = Gesture.Pinch()
+      // The viewport is short; two spreading fingers cross its bounds almost
+      // immediately during a real pinch. Without this the zoom can silently
+      // cancel mid-gesture the moment either finger leaves the view.
+      .shouldCancelWhenOutside(false)
       .onBegin(() => {
         beginInteraction();
         handlePinchBegin();

@@ -21,6 +21,11 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+// The gesture-handler ScrollView (not the plain react-native one) so the
+// screen's own scroll participates in the same native arbitration tree as any
+// nested react-native-gesture-handler gesture (e.g. the 3D vehicle viewport's
+// pan/pinch orbit) instead of racing it via a React-state scrollEnabled toggle.
+import { ScrollView as GestureAwareScrollView } from 'react-native-gesture-handler';
 import {
   fontFamilies,
   getButtonLoadingIndicatorColor,
@@ -80,7 +85,7 @@ export function Screen({
   const { bottom } = useSafeAreaInsets();
   const { screenContentPaddingBottom } = getBottomTabLayout(bottom);
   const body = scroll ? (
-    <ScrollView
+    <GestureAwareScrollView
       style={styles.flex}
       contentContainerStyle={[
         styles.screenContent,
@@ -93,7 +98,7 @@ export function Screen({
       showsVerticalScrollIndicator={false}
     >
       {children}
-    </ScrollView>
+    </GestureAwareScrollView>
   ) : (
     <View
       style={[

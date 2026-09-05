@@ -26,13 +26,14 @@ vi.mock('react-native', () => ({
   Modal: 'Modal',
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
-  ScrollView: 'ScrollView',
+  ScrollView: 'PlainRNScrollView',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
   useWindowDimensions: () => ({ height: 800 }),
 }));
+vi.mock('react-native-gesture-handler', () => ({ ScrollView: 'GestureAwareScrollView' }));
 vi.mock('@/shared/components/PasswordMascot', () => ({ PasswordMascot: () => null }));
 vi.mock('@expo/vector-icons', async () => {
   const React = await import('react');
@@ -84,7 +85,7 @@ vi.mock('@/shared/utils/selectionModalLayout', () => ({
   }),
 }));
 
-import { EmptyState, ErrorBanner, LoadingScreen } from './ui';
+import { EmptyState, ErrorBanner, LoadingScreen, Screen } from './ui';
 
 async function mount(children: ReactElement): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
@@ -108,6 +109,17 @@ describe('shared UI polish states', () => {
       0,
     );
   });
+
+  it(
+    'RELEASE FIX: Screen scrolls with the gesture-handler-aware ScrollView, ' +
+      'not the plain one, so a nested gesture (e.g. the 3D vehicle orbit) ' +
+      'arbitrates with it natively instead of racing a scrollEnabled toggle',
+    async () => {
+      const renderer = await mount(<Screen>{null}</Screen>);
+      expect(renderer.root.findAllByType('GestureAwareScrollView' as never)).toHaveLength(1);
+      expect(renderer.root.findAllByType('PlainRNScrollView' as never)).toHaveLength(0);
+    },
+  );
 
   it('keeps an empty-state CTA explicit and reachable when a screen supplies one', async () => {
     const onAction = vi.fn();

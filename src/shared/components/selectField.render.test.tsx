@@ -23,6 +23,7 @@ vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 48, left: 0 }),
 }));
+vi.mock('react-native-gesture-handler', () => ({ ScrollView: 'ScrollView' }));
 vi.mock('@react-native-community/datetimepicker', () => ({ default: 'DateTimePicker' }));
 vi.mock('@/shared/components/PasswordMascot', () => ({ PasswordMascot: () => null }));
 vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));

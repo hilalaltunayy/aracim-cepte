@@ -2,7 +2,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { appState, camera, gestureCallbacks, invalidate } = vi.hoisted(() => ({
+const { appState, camera, gestureCallbacks, invalidate, gestureConfig } = vi.hoisted(() => ({
   appState: { added: 0, removed: 0, callback: null as null | ((state: string) => void) },
   camera: {
     position: { set: vi.fn() },
@@ -14,6 +14,10 @@ const { appState, camera, gestureCallbacks, invalidate } = vi.hoisted(() => ({
     panChange: null as null | ((event: { changeX: number; changeY: number }) => void),
     pinchBegin: null as null | (() => void),
     pinchUpdate: null as null | ((event: { scale: number }) => void),
+  },
+  gestureConfig: {
+    pan: {} as Record<string, unknown[]>,
+    pinch: {} as Record<string, unknown[]>,
   },
 }));
 
@@ -41,13 +45,19 @@ vi.mock('@react-three/fiber/native', async () => {
 vi.mock('react-native-gesture-handler', async () => {
   const React = await import('react');
   const createGesture = (kind: 'pan' | 'pinch') => {
+    const record =
+      (method: string) =>
+      (...args: unknown[]) => {
+        gestureConfig[kind][method] = args;
+        return builder;
+      };
     const builder = {
-      maxPointers: () => builder,
-      minDistance: () => builder,
-      averageTouches: () => builder,
-      activeOffsetX: () => builder,
-      activeOffsetY: () => builder,
-      shouldCancelWhenOutside: () => builder,
+      maxPointers: record('maxPointers'),
+      minDistance: record('minDistance'),
+      averageTouches: record('averageTouches'),
+      activeOffsetX: record('activeOffsetX'),
+      activeOffsetY: record('activeOffsetY'),
+      shouldCancelWhenOutside: record('shouldCancelWhenOutside'),
       onChange: (callback: (event: never) => void) => {
         if (kind === 'pan') {
           gestureCallbacks.panChange = callback as (event: {
@@ -116,11 +126,31 @@ describe('procedural Sedan 3D scene lifecycle', () => {
     gestureCallbacks.panChange = null;
     gestureCallbacks.pinchBegin = null;
     gestureCallbacks.pinchUpdate = null;
+    gestureConfig.pan = {};
+    gestureConfig.pinch = {};
     camera.position.set.mockClear();
     camera.lookAt.mockClear();
     camera.updateProjectionMatrix.mockClear();
     invalidate.mockClear();
   });
+
+  it(
+    'configures reliable one-finger orbit and two-finger pinch: neither gesture ' +
+      'cancels when a finger briefly leaves the small viewport bounds',
+    async () => {
+      await mount();
+      // A single finger must claim the drag on a small, quick movement in any
+      // direction (predictable, near-immediate activation).
+      expect(gestureConfig.pan.maxPointers).toEqual([1]);
+      expect(gestureConfig.pan.activeOffsetX).toEqual([[-6, 6]]);
+      expect(gestureConfig.pan.activeOffsetY).toEqual([[-6, 6]]);
+      // Neither gesture may cancel just because a finger crosses the (short)
+      // viewport edge — a real one-finger drag or two-finger pinch does this
+      // constantly on a 260px-tall region.
+      expect(gestureConfig.pan.shouldCancelWhenOutside).toEqual([false]);
+      expect(gestureConfig.pinch.shouldCancelWhenOutside).toEqual([false]);
+    },
+  );
 
   it('mounts a static demand-render scene and drives the camera locally through gestures', async () => {
     const renderer = await mount();
