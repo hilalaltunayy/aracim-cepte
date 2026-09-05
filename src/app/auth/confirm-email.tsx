@@ -5,14 +5,14 @@ import {
   EMAIL_CONFIRMATION_INVALID_MESSAGE,
   parseEmailConfirmationCallback,
 } from '@/features/auth/emailConfirmation';
-import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
+import { AUTH_CALLBACK_ROUTES, useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 
 type Phase = 'loading' | 'success' | 'error';
 
 export default function ConfirmEmailScreen() {
   const styles = useThemedStyles(createStyles);
-  const incoming = useIncomingAuthCallbackUrl();
+  const incoming = useIncomingAuthCallbackUrl(AUTH_CALLBACK_ROUTES.emailConfirmation);
 
   const phase: Phase = incoming.url
     ? parseEmailConfirmationCallback(incoming.url).kind === 'success'

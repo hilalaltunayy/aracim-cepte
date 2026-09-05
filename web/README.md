@@ -4,6 +4,14 @@ Static pages that must be published on the existing public domain
 `https://aracimcepte.hilalaltunay.com`. They are **not** part of the Expo bundle
 and are not served by the app.
 
+> **This is NOT the live artifact.** Production serves the bridge from the
+> separate `aracim-cepte-legal` repository as a Next.js route
+> (`app/auth/reset-password/page.tsx`). The file here is a reference
+> implementation of the same contract, and `tests/webAuthResetBridge.test.ts`
+> exercises **only this file** — it says nothing about the deployed Next.js
+> page. Any change to the contract below has to be applied in that repo too,
+> and verified there.
+
 ## Why this exists
 
 Gmail (and most mail apps) refuse to launch a bare custom-scheme anchor such as

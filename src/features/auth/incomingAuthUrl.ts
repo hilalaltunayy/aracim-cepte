@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
+  authCallbackUrlTargetsRoute,
   getAuthCallbackState,
   startAuthCallbackCapture,
   subscribeAuthCallback,
+  type AuthCallbackRoute,
 } from './authCallbackCapture';
 
-export { authCallbackUrlHasParams } from './authCallbackCapture';
+export {
+  AUTH_CALLBACK_ROUTES,
+  authCallbackUrlHasParams,
+  authCallbackUrlTargetsRoute,
+} from './authCallbackCapture';
 
 export interface IncomingAuthUrlState {
   /** First URL seen that carries auth-callback params, else the settled bare URL. */
@@ -25,8 +31,12 @@ export interface IncomingAuthUrlState {
  *
  * `startAuthCallbackCapture()` is also called here as a safety net for any
  * entry point that renders a callback screen without the root layout.
+ *
+ * `route` scopes consumption: the buffer is app-wide, so a screen must only see
+ * a callback addressed to it. Without that, a PKCE recovery link (`?code=`)
+ * would satisfy the confirm-email parser and vice versa.
  */
-export function useIncomingAuthCallbackUrl(): IncomingAuthUrlState {
+export function useIncomingAuthCallbackUrl(route: AuthCallbackRoute): IncomingAuthUrlState {
   const [state, setState] = useState(() => {
     startAuthCallbackCapture();
     return getAuthCallbackState();
@@ -41,5 +51,8 @@ export function useIncomingAuthCallbackUrl(): IncomingAuthUrlState {
     return unsubscribe;
   }, []);
 
-  return { url: state.url, settled: state.settled };
+  return {
+    url: authCallbackUrlTargetsRoute(state.url, route) ? state.url : null,
+    settled: state.settled,
+  };
 }

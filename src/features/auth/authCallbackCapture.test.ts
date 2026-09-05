@@ -20,7 +20,10 @@ vi.mock('expo-linking', () => ({
 }));
 
 import {
+  AUTH_CALLBACK_ROUTES,
   authCallbackUrlHasParams,
+  authCallbackUrlTargetsRoute,
+  clearAuthCallback,
   getAuthCallbackState,
   resetAuthCallbackCaptureForTests,
   startAuthCallbackCapture,
@@ -124,6 +127,57 @@ describe('auth callback capture (app-launch buffering)', () => {
     startAuthCallbackCapture();
     startAuthCallbackCapture();
     expect(linking.subscribeCount).toBe(1);
+  });
+
+  it('scopes a callback to the route that owns it (cross-flow isolation)', () => {
+    const recovery = AUTH_CALLBACK_ROUTES.passwordRecovery;
+    const confirmation = AUTH_CALLBACK_ROUTES.emailConfirmation;
+    // A PKCE recovery link is `?code=` — the same shape the confirm-email
+    // parser treats as a completed signup, so it must never reach that screen.
+    const pkceRecovery = 'aracimcepte://auth/reset-password?code=pkce-code&type=recovery';
+    expect(authCallbackUrlTargetsRoute(pkceRecovery, recovery)).toBe(true);
+    expect(authCallbackUrlTargetsRoute(pkceRecovery, confirmation)).toBe(false);
+
+    const confirm = 'aracimcepte://auth/confirm-email#access_token=a&refresh_token=r&type=signup';
+    expect(authCallbackUrlTargetsRoute(confirm, confirmation)).toBe(true);
+    expect(authCallbackUrlTargetsRoute(confirm, recovery)).toBe(false);
+
+    // The https form (web build / bridge origin) resolves the same way.
+    expect(
+      authCallbackUrlTargetsRoute(
+        'https://aracimcepte.hilalaltunay.com/auth/reset-password?token_hash=t&type=recovery',
+        recovery,
+      ),
+    ).toBe(true);
+    // Trailing slash and casing must not defeat the match.
+    expect(
+      authCallbackUrlTargetsRoute('aracimcepte://auth/Reset-Password/?token_hash=t', recovery),
+    ).toBe(true);
+    expect(authCallbackUrlTargetsRoute('not-a-url', recovery)).toBe(false);
+    expect(authCallbackUrlTargetsRoute(null, recovery)).toBe(false);
+  });
+
+  it('clearAuthCallback drops a spent token but keeps the buffer settled', async () => {
+    linking.initialUrl = RECOVERY_URL;
+    startAuthCallbackCapture();
+    await vi.waitFor(() => expect(getAuthCallbackState().url).toBe(RECOVERY_URL));
+
+    clearAuthCallback();
+
+    expect(getAuthCallbackState().url).toBeNull();
+    // Still settled: no screen may fall back to its loading state.
+    expect(getAuthCallbackState().settled).toBe(true);
+  });
+
+  it('a cleared expired token never blocks the fresh link requested next', async () => {
+    linking.initialUrl = 'aracimcepte://auth/reset-password?token_hash=expired&type=recovery';
+    startAuthCallbackCapture();
+    await vi.waitFor(() => expect(getAuthCallbackState().url).toContain('expired'));
+    clearAuthCallback();
+
+    linking.listener?.({ url: RECOVERY_URL });
+
+    expect(getAuthCallbackState().url).toBe(RECOVERY_URL);
   });
 
   it('recognises every callback param shape, and rejects bare or malformed links', () => {

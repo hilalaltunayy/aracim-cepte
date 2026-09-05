@@ -80,6 +80,7 @@ vi.mock('@/shared/components/ui', () => ({
 
 import { useAuthStore } from '@/store/authStore';
 import {
+  getAuthCallbackState,
   resetAuthCallbackCaptureForTests,
   startAuthCallbackCapture,
 } from '@/features/auth/authCallbackCapture';
@@ -154,6 +155,68 @@ describe('password recovery route: HTTPS bridge -> app -> new password', () => {
     expect(
       renderer.root.findAll((node) => String(node.type) === 'ErrorBanner'),
     ).toHaveLength(0);
+  });
+
+  it('expired link then a FRESH link while the screen stays mounted: the new token is verified', async () => {
+    // The tester never leaves this screen between attempts, so the second link
+    // arrives on a mounted route. A plain "already processed" flag would drop
+    // it and leave the stale error on screen.
+    const expiredUrl = 'aracimcepte://auth/reset-password?token_hash=expired-token&type=recovery';
+    startAuthCallbackCapture();
+    linkingMock.urlListener?.({ url: expiredUrl });
+    authMock.verifyOtp.mockResolvedValueOnce({
+      data: { session: null },
+      error: new Error('expired'),
+    });
+    const renderer = await mount();
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+    await act(async () => linkingMock.urlListener?.({ url: REAL_TOKEN_URL }));
+
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(2);
+    expect(authMock.verifyOtp).toHaveBeenLastCalledWith({
+      token_hash: 'real-recovery-token',
+      type: 'recovery',
+    });
+    expect(findByLabel(renderer, 'Yeni şifre')).toBeDefined();
+  });
+
+  it('a spent token is dropped from the buffer, so a remount cannot resubmit it', async () => {
+    linkingMock.initialUrl = REAL_TOKEN_URL;
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+    await mount();
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(getAuthCallbackState().url).toBeNull();
+
+    // Navigating away and back must not re-verify the consumed token.
+    useAuthStore.setState({ recoveryMode: false, session: null });
+    await mount();
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it('a confirmation callback is never consumed by the recovery screen', async () => {
+    // A PKCE confirmation link is `?code=`, exactly the shape this screen's
+    // parser would otherwise try to exchange.
+    startAuthCallbackCapture();
+    linkingMock.urlListener?.({ url: 'aracimcepte://auth/confirm-email?code=signup-code' });
+
+    await mount();
+
+    expect(authMock.verifyOtp).not.toHaveBeenCalled();
+    expect(authMock.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('confirmation first, then recovery in the same process: recovery still works', async () => {
+    startAuthCallbackCapture();
+    linkingMock.urlListener?.({ url: 'aracimcepte://auth/confirm-email?code=signup-code' });
+    linkingMock.urlListener?.({ url: REAL_TOKEN_URL });
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+
+    const renderer = await mount();
+
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(findByLabel(renderer, 'Yeni şifre')).toBeDefined();
   });
 
   it('route already mounted when the url event arrives: consumes it and verifies exactly once', async () => {

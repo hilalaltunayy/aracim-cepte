@@ -88,6 +88,17 @@ describe('email confirmation route', () => {
     expect(routerMock.replace).toHaveBeenCalledWith('/auth/login');
   });
 
+  it('never claims a PKCE password-recovery link is a verified email', async () => {
+    // The capture buffer is app-wide. A recovery link in PKCE form is `?code=`,
+    // which this screen's parser otherwise treats as a completed signup, so
+    // route scoping is what stops it from rendering "doğrulandı".
+    linkingState.url = 'aracimcepte://auth/reset-password?code=pkce-code&type=recovery';
+    const renderer = await mount();
+    const output = JSON.stringify(renderer.toJSON());
+    expect(output).not.toContain('E-posta adresiniz doğrulandı');
+    expect(output).toContain('Doğrulama bağlantısı geçersiz');
+  });
+
   it('renders a safe error for an invalid callback', async () => {
     linkingState.url =
       'aracimcepte://auth/confirm-email?error=access_denied&error_description=raw-provider-detail';

@@ -9,7 +9,8 @@ import {
   PasswordInput,
   Screen,
 } from '@/shared/components/ui';
-import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
+import { AUTH_CALLBACK_ROUTES, useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
+import { clearAuthCallback } from '@/features/auth/authCallbackCapture';
 import { describeAuthCallbackUrl, logRecoveryTrace } from '@/features/auth/recoveryTrace';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
 import { PASSWORD_POLICY_HINT } from '@/shared/utils/passwordPolicy';
@@ -20,8 +21,11 @@ type Phase = 'loading' | 'ready' | 'success' | 'error';
 
 export default function ResetPasswordScreen() {
   const styles = useThemedStyles(createStyles);
-  const incoming = useIncomingAuthCallbackUrl();
-  const processed = useRef(false);
+  const incoming = useIncomingAuthCallbackUrl(AUTH_CALLBACK_ROUTES.passwordRecovery);
+  // Keyed by URL, not a plain flag: a tester who taps an expired link and then a
+  // fresh one never leaves this screen, so the second link arrives while it is
+  // still mounted. A boolean would swallow it and leave the stale error up.
+  const processedUrl = useRef<string | null>(null);
   const [establishPhase, setEstablishPhase] = useState<Phase | null>(null);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -38,14 +42,17 @@ export default function ResetPasswordScreen() {
       routeMounted: true,
       hasInitialUrl: Boolean(incoming.url),
       ...describeAuthCallbackUrl(incoming.url),
-      callbackAccepted: Boolean(incoming.url) && !processed.current,
-      duplicateSuppressed: processed.current,
+      callbackAccepted: Boolean(incoming.url) && processedUrl.current !== incoming.url,
+      duplicateSuppressed: Boolean(incoming.url) && processedUrl.current === incoming.url,
     });
-    if (processed.current || !incoming.url) return;
-    processed.current = true;
-    void establishRecovery(incoming.url).then((ready) =>
-      setEstablishPhase(ready ? 'ready' : 'error'),
-    );
+    if (!incoming.url || processedUrl.current === incoming.url) return;
+    processedUrl.current = incoming.url;
+    void establishRecovery(incoming.url).then((ready) => {
+      setEstablishPhase(ready ? 'ready' : 'error');
+      // The token is spent either way; drop it so a remount cannot resubmit it
+      // and a failed link cannot block the fresh one the user requests next.
+      clearAuthCallback();
+    });
   }, [establishRecovery, incoming.url]);
 
   // A settled deep link with no auth params means there is nothing to verify.

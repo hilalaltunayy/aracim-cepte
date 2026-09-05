@@ -33,6 +33,40 @@ export function authCallbackUrlHasParams(url: string | null | undefined): boolea
   }
 }
 
+/** Route paths that own an auth callback. A screen only consumes its own. */
+export const AUTH_CALLBACK_ROUTES = {
+  passwordRecovery: 'auth/reset-password',
+  emailConfirmation: 'auth/confirm-email',
+} as const;
+
+export type AuthCallbackRoute = (typeof AUTH_CALLBACK_ROUTES)[keyof typeof AUTH_CALLBACK_ROUTES];
+
+/**
+ * True when the callback URL addresses exactly this route.
+ *
+ * The capture buffer is app-wide, but each callback parser is only correct for
+ * its own route: `parseEmailConfirmationCallback` treats any `?code=` as a
+ * completed signup precisely because the URL used to be the one that opened
+ * that screen. A PKCE password-recovery link is also `?code=`, so without this
+ * filter a recovery callback read by the confirm-email screen would render
+ * "e-posta doğrulandı". Handles both the app scheme
+ * (`aracimcepte://auth/reset-password`, host `auth` + path `/reset-password`)
+ * and the https form used on web.
+ */
+export function authCallbackUrlTargetsRoute(
+  url: string | null | undefined,
+  route: AuthCallbackRoute,
+): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    const path = `${parsed.host}${parsed.pathname}`.toLowerCase().replace(/\/+$/, '');
+    return path.endsWith(route);
+  } catch {
+    return false;
+  }
+}
+
 export interface AuthCallbackCaptureState {
   /** First URL seen that carries auth-callback params, else the settled bare URL. */
   url: string | null;
@@ -139,6 +173,20 @@ export function startAuthCallbackCapture(): void {
 
 export function getAuthCallbackState(): AuthCallbackCaptureState {
   return state;
+}
+
+/**
+ * Drops the buffered callback once a screen has acted on it.
+ *
+ * Called after the recovery verification attempt settles — success or failure.
+ * The token is single-use either way, so keeping it would only let a remount
+ * re-submit a spent token, and a failed/expired link must never sit in the
+ * buffer blocking the fresh one the user is about to request. `settled` stays
+ * true so no screen falls back to its loading state.
+ */
+export function clearAuthCallback(): void {
+  if (!state.url) return;
+  publish({ url: null, settled: true, source: null });
 }
 
 export function subscribeAuthCallback(listener: () => void): () => void {

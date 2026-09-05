@@ -3,10 +3,16 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Executes the ACTUAL shipped bridge script (not a reimplementation) against a
- * fake window/document, so these tests fail the moment the real published page
- * at https://aracimcepte.hilalaltunay.com/auth/reset-password stops doing what
- * this file documents.
+ * Executes the reference bridge implementation in this repo against a fake
+ * window/document.
+ *
+ * SCOPE: production serves the bridge from the separate `aracim-cepte-legal`
+ * repository as a Next.js route (`app/auth/reset-password/page.tsx`). These
+ * tests cover ONLY `web/auth/reset-password/index.html` here — they do not
+ * prove anything about the deployed page. They pin the contract that page must
+ * also satisfy: token_hash and type=recovery forwarded verbatim to
+ * `aracimcepte://auth/reset-password`, non-recovery types refused, nothing
+ * logged, no third party involved.
  */
 const BRIDGE_HTML_PATH = path.resolve(__dirname, '../web/auth/reset-password/index.html');
 
