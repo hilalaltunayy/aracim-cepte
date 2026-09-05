@@ -27,8 +27,13 @@ import { shouldRedirectExpiredSession } from '@/features/auth/sessionRouting';
 import { getReminderNotificationDestination } from '@/features/reminders/notificationRouting';
 import { AppErrorBoundary } from '@/shared/components/AppErrorBoundary';
 import { useBillingStore } from '@/features/billing/store/billingStore';
+import { startAuthCallbackCapture } from '@/features/auth/authCallbackCapture';
 
 void SplashScreen.preventAutoHideAsync();
+// Must run before any route can mount: a recovery link tapped while the app is
+// already running arrives as a `url` event before Expo Router navigates to the
+// callback screen, so the listener has to be live from app launch.
+startAuthCallbackCapture();
 
 const NativeText = Text as typeof Text & { defaultProps?: { style?: object } };
 const NativeTextInput = TextInput as typeof TextInput & { defaultProps?: { style?: object } };

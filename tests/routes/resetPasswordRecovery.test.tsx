@@ -5,19 +5,16 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * End-to-end coverage for the exact physical flow: HTTPS bridge -> custom
- * scheme -> cold app launch -> reset-password route -> verifyOtp -> password
- * form -> updateUser -> success -> session cleanup.
+ * scheme -> app -> reset-password route -> verifyOtp -> password form ->
+ * updateUser -> success -> session cleanup, in BOTH cold and warm start.
  *
- * This is the flow that a stale installed APK (built from the
- * v1.0.0-closed-test-b2 source) showed "Şifre yenileme bağlantısı
- * kullanılamıyor" for, even with a correctly-forwarded token_hash: that old
- * source read the incoming URL with `Linking.useURL()` and cached the
- * *first* render's value (often `null` on a cold start, before the native
- * module resolves the real launch URL) via `processing.current ??= ...`,
- * permanently ignoring the real URL that arrived a tick later. The current
- * source (`useIncomingAuthCallbackUrl`, awaiting `Linking.getInitialURL()`
- * and only latching once real auth params are present) replaces that
- * mechanism entirely. These tests exercise the REAL current source.
+ * Proven production failure: URL capture used to start only when this route
+ * mounted, so a link tapped while the app was already running was delivered as
+ * a `url` event with no subscriber and lost for good — the screen settled at
+ * `{ url: null, settled: true }`, never called establishRecovery (so Supabase
+ * saw /recover but never /verify) and rendered its "link unusable" fallback.
+ * The WARM START case below fails against that implementation and passes with
+ * launch-time capture (see authCallbackCapture.ts).
  */
 
 const { authMock, linkingMock, routerMock } = vi.hoisted(() => ({
@@ -25,7 +22,11 @@ const { authMock, linkingMock, routerMock } = vi.hoisted(() => ({
     verifyOtp: vi.fn(),
     exchangeCodeForSession: vi.fn(),
     setSession: vi.fn(),
-    onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    onAuthStateChange: vi.fn(
+      (_callback: (event: string, session: unknown) => void) => ({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+    ),
     updateUser: vi.fn(),
     signOut: vi.fn(async () => ({ error: null })),
     getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
@@ -78,6 +79,10 @@ vi.mock('@/shared/components/ui', () => ({
 }));
 
 import { useAuthStore } from '@/store/authStore';
+import {
+  resetAuthCallbackCaptureForTests,
+  startAuthCallbackCapture,
+} from '@/features/auth/authCallbackCapture';
 import ResetPasswordScreen from '@/app/auth/reset-password';
 
 const REAL_TOKEN_URL = 'aracimcepte://auth/reset-password?token_hash=real-recovery-token&type=recovery';
@@ -124,7 +129,43 @@ describe('password recovery route: HTTPS bridge -> app -> new password', () => {
     routerMock.replace.mockClear();
     linkingMock.initialUrl = null;
     linkingMock.urlListener = null;
+    resetAuthCallbackCaptureForTests();
     useAuthStore.setState({ busy: false, error: null, session: null, recoveryMode: false });
+  });
+
+  it('WARM START: a url event that lands BEFORE the route mounts still verifies once and shows the form', async () => {
+    // The proven production failure. The app is already running, so Android
+    // delivers the recovery link as a `url` event and Expo Router only then
+    // navigates to this screen. Capture now runs from app launch, so the
+    // payload is buffered and the screen consumes it on mount instead of
+    // rendering the "link unusable" fallback with no /verify ever sent.
+    startAuthCallbackCapture();
+    linkingMock.urlListener?.({ url: REAL_TOKEN_URL });
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+
+    const renderer = await mount();
+
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(authMock.verifyOtp).toHaveBeenCalledWith({
+      token_hash: 'real-recovery-token',
+      type: 'recovery',
+    });
+    expect(findByLabel(renderer, 'Yeni şifre')).toBeDefined();
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'ErrorBanner'),
+    ).toHaveLength(0);
+  });
+
+  it('route already mounted when the url event arrives: consumes it and verifies exactly once', async () => {
+    // App open on the reset screen with nothing to verify yet.
+    const renderer = await mount();
+    expect(authMock.verifyOtp).not.toHaveBeenCalled();
+
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+    await act(async () => linkingMock.urlListener?.({ url: REAL_TOKEN_URL }));
+
+    expect(authMock.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(findByLabel(renderer, 'Yeni şifre')).toBeDefined();
   });
 
   it('valid token_hash + type=recovery: verifyOtp once, form appears, updateUser, success, session cleaned up', async () => {
@@ -168,7 +209,7 @@ describe('password recovery route: HTTPS bridge -> app -> new password', () => {
     const renderer = await mount();
     expect(authMock.verifyOtp).not.toHaveBeenCalled();
     const errorBanner = renderer.root.findAll(
-      (node) => node.type === 'ErrorBanner' && typeof node.props.message === 'string',
+      (node) => String(node.type) === 'ErrorBanner' && typeof node.props.message === 'string',
     )[0];
     expect(errorBanner).toBeDefined();
     expect(errorBanner.props.message).toMatch(/geçersiz|eksik|kullanılamıyor/);
@@ -191,7 +232,7 @@ describe('password recovery route: HTTPS bridge -> app -> new password', () => {
     });
     const renderer = await mount();
     const errorBanner = renderer.root.findAll(
-      (node) => node.type === 'ErrorBanner' && typeof node.props.message === 'string',
+      (node) => String(node.type) === 'ErrorBanner' && typeof node.props.message === 'string',
     )[0];
     expect(errorBanner.props.message).toMatch(/süresi dolmuş|kullanılmış/);
     expect(errorBanner.props.message).not.toContain('Token has expired');

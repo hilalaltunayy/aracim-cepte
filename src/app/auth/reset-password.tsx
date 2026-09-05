@@ -10,6 +10,7 @@ import {
   Screen,
 } from '@/shared/components/ui';
 import { useIncomingAuthCallbackUrl } from '@/features/auth/incomingAuthUrl';
+import { describeAuthCallbackUrl, logRecoveryTrace } from '@/features/auth/recoveryTrace';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
 import { PASSWORD_POLICY_HINT } from '@/shared/utils/passwordPolicy';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
@@ -31,6 +32,15 @@ export default function ResetPasswordScreen() {
   const matchError = validationError === 'Şifreler eşleşmiyor.';
 
   useEffect(() => {
+    logRecoveryTrace({
+      stage: 'route',
+      source: 'route',
+      routeMounted: true,
+      hasInitialUrl: Boolean(incoming.url),
+      ...describeAuthCallbackUrl(incoming.url),
+      callbackAccepted: Boolean(incoming.url) && !processed.current,
+      duplicateSuppressed: processed.current,
+    });
     if (processed.current || !incoming.url) return;
     processed.current = true;
     void establishRecovery(incoming.url).then((ready) =>

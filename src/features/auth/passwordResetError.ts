@@ -1,4 +1,5 @@
 import { getFriendlyError } from '@/shared/utils/errors';
+import { logRecoveryTrace } from './recoveryTrace';
 
 export interface SafeAuthErrorDetails {
   code: string;
@@ -57,11 +58,40 @@ export function logPasswordResetErrorInDevelopment(error: unknown): void {
 
 /**
  * Dev-only redacted trace of the recovery deep-link handling so a physical
- * Android test tells us exactly which branch fails (parse / exchange / result).
- * Never receives a token or email.
+ * Android test tells us exactly which stage stops (capture / route / parse /
+ * verify / result). Never receives a token, URL or email — the incoming
+ * diagnostic is structural by construction, and is re-emitted here under the
+ * single `[auth:recovery:trace]` prefix shared with the capture and route
+ * stages so one log filter shows the whole chain.
  */
 export function logRecoveryDiagnosticInDevelopment(diagnostic: unknown): void {
   if (typeof __DEV__ === 'undefined' || !__DEV__) return;
 
-  console.warn('[auth:password-reset:trace]', diagnostic);
+  const event = diagnostic as {
+    stage?: string;
+    kind?: string;
+    ok?: boolean;
+    recoveryEventSeen?: boolean;
+  } | null;
+  if (event?.stage === 'parse') {
+    logRecoveryTrace({ stage: 'parse', callbackAccepted: event.kind !== 'error' });
+    return;
+  }
+  if (event?.stage === 'exchange') {
+    logRecoveryTrace({
+      stage: 'verify',
+      verifyOtpAttempted: true,
+      verifyOtpSucceeded: Boolean(event.ok),
+    });
+    return;
+  }
+  if (event?.stage === 'result') {
+    logRecoveryTrace({
+      stage: 'result',
+      callbackAccepted: Boolean(event.ok),
+      recoveryEventSeen: Boolean(event.recoveryEventSeen),
+    });
+    return;
+  }
+  logRecoveryTrace({ stage: 'result' });
 }

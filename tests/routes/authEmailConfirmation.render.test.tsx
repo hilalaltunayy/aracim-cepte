@@ -51,6 +51,7 @@ vi.mock('@/shared/components/ui', async () => {
   };
 });
 
+import { resetAuthCallbackCaptureForTests } from '@/features/auth/authCallbackCapture';
 import ConfirmEmailScreen from '@/app/auth/confirm-email';
 
 async function mount(): Promise<ReactTestRenderer> {
@@ -70,6 +71,9 @@ describe('email confirmation route', () => {
 
   beforeEach(() => {
     routerMock.replace.mockClear();
+    // Deep-link capture is an app-lifetime singleton now (it must outlive route
+    // mounts), so each test starts from a clean launch.
+    resetAuthCallbackCaptureForTests();
   });
 
   it('renders the verified state and returns to login', async () => {
