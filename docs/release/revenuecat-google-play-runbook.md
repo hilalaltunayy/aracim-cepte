@@ -73,6 +73,29 @@ is missing on the client.
 - Without both, `getRevenueCatPublicConfig()` returns `enabled: false` and the
   paywall stays in its calm "not available" state (fail-closed).
 
+## 6b. Test Store QA build (opt-in, never production)
+
+RevenueCat Test Store lets QA exercise the full purchase / restore / entitlement
+flow without a real Play billing account. `react-native-purchases` is `10.7.1`,
+above the `>= 9.5.4` Test Store minimum — no SDK change. Nothing about the
+`premium` entitlement or the `default` / `$rc_monthly` / `$rc_annual` offering
+changes; Test Store is selected purely by the API key passed to `configure()`.
+
+- Create a **dedicated** EAS build profile for QA (e.g. `qa`) — do **not** add
+  these vars to `preview` or `production`.
+- On that profile only:
+  - `EXPO_PUBLIC_REVENUECAT_PURCHASES_ENABLED=true`
+  - `EXPO_PUBLIC_REVENUECAT_TEST_STORE_ENABLED=true`
+  - `EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY=<RevenueCat Test Store key>`
+- `getRevenueCatPublicConfig()` uses the Test Store key **only** when
+  `EXPO_PUBLIC_REVENUECAT_TEST_STORE_ENABLED` is exactly the string `true`. A
+  production build never sets that flag, so even if a Test Store key leaked into
+  its environment the key is not read and the Android production key is used.
+- A QA build that opts in but is missing the Test Store key fails closed
+  (`reason: 'missing_key'`) — it does **not** fall back to the production key.
+- The Test Store API key is a public SDK key like the others: injected via the
+  QA profile environment, never committed, never logged.
+
 ## 7. Webhook secret + deploy (Supabase Edge)
 
 - `supabase/functions/revenuecat-webhook` exists in source but is **NOT

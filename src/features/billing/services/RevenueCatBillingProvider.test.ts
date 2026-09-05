@@ -9,6 +9,7 @@ vi.mock('react-native', () => ({
 }));
 
 import { RevenueCatBillingProvider } from './RevenueCatBillingProvider';
+import type { RevenueCatPublicConfig } from './billingConfig';
 
 const info = (active = false) => ({
   entitlements: {
@@ -45,6 +46,15 @@ function sdk() {
               priceString: '₺49,99',
             },
           },
+          {
+            identifier: '$rc_annual',
+            packageType: 'ANNUAL',
+            product: {
+              identifier: 'premium_annual',
+              title: 'Yıllık Premium',
+              priceString: '₺499,99',
+            },
+          },
         ],
       },
     })),
@@ -55,10 +65,11 @@ function sdk() {
   };
 }
 
-const config = {
-  availability: { enabled: true, reason: 'ready' as const },
+const config: RevenueCatPublicConfig = {
+  availability: { enabled: true, reason: 'ready' },
   apiKey: 'public_test_key',
-  platform: 'android' as const,
+  platform: 'android',
+  store: 'production',
 };
 
 describe('RevenueCat billing adapter', () => {
@@ -99,7 +110,7 @@ describe('RevenueCat billing adapter', () => {
     expect(mock.removeCustomerInfoUpdateListener).toHaveBeenCalledOnce();
   });
 
-  it('loads remote Offering packages and preserves the store-formatted price', async () => {
+  it('loads the default Offering with the $rc_monthly and $rc_annual packages, store-formatted price preserved', async () => {
     const mock = sdk();
     const provider = new RevenueCatBillingProvider(config, mock as never);
     await provider.identify('10000000-0000-4000-8000-000000000001');
@@ -113,8 +124,26 @@ describe('RevenueCat billing adapter', () => {
           title: 'Aylık Premium',
           priceString: '₺49,99',
         },
+        {
+          id: '$rc_annual',
+          packageType: 'annual',
+          productId: 'premium_annual',
+          title: 'Yıllık Premium',
+          priceString: '₺499,99',
+        },
       ],
     });
+  });
+
+  it('recognises the premium entitlement from CustomerInfo regardless of store', async () => {
+    const mock = sdk();
+    mock.getCustomerInfo.mockResolvedValue(info(true));
+    const provider = new RevenueCatBillingProvider(
+      { ...config, store: 'test' },
+      mock as never,
+    );
+    const state = await provider.identify('10000000-0000-4000-8000-000000000001');
+    expect(state).toMatchObject({ status: 'premium', entitlementActive: true });
   });
 
   it('unlocks a mocked purchase only after CustomerInfo has active Premium', async () => {
@@ -150,7 +179,8 @@ describe('RevenueCat billing adapter', () => {
         availability: { enabled: false, reason: 'disabled' },
         apiKey: null,
         platform: 'android',
-      },
+        store: 'production',
+      } satisfies RevenueCatPublicConfig,
       mock as never,
     );
     expect((await disabled.identify('10000000-0000-4000-8000-000000000001')).status).toBe(
