@@ -47,6 +47,15 @@ export function getPasswordResetFriendlyError(error: unknown): string {
     return 'Bu e-posta adresine gönderim yapılamıyor. Lütfen uygulama yöneticisiyle iletişime geçin.';
   }
 
+  // Supabase Auth's documented `same_password` error code for updateUser({password}):
+  // the new password matches the account's current one. Detected by code first
+  // (structured, not sensitive to wording changes); the message fallback only
+  // matches the SDK's own fixed English phrase, never anything server-supplied
+  // beyond that check, and the raw text is never shown to the user either way.
+  if (code === 'same_password' || normalizedMessage.includes('different from the old password')) {
+    return 'Yeni belirleyeceğiniz şifre eski şifrenizle aynı olamaz.';
+  }
+
   return getFriendlyError(error);
 }
 

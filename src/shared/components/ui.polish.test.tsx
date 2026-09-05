@@ -8,14 +8,16 @@ vi.mock('react-native', () => ({
   Alert: { alert: vi.fn() },
   Animated: {
     View: 'AnimatedView',
+    Text: 'AnimatedText',
     Value: class {
       addListener = vi.fn();
-      interpolate = vi.fn();
+      interpolate = vi.fn(() => 0);
       removeListener = vi.fn();
       setValue = vi.fn();
     },
     parallel: () => ({ start: vi.fn() }),
     timing: () => ({ start: vi.fn() }),
+    spring: () => ({ start: vi.fn() }),
   },
   AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
   AccessibilityInfo: {
@@ -59,7 +61,6 @@ vi.mock('@/shared/theme', () => {
     useThemedStyles: (factory: (value: typeof theme) => unknown) => factory(theme),
   };
 });
-vi.mock('@/features/auth/passwordVisibility', () => ({ isPasswordVisibleAfter: () => false }));
 vi.mock('@/shared/utils/accessibility', () => ({
   getButtonAccessibility: (label: string) => ({ label, state: {} }),
   getSelectionAccessibilityState: (selected: boolean) => ({ selected }),
@@ -85,7 +86,7 @@ vi.mock('@/shared/utils/selectionModalLayout', () => ({
   }),
 }));
 
-import { EmptyState, ErrorBanner, LoadingScreen, Screen } from './ui';
+import { EmptyState, ErrorBanner, LoadingScreen, PasswordInput, Screen } from './ui';
 
 async function mount(children: ReactElement): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
@@ -120,6 +121,51 @@ describe('shared UI polish states', () => {
       expect(renderer.root.findAllByType('PlainRNScrollView' as never)).toHaveLength(0);
     },
   );
+
+  it(
+    'RELEASE FIX: password visibility is a plain tap toggle — first tap ' +
+      'reveals and it stays revealed, second tap masks again',
+    async () => {
+      const renderer = await mount(
+        <PasswordInput label="Şifre" value="sup3r-Secr3t!" onChangeText={() => undefined} />,
+      );
+      const textInput = () => renderer.root.findByType('TextInput' as never);
+      const eyeButton = renderer.root.findByType('Pressable' as never);
+
+      expect(textInput().props.secureTextEntry).toBe(true);
+      expect(eyeButton.props.onPressIn).toBeUndefined();
+      expect(eyeButton.props.onPressOut).toBeUndefined();
+
+      await act(async () => eyeButton.props.onPress());
+      expect(textInput().props.secureTextEntry).toBe(false);
+      // Moving focus elsewhere must not re-mask it — only another tap does.
+      await act(async () => textInput().props.onBlur?.({}));
+      expect(textInput().props.secureTextEntry).toBe(false);
+
+      await act(async () => eyeButton.props.onPress());
+      expect(textInput().props.secureTextEntry).toBe(true);
+    },
+  );
+
+  it('never logs the password value while toggling visibility', async () => {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const logs: unknown[][] = [];
+    console.log = (...args: unknown[]) => logs.push(args);
+    console.warn = (...args: unknown[]) => logs.push(args);
+    try {
+      const renderer = await mount(
+        <PasswordInput label="Şifre" value="sup3r-Secr3t!" onChangeText={() => undefined} />,
+      );
+      const eyeButton = renderer.root.findByType('Pressable' as never);
+      await act(async () => eyeButton.props.onPress());
+      await act(async () => eyeButton.props.onPress());
+    } finally {
+      console.log = originalLog;
+      console.warn = originalWarn;
+    }
+    expect(JSON.stringify(logs).includes('sup3r-Secr3t!')).toBe(false);
+  });
 
   it('keeps an empty-state CTA explicit and reachable when a screen supplies one', async () => {
     const onAction = vi.fn();

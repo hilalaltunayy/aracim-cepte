@@ -232,7 +232,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return true;
     } catch (error) {
       intentionalSessionEnd = false;
-      set({ busy: false, error: getFriendlyError(error) });
+      set({ busy: false, error: getPasswordResetFriendlyError(error) });
       return false;
     }
   },

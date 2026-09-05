@@ -13,11 +13,15 @@ import { AUTH_CALLBACK_ROUTES, useIncomingAuthCallbackUrl } from '@/features/aut
 import { clearAuthCallback } from '@/features/auth/authCallbackCapture';
 import { describeAuthCallbackUrl, logRecoveryTrace } from '@/features/auth/recoveryTrace';
 import { validateNewPassword } from '@/features/auth/passwordRecovery';
-import { PASSWORD_POLICY_HINT } from '@/shared/utils/passwordPolicy';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
 import { useAuthStore } from '@/store/authStore';
 
 type Phase = 'loading' | 'ready' | 'success' | 'error';
+
+// Screen-specific copy only — validateNewPassword's real policy (8-72 chars,
+// 1 uppercase, 1 digit, 1 special character) is unchanged.
+const PASSWORD_REQUIREMENT_HINT =
+  'Şifre en az 8 karakter olmalıdır ve içerisinde en az bir büyük harf, bir rakam ve bir özel karakter bulunmalıdır.';
 
 export default function ResetPasswordScreen() {
   const styles = useThemedStyles(createStyles);
@@ -140,7 +144,7 @@ export default function ResetPasswordScreen() {
           mascot
           error={submitted && matchError ? validationError : null}
         />
-        <Text style={styles.hint}>{PASSWORD_POLICY_HINT}</Text>
+        <Text style={styles.hint}>{PASSWORD_REQUIREMENT_HINT}</Text>
         <AppButton
           title="Şifreyi yenile"
           loading={busy}

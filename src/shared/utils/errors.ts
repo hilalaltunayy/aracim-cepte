@@ -30,7 +30,6 @@ export function getFriendlyError(error: unknown): string {
     if (isSessionExpiredError(error)) return 'Oturumunuz sona erdi. Lütfen tekrar giriş yapın.';
     if (text.includes('weak password') || text.includes('password should be'))
       return 'Şifre güvenlik koşullarını karşılamıyor.';
-    if (text.includes('same password')) return 'Yeni şifre önceki şifrenizden farklı olmalıdır.';
     if (text.includes('vehicle_limit_reached'))
       return 'Araç limitinize ulaştınız. Mevcut araçlarınız korunur.';
     if (text.includes('network') || text.includes('fetch'))

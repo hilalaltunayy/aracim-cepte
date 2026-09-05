@@ -37,7 +37,7 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
-import { isPasswordVisibleAfter } from '@/features/auth/passwordVisibility';
+import { nextPasswordVisibility } from '@/features/auth/passwordVisibility';
 import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
 import { PasswordMascot } from '@/shared/components/PasswordMascot';
 import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
@@ -298,7 +298,6 @@ export function PasswordInput({
   label,
   error,
   style,
-  onBlur,
   mascot = false,
   ...props
 }: TextInputProps & { label: string; error?: string | null; mascot?: boolean }) {
@@ -307,11 +306,12 @@ export function PasswordInput({
   const reducedMotion = useReducedMotion();
   const [visible, setVisible] = useState(false);
   const [eyeAnim] = useState(() => new Animated.Value(1));
-  const hide = () => setVisible(isPasswordVisibleAfter('cancel'));
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') setVisible(isPasswordVisibleAfter('background'));
+      if (state !== 'active') {
+        setVisible((current) => nextPasswordVisibility(current, 'background'));
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -330,19 +330,14 @@ export function PasswordInput({
         error={error}
         style={[styles.passwordInput, style]}
         secureTextEntry={!visible}
-        onBlur={(event) => {
-          setVisible(isPasswordVisibleAfter('blur'));
-          onBlur?.(event);
-        }}
       />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Şifreyi görmek için basılı tutun"
-        accessibilityHint="Şifre yalnız basılı tuttuğunuz sürece görünür"
+        accessibilityLabel={visible ? 'Şifreyi gizle' : 'Şifreyi göster'}
+        accessibilityHint="Şifre görünürlüğünü değiştirmek için dokunun"
+        accessibilityState={{ selected: visible }}
         hitSlop={8}
-        onPressIn={() => setVisible(isPasswordVisibleAfter('press-in'))}
-        onPressOut={() => setVisible(isPasswordVisibleAfter('press-out'))}
-        onResponderTerminate={hide}
+        onPress={() => setVisible((current) => nextPasswordVisibility(current, 'toggle'))}
         style={({ pressed }) => [styles.passwordEye, pressed && styles.pressed]}
       >
         {mascot ? (

@@ -267,6 +267,46 @@ describe('password recovery route: HTTPS bridge -> app -> new password', () => {
     expect(useAuthStore.getState().session).toBeNull();
   });
 
+  it('shows the requirement helper text exactly as specified', async () => {
+    linkingMock.initialUrl = REAL_TOKEN_URL;
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+    const renderer = await mount();
+
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          typeof node.props.children === 'string' &&
+          node.props.children ===
+            'Şifre en az 8 karakter olmalıdır ve içerisinde en az bir büyük harf, bir rakam ve bir özel karakter bulunmalıdır.',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('same-as-old-password backend error shows the exact required Turkish message, not a policy error', async () => {
+    linkingMock.initialUrl = REAL_TOKEN_URL;
+    authMock.verifyOtp.mockResolvedValueOnce({ data: { session }, error: null });
+    const renderer = await mount();
+
+    act(() => findByLabel(renderer, 'Yeni şifre').props.onChangeText('Guvenli-123!'));
+    act(() => findByLabel(renderer, 'Yeni şifre tekrar').props.onChangeText('Guvenli-123!'));
+
+    authMock.updateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: Object.assign(new Error('New password should be different from the old password.'), {
+        code: 'same_password',
+      }),
+    });
+    await act(async () => findByTitle(renderer, 'Şifreyi yenile').props.onPress());
+
+    // Never let the raw backend/updateUser call fail silently into commit.
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    const errorBanner = renderer.root.findAll(
+      (node) => String(node.type) === 'ErrorBanner' && typeof node.props.message === 'string',
+    )[0];
+    expect(errorBanner.props.message).toBe('Yeni belirleyeceğiniz şifre eski şifrenizle aynı olamaz.');
+    expect(errorBanner.props.message).not.toContain('New password should be');
+  });
+
   it('token_hash missing entirely: shows the invalid-link state, never calls verifyOtp', async () => {
     linkingMock.initialUrl = 'aracimcepte://auth/reset-password';
     const renderer = await mount();
