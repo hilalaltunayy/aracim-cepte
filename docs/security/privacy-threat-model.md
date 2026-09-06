@@ -73,6 +73,24 @@ TASK-027 bakım fişi/fatura OCR'ı da yalnız cihazda çalışır. Ham metin il
 önerileri transient kalır; log, analytics, Supabase veya yeni bir üçüncü taraf sağlayıcıya yazılmaz.
 Kullanıcı öneriyi seçip mevcut bakım formunu ayrıca kaydetmeden kalıcı bakım event'i değişmez.
 
+### Araç Asistanı bağlamı ve plaka (TASK-042)
+
+`vehicleAssistantProvider.ts` bağlamın tamamını `JSON.stringify(input.context)` ile prompt'a
+koyar; bu nedenle `VehicleAssistantContext`'e eklenen her alan üçüncü taraf modele aktarılır.
+TASK-042 bağlama yalnız betimleyici profil alanlarını ekledi: marka, model, model yılı, renk,
+yakıt tipi ve kasa tipi. Marka/model zaten `displayName` içinde gidiyordu.
+
+**Plaka bağlama eklenmedi.** Plaka KVKK anlamında kişisel tanımlayıcıdır ve bunu Gemini'ye
+göndermek yeni bir sınır ötesi PII aktarımı olurdu; `AGENTS.md` bunu ayrı privacy incelemesi ve
+açık onay kapısına bağlar. Plaka bunun yerine Edge Function içinde kalan
+`VehicleAssistantPrivateFacts` alanına yüklenir; yalnız deterministic lookup yolu okur, prompt'a
+ve evidence katalog'una girmez, loglanmaz. "Plakam ne?" sorusu bu yüzden modele hiç gitmeden
+yanıtlanır. `vehicleAssistantContext.test.mjs` serialize edilmiş bağlamda plakanın bulunmadığını
+doğrular.
+
+Plakayı modele göndermek ileride istenirse, bu ayrı bir privacy review + ADR + açık kullanıcı
+onayı gerektirir; mevcut testler sessizce eklenmesini engeller.
+
 ## Security/privacy regression kontrolü
 
 Her ilgili görevde completion report şu sorulara cevap verir:

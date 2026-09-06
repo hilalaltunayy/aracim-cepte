@@ -131,9 +131,16 @@ logged successful answer.
 
 - In the app, open Araç Asistanı and ask "Bakım durumumu özetler misin?".
   Expect a grounded answer and the daily-quota chip to drop by 1.
-- Only a **successful** provider answer consumes quota (Free 1/day,
-  Premium 10/day). Failures, refusals, out-of-domain and live-data questions
-  consume zero — enforced server-side by the reserve → commit → release RPCs.
+- Only a **useful** provider answer consumes quota (Free 1/day, Premium
+  10/day). Failures, refusals, out-of-domain and live-data questions consume
+  zero — enforced server-side by the reserve → commit → release RPCs.
+- Since TASK-042 the charge follows a typed outcome, not just a provider 200:
+  `answered` commits, while `insufficient_data`, `not_found`, `unsupported` and
+  `blocked` (safety override) release the reservation and still return the
+  answer. The `[ai:assistant:trace]` line `{"stage":"outcome",…}` records which
+  outcome was chosen, and the result line reads `unbilled` instead of
+  `committed`. Asking a stored-profile question ("Rengim ne?", "Plakam ne?")
+  never reaches the provider at all and never reserves.
 - If it still fails: check Edge Function logs for the provider HTTP status. A
   404/400 usually means a wrong `GEMINI_MODEL` or `GEMINI_API_STYLE`; adjust the
   secret (no code change needed) and retry.
