@@ -166,6 +166,84 @@ test('commits exactly once after a valid grounded provider response', async () =
   assert.deepEqual(calls, { reserve: 1, commit: 1, release: 0, provider: 1 });
 });
 
+test('a not_found answer is delivered but does not spend an allowance', async () => {
+  const { deps, calls } = dependencies({
+    provider: {
+      id: 'mock',
+      generateVehicleAssistantResponse: async () => ({
+        ...response,
+        answer: 'Aracınız için kayıtlı bir renk bilgisi bulunmuyor.',
+        evidence: [],
+      }),
+    },
+  });
+  const result = await handleVehicleAssistant('user-a', body, deps);
+  // The user still gets the answer...
+  assert.equal(result.response.answer, 'Aracınız için kayıtlı bir renk bilgisi bulunmuyor.');
+  assert.equal(result.source, 'provider');
+  // ...but a provider 200 that helped nobody must not be billed.
+  assert.equal(calls.reserve, 1);
+  assert.equal(calls.commit, 0);
+  assert.equal(calls.release, 1);
+  assert.equal(result.quota.used, 0);
+});
+
+test('an insufficient_data answer does not spend an allowance either', async () => {
+  const { deps, calls } = dependencies({
+    provider: {
+      id: 'mock',
+      generateVehicleAssistantResponse: async () => ({
+        ...response,
+        answer: 'Tüketim eğilimi için yeterli veri yok.',
+        evidence: [],
+      }),
+    },
+  });
+  const result = await handleVehicleAssistant('user-a', body, deps);
+  assert.equal(calls.commit, 0);
+  assert.equal(calls.release, 1);
+  assert.equal(result.quota.used, 0);
+});
+
+test('a substantive answer still spends exactly one allowance', async () => {
+  const { deps, calls } = dependencies();
+  const result = await handleVehicleAssistant('user-a', body, deps);
+  assert.equal(calls.reserve, 1);
+  assert.equal(calls.commit, 1);
+  assert.equal(calls.release, 0);
+  assert.equal(result.quota.used, 1);
+});
+
+test('traces the answer outcome before deciding whether to bill', async () => {
+  const diagnostics = [];
+  const { deps } = dependencies({
+    onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    provider: {
+      id: 'mock',
+      generateVehicleAssistantResponse: async () => ({
+        ...response,
+        answer: 'Bu konuda kayıt bulunmuyor.',
+        evidence: [],
+      }),
+    },
+  });
+  await handleVehicleAssistant('user-a', body, deps);
+  const outcome = diagnostics.find((entry) => entry.stage === 'outcome');
+  assert.deepEqual(outcome, {
+    stage: 'outcome',
+    answerOutcome: 'not_found',
+    consumesQuota: false,
+  });
+  assert.equal(
+    diagnostics.some(
+      (entry) => entry.stage === 'result' && entry.outcome === 'unbilled',
+    ),
+    true,
+  );
+  // The trace stays structural: no answer text leaks into the logs.
+  assert.equal(JSON.stringify(diagnostics).includes('kayıt bulunmuyor'), false);
+});
+
 test('releases quota when provider fails', async () => {
   const { deps, calls } = dependencies({
     provider: {

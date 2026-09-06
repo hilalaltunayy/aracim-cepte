@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   applyDeterministicSafety,
   canonicalEvidenceCodes,
+  classifyAssistantOutcome,
   classifyQuestion,
   containsUnsupportedDefiniteDiagnosis,
   diagnoseVehicleAssistantResponse,
   MODEL_OWNED_RESPONSE_FIELDS,
   normalizeVehicleAssistantEvidence,
+  outcomeConsumesQuota,
   requiresSafetyEscalation,
   resolveDeterministicVehicleFact,
   toTrustedVehicleAssistantResponse,
@@ -389,5 +391,45 @@ describe('resolveDeterministicVehicleFact', () => {
   it('never short-circuits a safety report', () => {
     expect(requiresSafetyEscalation('Fren tutmuyor, rengim ne?')).toBe(true);
     expect(resolveDeterministicVehicleFact('Fren tutmuyor, rengim ne?', context)).toBeNull();
+  });
+});
+
+describe('classifyAssistantOutcome', () => {
+  it('treats a substantive grounded answer as billable', () => {
+    expect(classifyAssistantOutcome(valid)).toBe('answered');
+    expect(outcomeConsumesQuota('answered')).toBe(true);
+  });
+
+  it('does not bill a well-formed answer that found nothing', () => {
+    for (const [answer, expected] of [
+      ['Aracınız için kayıtlı bir renk bilgisi bulunmuyor.', 'not_found'],
+      ['Bu konuda kayıt bulunamadı.', 'not_found'],
+      ['Tüketim eğilimi için yeterli veri yok.', 'insufficient_data'],
+      ['Analiz için yeterli bilgi bulunmuyor.', 'insufficient_data'],
+    ] as const) {
+      const outcome = classifyAssistantOutcome({ ...valid, answer, evidence: [] });
+      expect(outcome).toBe(expected);
+      expect(outcomeConsumesQuota(outcome)).toBe(false);
+    }
+  });
+
+  it('does not bill a safety override, which replaces the model answer', () => {
+    const escalated = applyDeterministicSafety(valid, 'Fren tutmuyor');
+    expect(classifyAssistantOutcome(escalated)).toBe('blocked');
+    expect(outcomeConsumesQuota('blocked')).toBe(false);
+  });
+
+  it('does not bill the locally gated domains', () => {
+    expect(classifyAssistantOutcome({ ...valid, domain: 'out_of_domain' })).toBe('unsupported');
+    expect(classifyAssistantOutcome({ ...valid, domain: 'external_data' })).toBe('unsupported');
+  });
+
+  it('defaults to answered so a useful reply is never made free by accident', () => {
+    // Mentions records without claiming absence -> still a real answer.
+    const outcome = classifyAssistantOutcome({
+      ...valid,
+      answer: 'Son bakım kaydınıza göre 9.400 km geçmiş, bakım zamanı yaklaşıyor.',
+    });
+    expect(outcome).toBe('answered');
   });
 });

@@ -408,6 +408,80 @@ export function resolveDeterministicVehicleFact(
   return null;
 }
 
+/* ------------------------------------------------------------------ *
+ * Answer outcome classification
+ *
+ * A provider HTTP 200 only means the call succeeded. It says nothing about
+ * whether the user got an answer: "bu konuda kayıt bulunmuyor" is a
+ * well-formed, schema-valid response that helped nobody. The daily allowance
+ * is charged on this classification, not on structural validity.
+ * ------------------------------------------------------------------ */
+
+export const ASSISTANT_OUTCOMES = [
+  /** A substantive answer. This is the only outcome that spends quota. */
+  'answered',
+  /** The records exist but are too sparse to answer ("yeterli veri yok"). */
+  'insufficient_data',
+  /** The requested value is simply not recorded. */
+  'not_found',
+  /** Out of domain, or needs a live data source that is not connected. */
+  'unsupported',
+  /** The deterministic safety override replaced the model's answer. */
+  'blocked',
+  /** The call or the response contract failed. */
+  'error',
+] as const;
+export type AssistantOutcome = (typeof ASSISTANT_OUTCOMES)[number];
+
+const notFoundPhrases = [
+  'bulunamadi',
+  'kayit yok',
+  'kayit bulunmuyor',
+  'kayit bulunamadi',
+  'kaydi bulunmuyor',
+  'bilgi bulunmuyor',
+  'bilgisi bulunmuyor',
+  'kayitli degil',
+  'girilmemis',
+] as const;
+
+const insufficientDataPhrases = [
+  'yeterli veri',
+  'yeterli bilgi',
+  'yeterli kayit',
+  'veri yetersiz',
+  'veri bulunmuyor',
+  'veri yok',
+  'daha fazla kayit gerek',
+  'kayit girmeniz gerek',
+] as const;
+
+/**
+ * Classifies a validated, trusted response so quota can follow usefulness.
+ *
+ * Deliberately conservative: the default is `answered`. Only an unambiguous
+ * no-data statement demotes it, so a genuinely useful answer is never made
+ * free by accident.
+ */
+export function classifyAssistantOutcome(response: VehicleAssistantResponse): AssistantOutcome {
+  if (response.domain === 'out_of_domain' || response.domain === 'external_data')
+    return 'unsupported';
+  // The safety override discards whatever the model wrote and substitutes a
+  // fixed message, so there is no model answer left to charge for.
+  if (response.safetyEscalation) return 'blocked';
+  const answer = foldTurkish(response.answer);
+  // "yeterli bilgi bulunmuyor" is sparse data, not a missing record, so the
+  // more specific qualifier is matched first.
+  if (containsAny(answer, insufficientDataPhrases)) return 'insufficient_data';
+  if (containsAny(answer, notFoundPhrases)) return 'not_found';
+  return 'answered';
+}
+
+/** Only a real answer is worth one of the user's daily allowances. */
+export function outcomeConsumesQuota(outcome: AssistantOutcome): boolean {
+  return outcome === 'answered';
+}
+
 const safetyTerms = [
   'fren tutm',
   'fren bos',

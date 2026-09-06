@@ -1,11 +1,14 @@
 import {
   canonicalEvidenceCodes,
+  classifyAssistantOutcome,
   classifyQuestion,
   diagnoseVehicleAssistantResponse,
+  outcomeConsumesQuota,
   resolveDeterministicVehicleFact,
   toTrustedVehicleAssistantResponse,
   validateFinalVehicleAssistantResponse,
   validateModelVehicleAssistantResponse,
+  type AssistantOutcome,
   type AssistantQuotaState,
   type AssistantResponseValidationDiagnostic,
   type VehicleAssistantContext,
@@ -25,9 +28,10 @@ export type AssistantHandlerDiagnostic =
   | ({ stage: 'provider' } & ProviderCallDiagnostic)
   | ({ stage: 'validate' } & AssistantResponseValidationDiagnostic)
   | { stage: 'normalize'; normalizationStage: string; finalValidationPassed: boolean }
+  | { stage: 'outcome'; answerOutcome: AssistantOutcome; consumesQuota: boolean }
   | { stage: 'commit'; ok: boolean }
   | { stage: 'release'; attempted: boolean; confirmed: boolean }
-  | { stage: 'result'; outcome: 'committed' | 'local' | 'failed'; code?: string };
+  | { stage: 'result'; outcome: 'committed' | 'local' | 'unbilled' | 'failed'; code?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -193,7 +197,26 @@ export async function handleVehicleAssistant(
     if (dependencies.signal?.aborted) {
       throw new VehicleAssistantHttpError(499, 'AI_REQUEST_CANCELLED');
     }
-    // Only a validated, safety-checked answer reaches commit.
+
+    // A provider 200 is not a useful answer. Charge on the classification, so
+    // "bu konuda kayıt bulunmuyor" gives the allowance back.
+    const answerOutcome = classifyAssistantOutcome(response);
+    const consumesQuota = outcomeConsumesQuota(answerOutcome);
+    trace({ stage: 'outcome', answerOutcome, consumesQuota });
+    if (!consumesQuota) {
+      const confirmed = await dependencies.releaseQuota(request.operationId).catch(() => false);
+      reserved = false;
+      trace({ stage: 'release', attempted: true, confirmed });
+      trace({ stage: 'result', outcome: 'unbilled', code: answerOutcome });
+      // The user still sees the answer; it simply did not cost an allowance.
+      return {
+        response,
+        quota: quotaState(await dependencies.getQuota()),
+        source: 'provider',
+      };
+    }
+
+    // Only a validated, safety-checked, substantive answer reaches commit.
     const committed = await dependencies.commitQuota(request.operationId);
     committedOk = true;
     reserved = false;
