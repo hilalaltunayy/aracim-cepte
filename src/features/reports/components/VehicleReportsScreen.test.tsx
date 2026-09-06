@@ -18,13 +18,19 @@ vi.mock('react-native', () => {
   return {
     Animated: { Value, View: 'AnimatedView', timing: () => ({ start: () => undefined }) },
     Pressable: 'Pressable',
-    StyleSheet: { create: <T,>(styles: T) => styles },
+    StyleSheet: {
+      create: <T,>(styles: T) => styles,
+      absoluteFill: { position: 'absolute' },
+      absoluteFillObject: { position: 'absolute' },
+      hairlineWidth: 1,
+    },
     Text: 'Text',
     View: 'View',
   };
 });
 vi.mock('react-native-svg', () => ({
   default: 'Svg',
+  Circle: 'Circle',
   Line: 'Line',
   Path: 'Path',
   Polyline: 'Polyline',
@@ -120,7 +126,7 @@ describe('VehicleReportsScreen', () => {
     await act(async () => renderer.root.findByProps({ title: 'Premium’u incele' }).props.onPress());
     expect(onUpgrade).toHaveBeenCalledOnce();
   });
-  it('renders rich fuel and maintenance trend surfaces with bar entrance motion', async () => {
+  it('renders one donut, one trend line and comparison bars instead of repeated line charts', async () => {
     state.value = {
       ...base,
       records: [
@@ -181,16 +187,48 @@ describe('VehicleReportsScreen', () => {
       ],
     };
     const renderer = await mount();
-    expect(texts(renderer)).toContain('Yakıt harcama eğilimi');
-    expect(texts(renderer)).toContain('Bakım harcama eğilimi');
+    expect(texts(renderer)).toContain('Harcamaların dağılımı');
+    expect(texts(renderer)).toContain('Aylık maliyet eğilimi');
+    expect(texts(renderer)).toContain('Karşılaştırma');
+    // The three repeated line charts collapse to a single monthly trend.
+    expect(renderer.root.findAllByProps({ testID: 'report-line-reveal' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ testID: 'report-bar-entrance' }).length).toBeGreaterThan(
       0,
     );
     expect(renderer.root.findAllByProps({ testID: 'report-kpi-count-up' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ testID: 'report-line-reveal' }).length).toBeGreaterThan(
-      0,
-    );
     expect(renderer.root.findAllByProps({ testID: 'report-period-transition' })).toHaveLength(1);
+  });
+
+  it('keeps every currency value inside its card on a narrow screen', async () => {
+    state.value = {
+      ...base,
+      records: [
+        {
+          id: 'big',
+          vehicleId: 'a',
+          recordType: 'maintenance',
+          category: 'Motor revizyonu',
+          amount: 1234567.89,
+          liters: null,
+          recordDate: '2026-08-12',
+          kilometer: 1000,
+          description: null,
+          createdAt: 'x',
+          updatedAt: 'x',
+        },
+      ],
+    };
+    const renderer = await mount();
+    // Every Text carrying a formatted TL amount must be line-clamped, so a large
+    // value wraps or ellipsises instead of pushing past the card edge.
+    const currencyTexts = renderer.root.findAll(
+      (node) => String(node.type) === 'Text' && node.children.join('').includes('1.234.567'),
+    );
+    expect(currencyTexts.length).toBeGreaterThan(0);
+    for (const node of currencyTexts) {
+      expect(typeof node.props.numberOfLines).toBe('number');
+      expect(node.props.numberOfLines).toBeGreaterThan(0);
+    }
   });
   it('loads real independently returned records for a two-vehicle comparison', async () => {
     loadReportsForVehicles.mockResolvedValueOnce([

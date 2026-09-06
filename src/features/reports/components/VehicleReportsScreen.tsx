@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Line, Path, Polyline } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import {
@@ -33,6 +32,7 @@ import {
   type VehicleComparison,
 } from '../domain/vehicleReports';
 import { loadReportsForVehicles } from '../services/vehicleReportLoader';
+import { BarChart, DonutChart, TrendChart, type DonutSegment } from './ReportCharts';
 
 const periodOptions = {
   month: 'Bu ay',
@@ -42,84 +42,6 @@ const periodOptions = {
   year: 'Bu yıl',
 } as const;
 const categoryLabels = { fuel: 'Yakıt', maintenance: 'Bakım', expense: 'Diğer' } as const;
-const categoryIcons = {
-  fuel: 'water-outline',
-  maintenance: 'construct-outline',
-  expense: 'receipt-outline',
-} as const;
-
-function TrendChart({ data }: { data: ReturnType<typeof buildVehicleReport>['buckets'] }) {
-  const { colors } = useAppTheme();
-  const styles = useThemedStyles(createStyles);
-  const max = Math.max(...data.map((item) => item.total), 0);
-  const width = 300;
-  const height = 114;
-  const pad = 10;
-  const points = data
-    .map(
-      (item, index) =>
-        `${pad + (index * (width - pad * 2)) / Math.max(data.length - 1, 1)},${height - pad - (max ? (item.total / max) * (height - pad * 2) : 0)}`,
-    )
-    .join(' ');
-  const revealKey = data.map((item) => `${item.key}:${item.total}`).join('|');
-  const [reveal] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    reveal.setValue(0);
-    Animated.timing(reveal, { toValue: 1, duration: 460, useNativeDriver: false }).start();
-  }, [reveal, revealKey]);
-  return (
-    <View accessibilityLabel="Döneme göre kayıtlı araç maliyeti eğilimi" style={styles.chartWrap}>
-      <Animated.View
-        testID="report-line-reveal"
-        style={{
-          overflow: 'hidden',
-          width: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-        }}
-      >
-        <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} accessible={false}>
-          <Line
-            x1={pad}
-            x2={width - pad}
-            y1={height - pad}
-            y2={height - pad}
-            stroke={colors.chartGrid}
-            strokeWidth={1}
-          />
-          <Line
-            x1={pad}
-            x2={width - pad}
-            y1={height / 2}
-            y2={height / 2}
-            stroke={colors.chartGrid}
-            strokeWidth={1}
-            strokeDasharray="3 5"
-          />
-          {max ? (
-            <Path
-              d={`M ${points.split(' ')[0]} L ${points} L ${width - pad},${height - pad} Z`}
-              fill={colors.paleAqua}
-            />
-          ) : null}
-          <Polyline
-            points={points}
-            fill="none"
-            stroke={colors.primary}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </Animated.View>
-      <View style={styles.chartLabels}>
-        {data.map((item) => (
-          <Text key={item.key} style={styles.chartLabel}>
-            {item.label}
-          </Text>
-        ))}
-      </View>
-    </View>
-  );
-}
 
 function CountUp({
   value,
@@ -143,7 +65,13 @@ function CountUp({
     return () => animated.removeListener(listener);
   }, [animated, value]);
   return (
-    <Text testID="report-kpi-count-up" style={[stylesForCount.value, style]}>
+    <Text
+      testID="report-kpi-count-up"
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.6}
+      style={[stylesForCount.value, style]}
+    >
       {value === null ? 'Yeterli veri yok' : format(display)}
     </Text>
   );
@@ -151,28 +79,6 @@ function CountUp({
 const stylesForCount = StyleSheet.create({
   value: { fontFamily: fontFamilies.bold, fontSize: 15, lineHeight: 20 },
 });
-
-function EntranceBar({ percent, color }: { percent: number; color: string }) {
-  const [progress] = useState(() => new Animated.Value(0));
-  useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, { toValue: 1, duration: 300, useNativeDriver: false }).start();
-  }, [percent, progress]);
-  return (
-    <Animated.View
-      testID="report-bar-entrance"
-      style={{
-        height: '100%',
-        borderRadius: radii.pill,
-        backgroundColor: color,
-        width: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0%', `${Math.max(0, Math.min(percent, 100))}%`],
-        }),
-      }}
-    />
-  );
-}
 
 function Comparison({ value }: { value: { percentage: number | null } }) {
   const styles = useThemedStyles(createStyles);
@@ -189,9 +95,29 @@ function Comparison({ value }: { value: { percentage: number | null } }) {
         color={increase ? '#B55B38' : '#0B6B50'}
         accessible={false}
       />
-      <Text style={styles.comparisonText}>
+      <Text numberOfLines={2} style={styles.comparisonText}>
         {increase ? '+' : ''}
         {formatNumber(value.percentage, 1)}% önceki döneme göre
+      </Text>
+    </View>
+  );
+}
+
+/** One cell of the compact fuel-efficiency grid. Values never wrap out of the card. */
+function MetricCell({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.metricCell}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={styles.metricCellValue}
+      >
+        {value}
+      </Text>
+      <Text numberOfLines={2} style={styles.metricCellLabel}>
+        {label}
       </Text>
     </View>
   );
@@ -276,18 +202,38 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
       </Screen>
     );
   if (!report) return null;
+
   const total = report.totalCost;
-  const sections = (
-    [
-      ['fuel', report.fuelCost],
-      ['maintenance', report.maintenanceCost],
-      ['expense', report.otherCost],
-    ] as const
-  ).filter(([, value]) => value > 0);
+  // Spend distribution — the same three totals the previous stacked bars used.
+  const distribution: DonutSegment[] = [
+    { key: 'fuel', label: categoryLabels.fuel, value: report.fuelCost, color: colors.primaryAction },
+    {
+      key: 'maintenance',
+      label: categoryLabels.maintenance,
+      value: report.maintenanceCost,
+      color: colors.aqua,
+    },
+    { key: 'expense', label: categoryLabels.expense, value: report.otherCost, color: colors.warning },
+  ];
+  const hasDistribution = distribution.some((segment) => segment.value > 0);
+  const categoryBars = distribution
+    .filter((segment) => segment.value > 0)
+    .map((segment) => ({ key: segment.key, label: segment.label, value: segment.value }));
+  const stationBars = report.stationDistribution.slice(0, 4).map((item) => ({
+    key: item.id,
+    label: item.id.replaceAll('_', ' '),
+    value: item.total,
+  }));
+  const maintenanceBars = report.maintenanceBreakdown.slice(0, 4).map((item) => ({
+    key: item.id,
+    label: item.id.replaceAll('_', ' '),
+    value: item.total,
+  }));
+
   return (
     <Screen backdrop={<AutomotiveBackdrop />}>
       <FadeIn key={`${vehicle.id}-${periodId}`}>
-        <View testID="report-period-transition">
+        <View testID="report-period-transition" style={styles.page}>
           <AppHeader
             title="Raporlar"
             subtitle={`${vehicle.brand} ${vehicle.model}`}
@@ -298,257 +244,195 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
                 onPress={() => setPeriodOpen(true)}
                 style={styles.periodButton}
               >
-                <Text style={styles.periodText}>{periodOptions[periodId]}</Text>
+                <Text numberOfLines={1} style={styles.periodText}>
+                  {periodOptions[periodId]}
+                </Text>
                 <Ionicons name="chevron-down" size={16} color={colors.primary} />
               </Pressable>
             }
           />
-          <Card style={styles.snapshot}>
+
+          {/* Hero summary — total cost, period and period-over-period change. */}
+          <Card style={styles.hero}>
             <Text style={styles.eyebrow}>KAYITLI ARAÇ MALİYETİ</Text>
             <CountUp style={styles.total} value={total} format={(value) => formatCurrency(value)} />
-            <Text style={styles.snapshotCaption}>
+            <Text numberOfLines={2} style={styles.heroCaption}>
               {report.period.label} içindeki yakıt, bakım ve diğer kayıtlar
             </Text>
             <Comparison value={report.comparisons.total} />
+            <View style={styles.heroSplit}>
+              {[
+                ['Yakıt', report.fuelCost],
+                ['Bakım', report.maintenanceCost],
+                ['Diğer', report.otherCost],
+              ].map(([label, value]) => (
+                <View key={String(label)} style={styles.heroSplitCell}>
+                  <Text numberOfLines={1} style={styles.heroSplitLabel}>
+                    {label}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    style={styles.heroSplitValue}
+                  >
+                    {formatCurrency(value as number)}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </Card>
-          <View style={styles.metricRow}>
-            {[
-              ['Yakıt', report.fuelCost, 'water-outline'],
-              ['Bakım', report.maintenanceCost, 'construct-outline'],
-            ].map(([label, value, icon]) => (
-              <Card key={String(label)} style={styles.metric}>
-                <Ionicons
-                  name={icon as keyof typeof Ionicons.glyphMap}
-                  size={18}
-                  color={colors.primary}
-                  accessible={false}
+
+          {/* Spend distribution — donut. */}
+          <Card>
+            <Text style={styles.cardTitle}>Harcamaların dağılımı</Text>
+            <Text style={styles.cardCaption}>Nereye ne kadar harcadınız?</Text>
+            <View style={styles.cardBody}>
+              {hasDistribution ? (
+                <DonutChart
+                  segments={distribution}
+                  centerLabel="Toplam"
+                  centerValue={formatCurrency(total)}
                 />
-                <Text style={styles.metricLabel}>{label}</Text>
-                <Text style={styles.metricValue}>{formatCurrency(value as number)}</Text>
-              </Card>
-            ))}
-          </View>
+              ) : (
+                <Text style={styles.emptyInline}>Bu dönem için henüz maliyet kaydı yok.</Text>
+              )}
+            </View>
+          </Card>
+
+          {/* Monthly trend — the single line chart in the report. */}
           <Card>
             <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.cardTitle}>Maliyet eğilimi</Text>
+              <View style={styles.cardHeading}>
+                <Text style={styles.cardTitle}>Aylık maliyet eğilimi</Text>
                 <Text style={styles.cardCaption}>Döneme göre toplam kayıtlı gider</Text>
               </View>
               {report.hasTrend ? (
-                <Text style={styles.cardValue}>{formatCurrency(total)}</Text>
+                <Text numberOfLines={1} style={styles.cardValue}>
+                  {formatCurrency(total)}
+                </Text>
               ) : null}
             </View>
             {report.hasTrend ? (
-              <TrendChart data={report.buckets} />
+              <TrendChart data={report.buckets} formatValue={formatCurrency} />
             ) : (
               <Text style={styles.emptyInline}>
                 Eğilimi görmek için en az iki farklı ayda kayıt gerekir.
               </Text>
             )}
           </Card>
-          <Card>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.cardTitle}>Harcamaların dağılımı</Text>
-                <Text style={styles.cardCaption}>Nereye ne kadar harcadınız?</Text>
+
+          {/* Comparison — bar chart across categories, then stations. */}
+          {categoryBars.length > 1 || stationBars.length ? (
+            <Card>
+              <Text style={styles.cardTitle}>Karşılaştırma</Text>
+              <Text style={styles.cardCaption}>
+                {stationBars.length
+                  ? 'Kategori ve yakıt istasyonu bazında kayıtlı harcama'
+                  : 'Kategori bazında kayıtlı harcama'}
+              </Text>
+              <View style={styles.cardBody}>
+                {categoryBars.length > 1 ? (
+                  <BarChart items={categoryBars} formatValue={formatCurrency} />
+                ) : null}
+                {stationBars.length ? (
+                  <>
+                    <Text style={styles.subHeading}>İstasyon dağılımı</Text>
+                    <BarChart
+                      items={stationBars}
+                      formatValue={formatCurrency}
+                      color={colors.primaryAction}
+                    />
+                  </>
+                ) : null}
               </View>
-            </View>
-            {sections.length ? (
-              <View style={styles.breakdown}>
-                {sections.map(([type, value]) => (
-                  <View key={type} style={styles.breakdownRow}>
-                    <View style={styles.breakdownHeader}>
-                      <View style={styles.breakdownName}>
-                        <Ionicons
-                          name={categoryIcons[type]}
-                          size={16}
-                          color={colors.primary}
-                          accessible={false}
-                        />
-                        <Text style={styles.metricLabel}>{categoryLabels[type]}</Text>
-                      </View>
-                      <Text style={styles.breakdownValue}>{formatCurrency(value)}</Text>
-                    </View>
-                    <View style={styles.track}>
-                      <EntranceBar percent={(value / total) * 100} color={colors.primary} />
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyInline}>Bu dönem için henüz maliyet kaydı yok.</Text>
-            )}
-          </Card>
+            </Card>
+          ) : null}
+
+          {/* Fuel efficiency — one compact 2x3 grid instead of six separate cards. */}
           <SectionHeader title="Yakıt ve verimlilik" />
-          <View style={styles.metricRow}>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.fuelLiters === null ? '—' : `${formatNumber(report.fuelLiters, 1)} L`}
-              </Text>
-              <Text style={styles.metricLabel}>Toplam yakıt</Text>
-            </Card>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.averageFuelPrice === null
-                  ? '—'
-                  : `${formatCurrency(report.averageFuelPrice)}/L`}
-              </Text>
-              <Text style={styles.metricLabel}>Ort. litre fiyatı</Text>
-            </Card>
-          </View>
-          <View style={styles.metricRow}>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.distanceKm === null ? '—' : `${formatNumber(report.distanceKm)} km`}
-              </Text>
-              <Text style={styles.metricLabel}>Kayıtlı mesafe</Text>
-            </Card>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.costPerKm === null ? '—' : `${formatCurrency(report.costPerKm)}/km`}
-              </Text>
-              <Text style={styles.metricLabel}>Km başı maliyet</Text>
-            </Card>
-          </View>
-          <View style={styles.metricRow}>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.fuelCostPerKm === null
-                  ? 'Yeterli veri yok'
-                  : `${formatCurrency(report.fuelCostPerKm)}/km`}
-              </Text>
-              <Text style={styles.metricLabel}>Yakıt / km</Text>
-            </Card>
-            <Card style={styles.metric}>
-              <Text style={styles.detailValue}>
-                {report.consumption === null
-                  ? 'Yeterli veri yok'
-                  : `${formatNumber(report.consumption, 1)} L/100 km`}
-              </Text>
-              <Text style={styles.metricLabel}>Ortalama tüketim</Text>
-            </Card>
-          </View>
-          {report.fuelBuckets.filter((item) => item.fuel > 0).length > 1 ? (
-            <Card>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardTitle}>Yakıt harcama eğilimi</Text>
-                  <Text style={styles.cardCaption}>Döneme göre yakıt harcaması</Text>
-                </View>
-                <Text style={styles.cardValue}>{formatCurrency(report.fuelCost)}</Text>
-              </View>
-              <TrendChart
-                data={report.fuelBuckets.map((item) => ({ ...item, total: item.fuel }))}
+          <Card>
+            <View style={styles.metricGrid}>
+              <MetricCell
+                label="Toplam yakıt"
+                value={report.fuelLiters === null ? '—' : `${formatNumber(report.fuelLiters, 1)} L`}
               />
-            </Card>
-          ) : null}
-          {report.refuelFrequency !== null ? (
-            <Text style={styles.inlineStat}>{report.refuelFrequency} yakıt alımı kaydedildi.</Text>
-          ) : null}
-          {report.stationDistribution.length ? (
-            <Card>
-              <Text style={styles.cardTitle}>İstasyon dağılımı</Text>
-              <Text style={styles.cardCaption}>Yakıt harcaması markaya göre</Text>
-              <View style={styles.breakdown}>
-                {report.stationDistribution.slice(0, 3).map((item) => (
-                  <View key={item.id} style={styles.breakdownRow}>
-                    <View style={styles.breakdownHeader}>
-                      <Text style={styles.metricLabel}>{item.id.replace('_', ' ')}</Text>
-                      <Text style={styles.breakdownValue}>{formatCurrency(item.total)}</Text>
-                    </View>
-                    <View style={styles.track}>
-                      <EntranceBar
-                        percent={(item.total / report.fuelCost) * 100}
-                        color={colors.primary}
-                      />
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          ) : null}
+              <MetricCell
+                label="Ort. litre fiyatı"
+                value={
+                  report.averageFuelPrice === null
+                    ? '—'
+                    : `${formatCurrency(report.averageFuelPrice)}/L`
+                }
+              />
+              <MetricCell
+                label="Kayıtlı mesafe"
+                value={report.distanceKm === null ? '—' : `${formatNumber(report.distanceKm)} km`}
+              />
+              <MetricCell
+                label="Km başı maliyet"
+                value={report.costPerKm === null ? '—' : `${formatCurrency(report.costPerKm)}/km`}
+              />
+              {/* These two keep the stronger "Yeterli veri yok" wording: an
+                  em dash would read as "nothing spent" rather than "unknown". */}
+              <MetricCell
+                label="Yakıt / km"
+                value={
+                  report.fuelCostPerKm === null
+                    ? 'Yeterli veri yok'
+                    : `${formatCurrency(report.fuelCostPerKm)}/km`
+                }
+              />
+              <MetricCell
+                label="Ortalama tüketim"
+                value={
+                  report.consumption === null
+                    ? 'Yeterli veri yok'
+                    : `${formatNumber(report.consumption, 1)} L/100`
+                }
+              />
+            </View>
+            {report.refuelFrequency !== null ? (
+              <Text style={styles.inlineStat}>{report.refuelFrequency} yakıt alımı kaydedildi.</Text>
+            ) : null}
+          </Card>
+
+          {/* Maintenance — one simplified summary plus a horizontal bar breakdown. */}
           <SectionHeader title="Bakım" />
           <Card>
-            <View style={styles.maintenanceLine}>
-              <View>
-                <Text style={styles.detailValue}>{report.maintenanceCount}</Text>
-                <Text style={styles.metricLabel}>Bakım kaydı</Text>
-              </View>
-              <View>
-                <Text style={styles.breakdownValue}>
-                  {report.averageMaintenanceCost === null
+            <View style={styles.metricGrid}>
+              <MetricCell label="Bakım kaydı" value={String(report.maintenanceCount)} />
+              <MetricCell
+                label="Ort. bakım"
+                value={
+                  report.averageMaintenanceCost === null
                     ? '—'
-                    : formatCurrency(report.averageMaintenanceCost)}
-                </Text>
-                <Text style={styles.metricLabel}>Ort. bakım</Text>
-              </View>
-              <View>
-                <Text style={styles.breakdownValue}>
-                  {report.partsCost === null ? '—' : formatCurrency(report.partsCost)}
-                </Text>
-                <Text style={styles.metricLabel}>Parça</Text>
-              </View>
-              <View>
-                <Text style={styles.breakdownValue}>
-                  {report.laborCost === null ? '—' : formatCurrency(report.laborCost)}
-                </Text>
-                <Text style={styles.metricLabel}>İşçilik</Text>
-              </View>
+                    : formatCurrency(report.averageMaintenanceCost)
+                }
+              />
+              <MetricCell
+                label="Parça"
+                value={report.partsCost === null ? '—' : formatCurrency(report.partsCost)}
+              />
+              <MetricCell
+                label="İşçilik"
+                value={report.laborCost === null ? '—' : formatCurrency(report.laborCost)}
+              />
             </View>
-          </Card>
-          {report.maintenanceBuckets.filter((item) => item.maintenance > 0).length > 1 ? (
-            <Card>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardTitle}>Bakım harcama eğilimi</Text>
-                  <Text style={styles.cardCaption}>Döneme göre bakım harcaması</Text>
-                </View>
-                <Text style={styles.cardValue}>{formatCurrency(report.maintenanceCost)}</Text>
+            {maintenanceBars.length ? (
+              <View style={styles.cardBody}>
+                <Text style={styles.subHeading}>Bakım işlemleri</Text>
+                <BarChart items={maintenanceBars} formatValue={formatCurrency} color={colors.aqua} />
               </View>
-              <TrendChart
-                data={report.maintenanceBuckets.map((item) => ({
-                  ...item,
-                  total: item.maintenance,
-                }))}
-              />
-            </Card>
-          ) : null}
-          {report.maintenanceBreakdown.length ? (
-            <Card>
-              <Text style={styles.cardTitle}>Bakım işlemleri</Text>
-              <Text style={styles.cardCaption}>Kaydedilen bakım kalemlerine göre</Text>
-              <View style={styles.breakdown}>
-                {report.maintenanceBreakdown.slice(0, 3).map((item) => (
-                  <View key={item.id} style={styles.breakdownRow}>
-                    <View style={styles.breakdownHeader}>
-                      <Text style={styles.metricLabel}>{item.id.replaceAll('_', ' ')}</Text>
-                      <Text style={styles.breakdownValue}>{formatCurrency(item.total)}</Text>
-                    </View>
-                    <View style={styles.track}>
-                      <EntranceBar
-                        percent={(item.total / report.maintenanceCost) * 100}
-                        color={colors.primary}
-                      />
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          ) : null}
-          {report.highestMaintenance ? (
-            <Card style={styles.highlight}>
-              <Ionicons
-                name="construct-outline"
-                size={20}
-                color={colors.primary}
-                accessible={false}
-              />
-              <Text style={styles.highlightText}>
+            ) : null}
+            {report.highestMaintenance ? (
+              <Text numberOfLines={2} style={styles.inlineStat}>
                 En yüksek bakım: {report.highestMaintenance.category} ·{' '}
                 {formatCurrency(report.highestMaintenance.amount)}
               </Text>
-            </Card>
-          ) : null}
+            ) : null}
+          </Card>
+
           {report.highestCategory ? (
             <Card style={styles.highlight}>
               <Ionicons name="bulb-outline" size={20} color={colors.primary} accessible={false} />
@@ -558,6 +442,7 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
               </Text>
             </Card>
           ) : null}
+
           {comparisonError ? (
             <Card>
               <Text style={styles.cardTitle}>Araç karşılaştırması</Text>
@@ -574,43 +459,27 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
                 <Text style={styles.cardCaption}>
                   Sahip olduğunuz araçlar aynı dönemde karşılaştırılır.
                 </Text>
-                <View style={styles.breakdown}>
-                  {vehicleComparisons.map((item) => (
-                    <View key={item.vehicleId} style={styles.breakdownRow}>
-                      <View style={styles.breakdownHeader}>
-                        <Text style={styles.breakdownValue}>
-                          {item.label}
-                          {item.vehicleId === vehicle.id ? ' · Seçili' : ''}
-                        </Text>
-                        <Text style={styles.breakdownValue}>{formatCurrency(item.totalCost)}</Text>
-                      </View>
-                      <View style={styles.track}>
-                        <EntranceBar
-                          percent={
-                            (item.totalCost /
-                              Math.max(...vehicleComparisons.map((value) => value.totalCost), 1)) *
-                            100
-                          }
-                          color={colors.primary}
-                        />
-                      </View>
-                      <Text style={styles.metricLabel}>
-                        {formatCurrency(item.fuelCost)} yakıt ·{' '}
-                        {formatCurrency(item.maintenanceCost)} bakım ·{' '}
-                        {item.distanceKm === null
-                          ? 'Mesafe bilinmiyor'
-                          : `${formatNumber(item.distanceKm)} km`}{' '}
-                        ·{' '}
-                        {item.costPerKm === null
+                <View style={styles.cardBody}>
+                  <BarChart
+                    formatValue={formatCurrency}
+                    items={vehicleComparisons.map((item) => ({
+                      key: item.vehicleId,
+                      label: `${item.label}${item.vehicleId === vehicle.id ? ' · Seçili' : ''}`,
+                      value: item.totalCost,
+                      caption: `${formatCurrency(item.fuelCost)} yakıt · ${formatCurrency(
+                        item.maintenanceCost,
+                      )} bakım · ${
+                        item.costPerKm === null
                           ? 'Km maliyeti bilinmiyor'
-                          : `${formatCurrency(item.costPerKm)}/km`}
-                      </Text>
-                    </View>
-                  ))}
+                          : `${formatCurrency(item.costPerKm)}/km`
+                      }`,
+                    }))}
+                  />
                 </View>
               </Card>
             </>
           ) : null}
+
           <ActionSheet
             visible={periodOpen}
             title="Rapor dönemi"
@@ -630,8 +499,10 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
 
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
+    page: { gap: spacing.md },
     periodButton: {
       minHeight: 38,
+      maxWidth: 140,
       borderRadius: radii.md,
       paddingHorizontal: spacing.sm,
       backgroundColor: colors.paleAqua,
@@ -639,8 +510,13 @@ const createStyles = ({ colors }: AppTheme) =>
       alignItems: 'center',
       gap: 2,
     },
-    periodText: { color: colors.primary, ...typography.caption, fontFamily: fontFamilies.semibold },
-    snapshot: { gap: spacing.sm, backgroundColor: colors.elevatedSurface },
+    periodText: {
+      color: colors.primary,
+      ...typography.caption,
+      fontFamily: fontFamilies.semibold,
+      flexShrink: 1,
+    },
+    hero: { gap: spacing.sm, backgroundColor: colors.elevatedSurface },
     eyebrow: { color: colors.primary, ...typography.eyebrow },
     total: {
       color: colors.textPrimary,
@@ -649,55 +525,67 @@ const createStyles = ({ colors }: AppTheme) =>
       lineHeight: 41,
       letterSpacing: -1,
     },
-    snapshotCaption: { color: colors.textSecondary, ...typography.caption },
-    comparison: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.xs },
-    comparisonText: { color: colors.textSecondary, ...typography.caption },
-    comparisonMuted: { color: colors.textSecondary, ...typography.caption, marginTop: spacing.xs },
-    inlineStat: { color: colors.textSecondary, ...typography.caption, marginTop: -spacing.xs },
-    metricRow: { flexDirection: 'row', gap: spacing.sm },
-    metric: { flex: 1, minWidth: 0, padding: spacing.md, gap: spacing.xs },
-    metricLabel: { color: colors.textSecondary, ...typography.caption },
-    metricValue: {
-      color: colors.textPrimary,
-      fontFamily: fontFamilies.bold,
-      fontSize: 15,
-      lineHeight: 20,
+    heroCaption: { color: colors.textSecondary, ...typography.caption },
+    heroSplit: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
     },
-    detailValue: { color: colors.textPrimary, ...typography.cardTitle },
+    heroSplitCell: { flex: 1, minWidth: 0, gap: 2 },
+    heroSplitLabel: { color: colors.textSecondary, ...typography.caption },
+    heroSplitValue: {
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.semibold,
+      fontSize: 14,
+      lineHeight: 19,
+    },
+    comparison: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: spacing.xs },
+    comparisonText: { flex: 1, minWidth: 0, color: colors.textSecondary, ...typography.caption },
+    comparisonMuted: { color: colors.textSecondary, ...typography.caption, marginTop: spacing.xs },
+    inlineStat: { color: colors.textSecondary, ...typography.caption, marginTop: spacing.sm },
     cardHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      gap: spacing.md,
+      gap: spacing.sm,
       marginBottom: spacing.md,
     },
+    cardHeading: { flex: 1, minWidth: 0 },
+    cardBody: { marginTop: spacing.md, gap: spacing.md },
     cardTitle: { color: colors.textPrimary, ...typography.cardTitle },
     cardCaption: { color: colors.textSecondary, ...typography.caption, marginTop: 2 },
-    cardValue: { color: colors.textPrimary, ...typography.label },
-    chartWrap: { gap: spacing.sm },
-    chartLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-    chartLabel: { color: colors.textSecondary, ...typography.caption, textTransform: 'capitalize' },
-    emptyInline: { color: colors.textSecondary, ...typography.body },
-    breakdown: { gap: spacing.md },
-    breakdownRow: { gap: 6 },
-    breakdownHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-    breakdownName: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    breakdownValue: { color: colors.textPrimary, ...typography.label },
-    track: {
-      height: 7,
-      borderRadius: radii.pill,
-      backgroundColor: colors.neutralSurface,
-      overflow: 'hidden',
+    cardValue: { color: colors.textPrimary, ...typography.label, flexShrink: 0, maxWidth: '46%' },
+    subHeading: {
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.semibold,
+      fontSize: 13,
     },
-    fill: { height: '100%', borderRadius: radii.pill, backgroundColor: colors.primary },
-    maintenanceLine: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+    emptyInline: { color: colors.textSecondary, ...typography.body },
+    metricGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md, columnGap: spacing.sm },
+    metricCell: {
+      // Two columns on every supported width; a third never squeezes currency.
+      flexBasis: '47%',
+      flexGrow: 1,
+      minWidth: 0,
+      gap: 2,
+    },
+    metricCellValue: {
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.bold,
+      fontSize: 16,
+      lineHeight: 21,
+    },
+    metricCellLabel: { color: colors.textSecondary, ...typography.caption },
     highlight: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: spacing.sm,
       backgroundColor: colors.paleAqua,
     },
-    highlightText: { color: colors.textPrimary, ...typography.body, flex: 1 },
+    highlightText: { color: colors.textPrimary, ...typography.body, flex: 1, minWidth: 0 },
     locked: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xxl },
     lockIcon: {
       width: 56,
