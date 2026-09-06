@@ -19,6 +19,7 @@ import {
   uploadParentAttachment,
 } from '@/data/storage/attachments';
 import { useDataStore } from '@/store/dataStore';
+import { downloadPersistedAttachment } from '@/features/attachments/services/attachmentDownload';
 import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
@@ -212,6 +213,12 @@ export default function DocumentEditScreen() {
         onChange={updateValue}
         onAttachmentsChange={setAttachments}
         onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+        onDownloadAttachment={async (attachment) => {
+          await downloadPersistedAttachment(attachment, {
+            label: values.title,
+            date: values.expiryDate ?? values.startDate,
+          });
+        }}
         onApplyOcrSuggestions={applyOcrSuggestions}
       />
       {existing && values.expiryDate ? (

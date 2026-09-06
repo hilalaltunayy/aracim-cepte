@@ -31,6 +31,7 @@ export function MaintenanceDetailsSection({
   onChange,
   onAttachmentsChange,
   onOpenAttachment,
+  onDownloadAttachment,
   onOcrApply,
 }: {
   expanded: boolean;
@@ -47,6 +48,7 @@ export function MaintenanceDetailsSection({
   ) => void;
   onAttachmentsChange: (items: AttachmentListItem[]) => void;
   onOpenAttachment: (item: PersistedAttachment) => Promise<void> | void;
+  onDownloadAttachment?: (item: PersistedAttachment) => Promise<void> | void;
   onOcrApply: (patch: MaintenanceReceiptPatch) => void;
 }) {
   return (
@@ -112,6 +114,7 @@ export function MaintenanceDetailsSection({
             disabled={disabled}
             onChange={onAttachmentsChange}
             onOpen={onOpenAttachment}
+            onDownload={onDownloadAttachment}
           />
           <MaintenanceReceiptOcrSection
             attachments={attachments}

@@ -1,5 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { File, Paths } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 import { Linking } from 'react-native';
 import { getSupabaseClient } from '@/data/supabase/client';
 import { getFunctionErrorCode } from '@/data/supabase/functionErrors';
@@ -13,6 +15,11 @@ import {
   normalizeAttachmentMime,
 } from './attachmentRules';
 import { openPrivateAttachment } from './openAttachment';
+import {
+  downloadPrivateAttachment,
+  type AttachmentDownloadRequest,
+  type AttachmentDownloadResult,
+} from './downloadAttachment';
 import type {
   AttachmentParentType,
   PendingAttachment,
@@ -197,6 +204,41 @@ export async function openAttachment(path: string): Promise<void> {
     },
     canOpenUrl: (url) => Linking.canOpenURL(url),
     openUrl: (url) => Linking.openURL(url),
+  });
+}
+
+/**
+ * Saves a previously uploaded private file back to the user's device.
+ *
+ * The signed URL lives for 60 seconds, exactly as the in-app open path does,
+ * and the bucket stays private throughout. Ownership is not re-checked here
+ * because it cannot be asserted from the client: Storage RLS decides whether
+ * the object can be signed at all, so another user's path simply fails.
+ */
+export async function downloadAttachmentToDevice(
+  request: AttachmentDownloadRequest,
+): Promise<AttachmentDownloadResult> {
+  const storage = getSupabaseClient().storage.from('vehicle-attachments');
+  return downloadPrivateAttachment(request, {
+    async createSignedUrl(objectPath) {
+      const { data, error } = await storage.createSignedUrl(objectPath, 60);
+      return error ? null : (data.signedUrl ?? null);
+    },
+    async downloadToCache(url, fileName) {
+      const destination = new File(Paths.cache, fileName);
+      // A leftover from an interrupted download would block the write.
+      if (destination.exists) destination.delete();
+      const downloaded = await File.downloadFileAsync(url, destination);
+      return downloaded.uri;
+    },
+    isSharingAvailable: () => Sharing.isAvailableAsync(),
+    async share(uri, mimeType, fileName) {
+      await Sharing.shareAsync(uri, { mimeType, dialogTitle: fileName });
+    },
+    async cleanup(uri) {
+      const file = new File(uri);
+      if (file.exists) file.delete();
+    },
   });
 }
 

@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({ invoke: vi.fn(), getUser: vi.fn() }));
 
 vi.mock('expo-document-picker', () => ({}));
 vi.mock('expo-image-picker', () => ({}));
+// The download path pulls in native file/share modules; this suite only covers upload.
+vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: {} } }));
+vi.mock('expo-sharing', () => ({ isAvailableAsync: vi.fn(), shareAsync: vi.fn() }));
 vi.mock('react-native', () => ({ Linking: {} }));
 vi.mock('@/data/supabase/client', () => ({
   getSupabaseClient: () => ({

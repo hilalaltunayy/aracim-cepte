@@ -168,4 +168,106 @@ describe('UnifiedAttachmentField', () => {
         .accessibilityState,
     ).toEqual({ busy: false });
   });
+  const persistedFile: AttachmentListItem = {
+    id: 'persisted',
+    ownerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    vehicleId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    parentType: 'expertise_report',
+    parentId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    source: 'document',
+    originalName: 'rapor.pdf',
+    storagePath: 'owner/vehicle/random.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 100,
+    createdAt: '2026-08-11T00:00:00Z',
+  };
+
+  it('keeps the existing open action and adds download alongside it', async () => {
+    const onOpen = vi.fn();
+    const onDownload = vi.fn();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <UnifiedAttachmentField
+          items={[persistedFile]}
+          onChange={vi.fn()}
+          onOpen={onOpen}
+          onDownload={onDownload}
+        />,
+      );
+    });
+    const open = renderer!.root.findByProps({ accessibilityLabel: 'rapor.pdf dosyasını aç' });
+    const download = renderer!.root.findByProps({
+      accessibilityLabel: 'rapor.pdf dosyasını cihaza indir',
+    });
+    await act(async () => open.props.onPress());
+    expect(onOpen).toHaveBeenCalledWith(persistedFile);
+    await act(async () => download.props.onPress());
+    expect(onDownload).toHaveBeenCalledWith(persistedFile);
+  });
+
+  it('offers no download affordance when the screen does not provide one', async () => {
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <UnifiedAttachmentField items={[persistedFile]} onChange={vi.fn()} onOpen={vi.fn()} />,
+      );
+    });
+    expect(
+      renderer!.root.findAllByProps({ accessibilityLabel: 'rapor.pdf dosyasını cihaza indir' }),
+    ).toHaveLength(0);
+  });
+
+  it('never offers download for a file that has not been uploaded yet', async () => {
+    const pending: AttachmentListItem = {
+      id: 'pending',
+      requestId: 'a3520000-0000-4000-8000-000000000001',
+      uri: 'file:///local.pdf',
+      originalName: 'yeni.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 10,
+      source: 'document',
+    };
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <UnifiedAttachmentField
+          items={[pending]}
+          onChange={vi.fn()}
+          onOpen={vi.fn()}
+          onDownload={vi.fn()}
+        />,
+      );
+    });
+    expect(
+      renderer!.root.findAllByProps({ accessibilityLabel: 'yeni.pdf dosyasını cihaza indir' }),
+    ).toHaveLength(0);
+  });
+
+  it('shows a friendly error and clears the busy state when a download fails', async () => {
+    const onDownload = vi.fn().mockRejectedValue(
+      new Error('signed_url=https://secret.example/object'),
+    );
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <UnifiedAttachmentField
+          items={[persistedFile]}
+          onChange={vi.fn()}
+          onOpen={vi.fn()}
+          onDownload={onDownload}
+        />,
+      );
+    });
+    const download = renderer!.root.findByProps({
+      accessibilityLabel: 'rapor.pdf dosyasını cihaza indir',
+    });
+    await act(async () => download.props.onPress());
+    const serialized = JSON.stringify(renderer!.toJSON());
+    expect(serialized).not.toContain('secret.example');
+    expect(
+      renderer!.root.findByProps({ accessibilityLabel: 'rapor.pdf dosyasını cihaza indir' }).props
+        .accessibilityState,
+    ).toEqual({ busy: false });
+  });
 });

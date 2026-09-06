@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,10 +16,14 @@ import { firstRouteParam, safeEntityId, editRecordHref } from '@/shared/utils/ro
 import { goBackOr } from '@/shared/utils/navigation';
 import { buildRecordDetailView } from '@/features/records/recordDetail';
 import { openAttachment } from '@/data/storage/attachments';
+import { downloadPersistedAttachment } from '@/features/attachments/services/attachmentDownload';
+import { getFriendlyError } from '@/shared/utils/errors';
 import { fontFamilies, radii, spacing, useThemedStyles, type AppTheme } from '@/shared/theme';
 
 export default function RecordDetailScreen() {
   const styles = useThemedStyles(createStyles);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const routeId = safeEntityId(params.id);
   const invalidRouteId = Boolean(firstRouteParam(params.id) && !routeId);
@@ -74,6 +78,7 @@ export default function RecordDetailScreen() {
       {attachments.length ? (
         <Card style={styles.group}>
           <Text style={styles.groupTitle}>Ekler</Text>
+          {downloadError ? <ErrorBanner message={downloadError} /> : null}
           {attachments.map((attachment) => (
             <Pressable
               key={attachment.id}
@@ -91,6 +96,32 @@ export default function RecordDetailScreen() {
               <Text style={styles.attachmentName} numberOfLines={1}>
                 {attachment.originalName}
               </Text>
+              {/* Nested inside the open row so the whole row still opens the
+                  file; only this icon saves a copy to the device. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${attachment.originalName} dosyasını cihaza indir`}
+                accessibilityState={{ busy: downloadingId === attachment.id }}
+                hitSlop={8}
+                disabled={downloadingId !== null}
+                onPress={() => {
+                  setDownloadError(null);
+                  setDownloadingId(attachment.id);
+                  void downloadPersistedAttachment(attachment, {
+                    label: record.category,
+                    date: record.recordDate,
+                  })
+                    .catch((caught) => setDownloadError(getFriendlyError(caught)))
+                    .finally(() => setDownloadingId(null));
+                }}
+              >
+                <Ionicons
+                  name="download-outline"
+                  size={18}
+                  color={styles.iconGlyph.color}
+                  accessible={false}
+                />
+              </Pressable>
             </Pressable>
           ))}
         </Card>

@@ -24,6 +24,7 @@ import {
 import { parseDecimal, todayDateOnly } from '@/shared/utils/format';
 import { goBackOr } from '@/shared/utils/navigation';
 import { useDataStore } from '@/store/dataStore';
+import { downloadPersistedAttachment } from '@/features/attachments/services/attachmentDownload';
 import { spacing, useAppTheme } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
@@ -540,6 +541,9 @@ export default function RecordEditScreen() {
           }}
           onAttachmentsChange={setAttachments}
           onOpenAttachment={(attachment) => openAttachment(attachment.storagePath)}
+          onDownloadAttachment={async (attachment) => {
+            await downloadPersistedAttachment(attachment, { label: category, date });
+          }}
           onOcrApply={(patch) => {
             setMaintenanceDetails((current) => ({
               ...current,

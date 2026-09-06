@@ -20,6 +20,7 @@ import {
   uploadParentAttachment,
 } from '@/data/storage/attachments';
 import { useDataStore } from '@/store/dataStore';
+import { downloadPersistedAttachment } from '@/features/attachments/services/attachmentDownload';
 import { getFriendlyError } from '@/shared/utils/errors';
 import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
@@ -182,6 +183,12 @@ export default function ExpertiseEditScreen() {
           disabled={submitting}
           onChange={setAttachments}
           onOpen={(attachment) => openAttachment(attachment.storagePath)}
+          onDownload={async (attachment) => {
+            await downloadPersistedAttachment(attachment, {
+              label: 'Ekspertiz Raporu',
+              date,
+            });
+          }}
         />
       </FormSection>
       <AppButton title="Raporu kaydet" loading={loading || submitting} onPress={submit} />

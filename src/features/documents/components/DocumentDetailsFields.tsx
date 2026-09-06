@@ -21,6 +21,7 @@ export function DocumentDetailsFields({
   onChange,
   onAttachmentsChange,
   onOpenAttachment,
+  onDownloadAttachment,
   onApplyOcrSuggestions,
 }: {
   type: DocumentType;
@@ -31,6 +32,7 @@ export function DocumentDetailsFields({
   onChange: <K extends keyof DocumentFormValues>(key: K, value: DocumentFormValues[K]) => void;
   onAttachmentsChange: (items: AttachmentListItem[]) => void;
   onOpenAttachment: (item: PersistedAttachment) => Promise<void> | void;
+  onDownloadAttachment?: (item: PersistedAttachment) => Promise<void> | void;
   onApplyOcrSuggestions: (patch: DocumentOcrFormPatch) => void;
 }) {
   const definition = getDocumentTypeDefinition(type);
@@ -47,6 +49,7 @@ export function DocumentDetailsFields({
               disabled={disabled}
               onChange={onAttachmentsChange}
               onOpen={onOpenAttachment}
+              onDownload={onDownloadAttachment}
             />
           );
         }

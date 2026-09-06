@@ -29,6 +29,7 @@ import {
 import { getFriendlyError } from '@/shared/utils/errors';
 import { ATTACHMENT_CONFIG } from '../config/attachmentConfig';
 
+
 const sourceOptions = [
   { value: 'camera', label: 'Fotoğraf çek', icon: 'camera-outline' },
   { value: 'gallery', label: 'Galeriden seç', icon: 'images-outline' },
@@ -51,6 +52,7 @@ export function UnifiedAttachmentField({
   items,
   onChange,
   onOpen,
+  onDownload,
   disabled = false,
   label = 'Ek dosyalar',
   helper = 'Fotoğraf ve belgeler aynı dosya sınırını paylaşır.',
@@ -58,6 +60,8 @@ export function UnifiedAttachmentField({
   items: AttachmentListItem[];
   onChange: (items: AttachmentListItem[]) => void;
   onOpen?: (item: PersistedAttachment) => Promise<void> | void;
+  /** Saves the stored copy back to the device; available to every plan. */
+  onDownload?: (item: PersistedAttachment) => Promise<void> | void;
   disabled?: boolean;
   label?: string;
   helper?: string;
@@ -67,6 +71,7 @@ export function UnifiedAttachmentField({
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<AttachmentSource | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const select = async (source: AttachmentSource) => {
@@ -102,6 +107,21 @@ export function UnifiedAttachmentField({
       setError('Dosya açılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       setOpeningId(null);
+    }
+  };
+
+  const download = async (item: AttachmentListItem) => {
+    // The id guard also stops a double tap from starting two downloads of the
+    // same file, which would race for the same cache path.
+    if (!onDownload || isPendingAttachment(item) || downloadingId) return;
+    setError(null);
+    setDownloadingId(item.id);
+    try {
+      await onDownload(item);
+    } catch (caught) {
+      setError(getFriendlyError(caught));
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -154,6 +174,22 @@ export function UnifiedAttachmentField({
                   <ActivityIndicator color={colors.primary} />
                 ) : (
                   <Ionicons name="open-outline" size={22} color={colors.primary} />
+                )}
+              </Pressable>
+            ) : null}
+            {!pending && onDownload ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${item.originalName} dosyasını cihaza indir`}
+                accessibilityState={{ busy: downloadingId === item.id }}
+                hitSlop={8}
+                disabled={downloadingId !== null}
+                onPress={() => void download(item)}
+              >
+                {downloadingId === item.id ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <Ionicons name="download-outline" size={22} color={colors.primary} />
                 )}
               </Pressable>
             ) : null}
