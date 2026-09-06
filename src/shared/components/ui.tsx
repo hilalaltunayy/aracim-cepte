@@ -1164,7 +1164,10 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
       shadowOpacity: 0.08,
       shadowRadius: 8,
     },
-    multiline: { minHeight: 110, paddingTop: spacing.md, textAlignVertical: 'top' },
+    // No paddingTop here: this style is applied after `floatingInputMultiline`
+    // and used to override its 26px top padding down to 12, which pushed the
+    // first line of text under the floated label (the "Açıklama" overlap).
+    multiline: { minHeight: 110, textAlignVertical: 'top' },
     inputError: { borderColor: colors.error },
     errorText: { color: colors.error, ...typography.caption },
     passwordField: { position: 'relative' },
