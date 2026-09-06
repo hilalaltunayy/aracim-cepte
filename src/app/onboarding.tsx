@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 import { AppButton, Screen } from '@/shared/components/ui';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import {
   fontFamilies,
   radii,
@@ -151,7 +152,11 @@ export default function OnboardingScreen() {
       colors={[colors.brandGradientStart, colors.brandGradientEnd]}
       style={styles.gradient}
     >
-      <Screen style={styles.screen} backgroundColor="transparent">
+      <Screen
+        style={styles.screen}
+        backgroundColor="transparent"
+        backdrop={<AutomotiveBackdrop />}
+      >
         <Entrance progress={entrances[0]}>
           <View style={styles.brand}>
             <Text style={styles.eyebrow}>ARACINIZIN DİJİTAL YOL ARKADAŞI</Text>
@@ -163,7 +168,25 @@ export default function OnboardingScreen() {
         </Entrance>
         <Entrance progress={entrances[1]}>
           <View style={styles.hero}>
-            <VehicleIllustration wheelProgress={wheelProgress} />
+            {/* Slightly larger vehicle that drives in from the left while its
+                wheels turn, so the illustration reads as moving on a road.
+                Both are plain numeric style transforms driven by the existing
+                wheelProgress value — no new SVG animation. */}
+            <Animated.View
+              style={{
+                transform: [
+                  { scale: 1.1 },
+                  {
+                    translateX: wheelProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-18, 0],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <VehicleIllustration wheelProgress={wheelProgress} />
+            </Animated.View>
           </View>
         </Entrance>
         <View style={styles.featureRow}>
