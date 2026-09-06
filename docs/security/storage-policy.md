@@ -46,6 +46,20 @@ local/QA database testleri, deploy, iki kullanıcılı negatif test ve gerçek c
   yazılmaz.
 - Her açma isteğinde yetki yeniden doğrulanır; kalıcı URL cache'i tutulmaz.
 
+### Cihaza indirme (TASK-043)
+
+- "Cihaza indir" akışı açma akışıyla aynı sınırı kullanır: 60 saniyelik signed URL, tek kullanım,
+  bucket private kalır. Public URL üretilmez.
+- Dosya app-private cache'e indirilir, native save/share sheet'e verilir ve **paylaşım sonrası
+  cache kopyası silinir**; uygulama ikinci bir kalıcı arşiv tutmaz.
+- Sahiplik client'ta yeniden iddia edilmez; başka kullanıcının path'i Storage RLS nedeniyle
+  imzalanamaz. "Bulunamadı" ve "yetkisiz" kullanıcıya tek ve aynı mesajla döner, böylece object
+  varlığı sızdırılmaz.
+- İndirme her planda açıktır. Kullanıcının kendi yüklediği dosyaya erişim abonelik bitince
+  kesilmez; yeni yükleme ve toplam depolama limitleri Free/Premium ayrımını korumaya devam eder.
+- Dosya adı depolanan `original_filename`'den, yoksa parent kayıt başlığı ve yılından türetilir;
+  uzantı her zaman kayıtlı MIME türünü izler. Signed URL veya object path dosya adına yazılmaz.
+
 ### Dosya kabulü
 
 - V1 hedef allow-list: `application/pdf`, `image/jpeg`, `image/png`. `.jpg` ve `.jpeg` dosya
