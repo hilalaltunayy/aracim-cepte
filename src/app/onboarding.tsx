@@ -19,9 +19,14 @@ const AnimatedSvgGroup = Animated.createAnimatedComponent(G);
 
 function VehicleIllustration({ wheelProgress }: { wheelProgress: Animated.Value }) {
   const { colors } = useAppTheme();
+  // react-native-svg <G rotation> is a numeric degree prop, not a style
+  // transform: under the New Architecture its codegen delegate hard-casts the
+  // value to Double, so a "…deg" string crashes at first render
+  // (ClassCastException: String cannot be cast to Double). Degrees as a plain
+  // number produce the identical full-turn spin.
   const wheelRotation = wheelProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: [0, 360],
   });
   return (
     <Svg width="100%" height={260} viewBox="0 0 360 260" accessible={false}>
