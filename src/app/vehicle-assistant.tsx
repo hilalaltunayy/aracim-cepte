@@ -40,6 +40,7 @@ export default function VehicleAssistantRoute() {
   return (
     <VehicleAssistantScreen
       key={vehicle.id}
+      vehicleId={vehicle.id}
       vehicleName={`${vehicle.brand} ${vehicle.model}`}
       userName={userName}
       initialQuota={quota}

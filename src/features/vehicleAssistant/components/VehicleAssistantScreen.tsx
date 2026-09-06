@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AppButton, AppInput, Card, Screen, StatusBadge } from '@/shared/components/ui';
+import { AppButton, Card, Screen, StatusBadge } from '@/shared/components/ui';
 import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import {
   fontFamilies,
@@ -13,6 +13,10 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import type { AssistantQuotaState, VehicleAssistantResult } from '../domain/assistantContract';
+import {
+  useAssistantSessionStore,
+  type AssistantChatMessage,
+} from '../state/assistantSessionStore';
 
 const suggestedQuestions = [
   'Şu an dikkat etmem gereken bir şey var mı?',
@@ -28,17 +32,14 @@ const severityPresentation = {
   high: { label: 'Öncelikli', tone: 'danger' },
 } as const;
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text?: string;
-  result?: VehicleAssistantResult;
-  error?: string;
-  pending?: boolean;
-  question?: string;
-}
+type ChatMessage = AssistantChatMessage;
+
+/** Stable identity so an absent thread never re-renders the screen in a loop. */
+const EMPTY_THREAD: readonly ChatMessage[] = [];
 
 export interface VehicleAssistantScreenProps {
+  /** Scopes the session thread; each vehicle keeps its own chat history. */
+  vehicleId: string;
   vehicleName: string;
   userName?: string;
   initialQuota: AssistantQuotaState | null;
@@ -51,6 +52,7 @@ export interface VehicleAssistantScreenProps {
 }
 
 export function VehicleAssistantScreen({
+  vehicleId,
   vehicleName,
   userName,
   initialQuota,
@@ -63,10 +65,16 @@ export function VehicleAssistantScreen({
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const scrollRef = useRef<ScrollView>(null);
-  const idRef = useRef(0);
-  const nextId = () => `m${(idRef.current += 1)}`;
-  const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Thread and draft live in a session-only store, so leaving this tab and
+  // coming back restores the conversation. Nothing here is persisted.
+  const messages = useAssistantSessionStore((state) => state.threads[vehicleId]) ?? EMPTY_THREAD;
+  const question = useAssistantSessionStore((state) => state.drafts[vehicleId]) ?? '';
+  const createMessageId = useAssistantSessionStore((state) => state.createMessageId);
+  const appendMessages = useAssistantSessionStore((state) => state.appendMessages);
+  const patchMessage = useAssistantSessionStore((state) => state.patchMessage);
+  const removeMessage = useAssistantSessionStore((state) => state.removeMessage);
+  const setDraft = useAssistantSessionStore((state) => state.setDraft);
+  const setQuestion = (value: string) => setDraft(vehicleId, value);
   const [quota, setQuota] = useState<AssistantQuotaState | null>(initialQuota);
   const [openEvidence, setOpenEvidence] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -80,19 +88,27 @@ export function VehicleAssistantScreen({
   const exhausted = remaining <= 0;
   const started = messages.length > 0;
 
-  const scrollToEnd = () => {
-    const run = () => scrollRef.current?.scrollToEnd({ animated: true });
+  const scrollToEnd = (animated = true) => {
+    const run = () => scrollRef.current?.scrollToEnd({ animated });
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
     else run();
   };
 
+  // A restored thread should open on the latest answer, not at the top.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || messages.length === 0) return;
+    restoredRef.current = true;
+    scrollToEnd(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const ask = async (raw: string) => {
     const value = raw.trim();
     if (!value || loading || exhausted || !enabled) return;
-    const pendingId = nextId();
-    setMessages((current) => [
-      ...current,
-      { id: nextId(), role: 'user', text: value },
+    const pendingId = createMessageId();
+    appendMessages(vehicleId, [
+      { id: createMessageId(), role: 'user', text: value },
       { id: pendingId, role: 'assistant', pending: true, question: value },
     ]);
     setQuestion('');
@@ -101,26 +117,13 @@ export function VehicleAssistantScreen({
     try {
       const result = await onAsk(value);
       setQuota(result.quota);
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === pendingId ? { ...message, pending: false, result } : message,
-        ),
-      );
+      patchMessage(vehicleId, pendingId, { pending: false, result });
     } catch (caught) {
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === pendingId
-            ? {
-                ...message,
-                pending: false,
-                error:
-                  caught instanceof Error
-                    ? caught.message
-                    : 'Araç Asistanı şu anda kullanılamıyor.',
-              }
-            : message,
-        ),
-      );
+      patchMessage(vehicleId, pendingId, {
+        pending: false,
+        error:
+          caught instanceof Error ? caught.message : 'Araç Asistanı şu anda kullanılamıyor.',
+      });
       // A failed answer must not leave a misleading quota chip: re-read the
       // server-authoritative committed usage.
       if (onSyncQuota) {
@@ -136,7 +139,7 @@ export function VehicleAssistantScreen({
 
   const retry = (message: ChatMessage) => {
     if (!message.question) return;
-    setMessages((current) => current.filter((item) => item.id !== message.id));
+    removeMessage(vehicleId, message.id);
     void ask(message.question);
   };
 
@@ -177,11 +180,14 @@ export function VehicleAssistantScreen({
         </View>
       </View>
 
+      {/* The single main scroll: everything below the header is one thread, and
+          answer cards render inline rather than inside their own scroll box. */}
       <ScrollView
         ref={scrollRef}
         style={styles.thread}
         contentContainerStyle={styles.threadContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {!started ? (
           <View style={styles.greeting}>
@@ -272,15 +278,20 @@ export function VehicleAssistantScreen({
           <Text style={styles.limitText}>Araç Asistanı şu anda kullanıma kapalı.</Text>
         ) : null}
         <View style={styles.composerRow}>
-          <View style={styles.composerInput}>
-            <AppInput
-              label="Mesajınız"
-              value={question}
-              onChangeText={(value) => setQuestion(value.slice(0, 600))}
-              editable={!loading && enabled && !exhausted}
-              multiline
-            />
-          </View>
+          {/* A compact chat field rather than the tall floating-label form input:
+              the thread keeps the screen, the composer only takes what it needs
+              and grows to at most a few lines. */}
+          <TextInput
+            style={styles.composerInput}
+            accessibilityLabel="Mesajınız"
+            placeholder="Aracınız hakkında sorun"
+            placeholderTextColor={colors.muted}
+            value={question}
+            onChangeText={(value) => setQuestion(value.slice(0, 600))}
+            editable={!loading && enabled && !exhausted}
+            multiline
+            textAlignVertical="center"
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Gönder"
@@ -464,11 +475,31 @@ const createStyles = ({ colors }: AppTheme) =>
     suggestionItem: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
     suggestionItemText: { flex: 1, color: colors.textSecondary, ...typography.body },
     bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginTop: 8 },
-    composer: { gap: spacing.sm, paddingTop: spacing.sm },
+    composer: {
+      gap: spacing.sm,
+      paddingTop: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
     limitRow: { gap: spacing.xs, alignItems: 'flex-start' },
     limitText: { color: colors.warning, ...typography.caption },
     composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
-    composerInput: { flex: 1 },
+    composerInput: {
+      flex: 1,
+      minWidth: 0,
+      minHeight: 48,
+      maxHeight: 132,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.regular,
+      fontSize: 15,
+      lineHeight: 21,
+    },
     sendButton: {
       width: 48,
       height: 48,

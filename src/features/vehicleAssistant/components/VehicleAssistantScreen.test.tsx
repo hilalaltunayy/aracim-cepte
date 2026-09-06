@@ -1,13 +1,14 @@
 /* eslint-disable import/first */
 import type { ComponentProps, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   Text: 'Text',
+  TextInput: 'TextInput',
   View: 'View',
 }));
 vi.mock('@expo/vector-icons', async () => {
@@ -34,7 +35,6 @@ vi.mock('@/shared/components/ui', async () => {
     };
   return {
     AppButton: host('AppButton'),
-    AppInput: host('AppInput'),
     Card: host('Card'),
     Screen: host('Screen'),
     StatusBadge: host('StatusBadge'),
@@ -42,6 +42,7 @@ vi.mock('@/shared/components/ui', async () => {
 });
 
 import { VehicleAssistantScreen } from './VehicleAssistantScreen';
+import { useAssistantSessionStore } from '../state/assistantSessionStore';
 import type { VehicleAssistantResult } from '../domain/assistantContract';
 
 const success: VehicleAssistantResult = {
@@ -60,6 +61,7 @@ const success: VehicleAssistantResult = {
   },
 };
 const base: ComponentProps<typeof VehicleAssistantScreen> = {
+  vehicleId: 'vehicle-1',
   vehicleName: 'Kia Sportage',
   initialQuota: { used: 0, limit: 1, remaining: 1, periodStart: '2026-09-02' },
   entitlementLimit: 1,
@@ -79,7 +81,7 @@ const texts = (renderer: ReactTestRenderer) =>
     .findAll((node) => String(node.type) === 'Text')
     .map((node) => node.children.join(''));
 const input = (renderer: ReactTestRenderer) =>
-  renderer.root.find((node) => String(node.type) === 'AppInput');
+  renderer.root.find((node) => String(node.type) === 'TextInput');
 const send = (renderer: ReactTestRenderer) =>
   renderer.root.find((node) => node.props.accessibilityLabel === 'Gönder');
 
@@ -93,6 +95,9 @@ describe('VehicleAssistantScreen', () => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  beforeEach(() => {
+    useAssistantSessionStore.getState().resetAllSessions();
   });
 
   it('renders a vehicle-scoped empty chat with prompt suggestions and a daily quota chip', async () => {
@@ -213,6 +218,47 @@ describe('VehicleAssistantScreen', () => {
     });
     expect(texts(renderer)).toContain('Bugünkü Araç Asistanı kullanım sınırınıza ulaştınız.');
     expect(send(renderer).props.disabled).toBe(true);
+  });
+
+  it('keeps the chat when the route is left and re-entered', async () => {
+    const renderer = await mount();
+    await askQuestion(renderer, 'Bakım durumum nedir?');
+    expect(texts(renderer)).toContain(success.response.answer);
+
+    // Leaving the tab unmounts the screen; the session store outlives it.
+    await act(async () => renderer.unmount());
+    const reopened = await mount();
+    expect(texts(reopened)).toContain('Bakım durumum nedir?');
+    expect(texts(reopened)).toContain(success.response.answer);
+    // The greeting/suggestion state must not come back over an existing thread.
+    expect(texts(reopened)).not.toContain('Örnek sorular');
+  });
+
+  it('keeps each vehicle thread separate', async () => {
+    const renderer = await mount();
+    await askQuestion(renderer, 'Bakım durumum nedir?');
+    await act(async () => renderer.unmount());
+
+    const otherVehicle = await mount({ ...base, vehicleId: 'vehicle-2' });
+    expect(texts(otherVehicle)).not.toContain('Bakım durumum nedir?');
+    expect(texts(otherVehicle)).toContain('Örnek sorular');
+  });
+
+  it('holds the session in memory only, never in persistent storage', async () => {
+    const renderer = await mount();
+    await askQuestion(renderer, 'Bakım durumum nedir?');
+    // The store must not be wired to AsyncStorage/Supabase: a persisted Zustand
+    // store exposes `persist` on the hook, a session-only one does not.
+    expect(
+      (useAssistantSessionStore as unknown as { persist?: unknown }).persist,
+    ).toBeUndefined();
+    // A "full app restart" is this module losing its state; nothing restores it.
+    await act(async () => {
+      useAssistantSessionStore.getState().resetAllSessions();
+    });
+    const restarted = await mount();
+    expect(texts(restarted)).not.toContain('Bakım durumum nedir?');
+    expect(texts(restarted)).toContain('Örnek sorular');
   });
 
   it.each([
