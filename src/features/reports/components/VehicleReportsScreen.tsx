@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Path, Polyline } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import {
   ActionSheet,
   AppButton,
@@ -248,7 +249,7 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
   if (!bootstrapped || loading) return <LoadingScreen />;
   if (!vehicle)
     return (
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <AppHeader title="Raporlar" subtitle="Araç verilerinizden anlamlı özetler" />
         <EmptyState
           title="Önce bir araç ekleyin"
@@ -259,7 +260,7 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     );
   if (!entitlements.advancedReports)
     return (
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <AppHeader title="Raporlar" subtitle={`${vehicle.brand} ${vehicle.model}`} />
         <Card style={styles.locked}>
           <View style={styles.lockIcon}>
@@ -284,7 +285,7 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     ] as const
   ).filter(([, value]) => value > 0);
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       <FadeIn key={`${vehicle.id}-${periodId}`}>
         <View testID="report-period-transition">
           <AppHeader

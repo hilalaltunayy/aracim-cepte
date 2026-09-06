@@ -32,6 +32,7 @@ import {
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { router } from 'expo-router';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { getBodySchemaType } from '@/features/vehicles/config/bodyTypes';
 
 export default function BodyConditionScreen() {
@@ -71,7 +72,7 @@ export default function BodyConditionScreen() {
   if (vehicleState === 'loading') return <LoadingScreen />;
   if (!vehicle || !schema) {
     return (
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
       </Screen>
     );
@@ -84,7 +85,7 @@ export default function BodyConditionScreen() {
   const selectedLabel = schema.parts.find((part) => part.key === selectedPart)?.label ?? 'Parça';
   const representativeCondition = getRepresentativeBodyCondition(conditions) ?? 'unknown';
   return (
-    <Screen>
+    <Screen backdrop={<AutomotiveBackdrop />}>
       {error ? <ErrorBanner message={error} /> : null}
       <BodyDiagram
         bodyType={vehicle.bodyType}

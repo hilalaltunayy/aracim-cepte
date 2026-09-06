@@ -27,6 +27,7 @@ import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { getVehicleBodyTypeLabel } from '@/features/vehicles/config/bodyTypes';
 import { getVehicleTaxonomySummary } from '@/features/vehicles/domain/vehicleProfile';
 import { Vehicle3DRegion } from '@/features/vehicle3d/Vehicle3DRegion';
+import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
 import { VehiclePhotoGallery } from '@/features/vehicles/components/VehiclePhotoGallery';
 import { VehiclePhotoImage } from '@/features/vehicles/components/VehiclePhotoImage';
@@ -106,7 +107,7 @@ export default function VehicleScreen() {
   if (vehicleState === 'loading') return <LoadingScreen />;
   if (!vehicle) {
     return (
-      <Screen>
+      <Screen backdrop={<AutomotiveBackdrop />}>
         <AppHeader title="Aracım" subtitle="Araç bilgilerinizi yönetin" />
         <NoVehicleState onCreate={() => router.navigate('/vehicle/edit')} />
       </Screen>
@@ -126,7 +127,7 @@ export default function VehicleScreen() {
     ]);
   };
   return (
-    <Screen scrollEnabled={!vehicle3dInteracting}>
+    <Screen scrollEnabled={!vehicle3dInteracting} backdrop={<AutomotiveBackdrop />}>
       <AppHeader title="Aracım" subtitle="Kimlik, durum ve belgeler" />
       <Card style={styles.vehicleCard}>
         {vehicle.primaryPhoto ? (
