@@ -4,6 +4,7 @@ import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -28,12 +29,23 @@ import { getReminderNotificationDestination } from '@/features/reminders/notific
 import { AppErrorBoundary } from '@/shared/components/AppErrorBoundary';
 import { useBillingStore } from '@/features/billing/store/billingStore';
 import { startAuthCallbackCapture } from '@/features/auth/authCallbackCapture';
+import { getBuildIdentity } from '@/shared/utils/buildIdentity';
 
 void SplashScreen.preventAutoHideAsync();
 // Must run before any route can mount: a recovery link tapped while the app is
 // already running arrives as a `url` event before Expo Router navigates to the
 // callback screen, so the listener has to be live from app launch.
 startAuthCallbackCapture();
+// One line, no secrets: proves on sight (logcat) which artifact the device is
+// actually running, independent of what the store listing claims.
+console.log(
+  '[app:build]',
+  getBuildIdentity({
+    version: Constants.expoConfig?.version,
+    versionCode: Constants.expoConfig?.android?.versionCode,
+    buildId: process.env.EXPO_PUBLIC_BUILD_ID,
+  }),
+);
 
 const NativeText = Text as typeof Text & { defaultProps?: { style?: object } };
 const NativeTextInput = TextInput as typeof TextInput & { defaultProps?: { style?: object } };

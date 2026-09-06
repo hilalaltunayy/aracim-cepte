@@ -33,6 +33,7 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
+import { getBuildIdentity } from '@/shared/utils/buildIdentity';
 import { DEVELOPER_INFO } from '@/features/settings/about';
 import { THEME_OPTIONS, type ThemePreference } from '@/features/theme/themePreference';
 import {
@@ -379,7 +380,16 @@ export default function SettingsScreen() {
       </Card>
       <Card style={styles.about}>
         <Text style={styles.aboutTitle}>Aracım Cepte</Text>
-        <Text style={styles.aboutText}>Sürüm {Constants.expoConfig?.version ?? '1.0.0'}</Text>
+        {/* Version code makes it visible on the device which artifact is actually
+            installed — a store listing can show a newer release than the phone has. */}
+        <Text style={styles.aboutText}>
+          Sürüm{' '}
+          {getBuildIdentity({
+            version: Constants.expoConfig?.version,
+            versionCode: Constants.expoConfig?.android?.versionCode,
+            buildId: process.env.EXPO_PUBLIC_BUILD_ID,
+          })}
+        </Text>
         <Text style={styles.aboutText}>
           Araç giderlerini, bakımları ve önemli tarihleri tek yerde düzenleyen kişisel araç
           asistanı.
