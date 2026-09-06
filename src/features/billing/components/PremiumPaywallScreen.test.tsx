@@ -99,7 +99,7 @@ describe('PremiumPaywallScreen', () => {
 
   it('renders only currently implemented Premium benefits', async () => {
     const renderer = await mount();
-    expect(texts(renderer)).toContain('En fazla 3 araç');
+    expect(texts(renderer)).toContain('3 araç ekleme özelliği');
     expect(texts(renderer)).toContain('Ayda 30 OCR taraması');
     expect(texts(renderer)).toContain('Günde 10 Araç Asistanı yanıtı');
     expect(texts(renderer).join(' ')).not.toContain('OBD');

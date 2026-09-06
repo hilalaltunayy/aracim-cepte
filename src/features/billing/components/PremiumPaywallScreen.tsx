@@ -17,7 +17,8 @@ import { PLAN_ENTITLEMENTS, type PlanId } from '@/features/entitlements/domain/e
 import type { BillingOffering, BillingSubscriptionState } from '../domain/billing';
 
 const PREMIUM_BENEFITS = [
-  `En fazla ${PLAN_ENTITLEMENTS.premium.maxVehicles} araç`,
+  // Reads as a capability the user gains, not a cap they are held to.
+  `${PLAN_ENTITLEMENTS.premium.maxVehicles} araç ekleme özelliği`,
   'Gelişmiş araç raporları',
   `Ayda ${PLAN_ENTITLEMENTS.premium.ocrMonthlyQuota} OCR taraması`,
   `Günde ${PLAN_ENTITLEMENTS.premium.aiDailyQuota} Araç Asistanı yanıtı`,
