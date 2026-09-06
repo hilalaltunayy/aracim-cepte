@@ -247,20 +247,29 @@ function parseReceiptDate(text: string): string | null {
       .toString()
       .padStart(2, '0')}`;
   };
+  // Turkish receipts are day-first, so an explicit dd<sep>mm<sep>yyyy with a full
+  // year is the most trustworthy shape and is tried across the whole text first.
+  const dmyFullYearPattern = /(?:^|[^\d])(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/g;
   const isoPattern = /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/g;
-  const dmyPattern = /(?:^|[^\d])(\d{1,2})[.\-/\s](\d{1,2})[.\-/\s](?:(\d{4})|(\d{2})(?!\d))/g;
-  const scan = (source: string): string | null => {
-    for (const iso of source.matchAll(isoPattern)) {
-      const value = toIso(Number(iso[3]), Number(iso[2]), Number(iso[1]));
-      if (value) return value;
-    }
-    for (const dmy of source.matchAll(dmyPattern)) {
-      const year = dmy[3] ?? dmy[4];
-      const value = toIso(Number(dmy[1]), Number(dmy[2]), Number(year));
+  // Last resort only. A two-digit year makes any three small numbers look like a
+  // date, so it must never outrank a real full-year date elsewhere on the
+  // receipt: an EKÜ/fiş number such as "04-03-02" was being read as 2002-03-04
+  // and overwriting the printed date. Whitespace is deliberately NOT a
+  // separator here for the same reason ("FIS 04 03 02").
+  const dmyShortYearPattern = /(?:^|[^\d])(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2})(?!\d)/g;
+  const scanWith = (source: string, pattern: RegExp, dayFirst: boolean): string | null => {
+    for (const match of source.matchAll(pattern)) {
+      const value = dayFirst
+        ? toIso(Number(match[1]), Number(match[2]), Number(match[3]))
+        : toIso(Number(match[3]), Number(match[2]), Number(match[1]));
       if (value) return value;
     }
     return null;
   };
+  const scan = (source: string): string | null =>
+    scanWith(source, dmyFullYearPattern, true) ??
+    scanWith(source, isoPattern, false) ??
+    scanWith(source, dmyShortYearPattern, true);
   for (const line of text.split(/\r?\n/)) {
     if (/tar[iı]h|d[üu]zenlen/i.test(line)) {
       const value = scan(line);

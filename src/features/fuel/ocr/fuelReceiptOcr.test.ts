@@ -83,6 +83,33 @@ describe('fuel receipt OCR parser', () => {
     expect(values(`${line}\nToplam: 500,00`)).toMatchObject({ recordDate: expected });
   });
 
+  it('prefers the printed full-year date over an earlier fiş/EKÜ number that looks like a short date', () => {
+    // Reported from a physical receipt: an "04-03-02"-shaped identifier earlier
+    // in the text was read as 2002-03-04 and overwrote the real date.
+    expect(
+      values(['EKU NO 04-03-02', 'TARIH 02-09-2026', 'TOPLAM 500,00'].join('\n')).recordDate,
+    ).toBe('2026-09-02');
+    expect(
+      values(['FIS 04 03 02', '02-09-2026 14:45', 'TOPLAM 500,00'].join('\n')).recordDate,
+    ).toBe('2026-09-02');
+  });
+
+  it('does not read three space-separated numbers as a date', () => {
+    expect(values('POMPA 4 3 02\nTOPLAM 500,00').recordDate).toBeUndefined();
+  });
+
+  it('still accepts a genuine two-digit-year date when no full-year date exists', () => {
+    expect(values('Tarih: 02.09.26\nToplam: 500,00').recordDate).toBe('2026-09-02');
+  });
+
+  it('reads the litre x unit-price line from the physical receipt', () => {
+    expect(values(['6,550 LT X 76,35', 'TOPLAM 500,00'].join('\n'))).toMatchObject({
+      liters: '6,55',
+      pricePerLiter: '76,35',
+      total: '500',
+    });
+  });
+
   it('rejects a calendar-impossible date and reports no recordDate suggestion', () => {
     expect(values('Tarih: 32-13-2026\nToplam: 500,00').recordDate).toBeUndefined();
     expect(values('Tarih: 31-04-2026\nToplam: 500,00').recordDate).toBeUndefined();

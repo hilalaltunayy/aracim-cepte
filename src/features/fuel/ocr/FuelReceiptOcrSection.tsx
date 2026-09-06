@@ -47,13 +47,36 @@ function hasValue(
     : false;
 }
 
+/**
+ * Rows the review card always shows, in this order, so a field the OCR could
+ * not read stays visible and editable instead of silently disappearing.
+ */
+const ALWAYS_REVIEWED_FIELDS = [
+  'total',
+  'liters',
+  'pricePerLiter',
+  'recordDate',
+  'receiptTime',
+  'documentNumber',
+] as const satisfies readonly FuelReceiptOcrField[];
+
 export function prepareFuelReceiptReviewSuggestions(
   suggestions: readonly FuelReceiptOcrSuggestion[],
   _fuelEntry: FuelEntryState,
   _stationBrand: FuelStationId | '',
   _recordDate: string,
 ): ReviewSuggestion[] {
-  return suggestions.map((suggestion) => ({ ...suggestion }));
+  const detected = new Map(suggestions.map((item) => [item.fieldId, item]));
+  const canonical = ALWAYS_REVIEWED_FIELDS.map(
+    (fieldId): ReviewSuggestion =>
+      detected.get(fieldId) ?? { fieldId, value: '', source: 'ocr' },
+  );
+  // Anything else the parser found (station, location) keeps its place after
+  // the canonical rows; an empty row is never transferred to the form.
+  const extras = suggestions
+    .filter((item) => !(ALWAYS_REVIEWED_FIELDS as readonly string[]).includes(item.fieldId))
+    .map((item) => ({ ...item }));
+  return [...canonical, ...extras];
 }
 
 export function buildFuelReceiptFormPatch(

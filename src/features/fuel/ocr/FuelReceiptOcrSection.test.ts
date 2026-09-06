@@ -80,6 +80,44 @@ describe('FuelReceiptOcrSection review safety', () => {
     expect(buildFuelReceiptFormPatch(suggestions)).toEqual({ total: '2000', liters: '43,29' });
   });
 
+  it('always shows the six receipt fields, even the ones OCR could not read', () => {
+    const reviewed = prepareFuelReceiptReviewSuggestions(
+      [{ fieldId: 'total', value: '500', source: 'ocr' }],
+      createFuelEntryState(),
+      '',
+      '2026-09-05',
+    );
+
+    expect(reviewed.map((item) => item.fieldId)).toEqual([
+      'total',
+      'liters',
+      'pricePerLiter',
+      'recordDate',
+      'receiptTime',
+      'documentNumber',
+    ]);
+    expect(reviewed.find((item) => item.fieldId === 'total')?.value).toBe('500');
+    // Undetected fields stay visible with an empty, editable value...
+    expect(reviewed.find((item) => item.fieldId === 'liters')?.value).toBe('');
+    // ...and are never written into the form.
+    expect(buildFuelReceiptFormPatch(reviewed)).toEqual({ total: '500' });
+  });
+
+  it('keeps extra detected fields (station, location) after the canonical rows', () => {
+    const reviewed = prepareFuelReceiptReviewSuggestions(
+      [
+        { fieldId: 'stationBrand', value: 'opet', source: 'ocr' },
+        { fieldId: 'liters', value: '6,55', source: 'ocr' },
+      ],
+      createFuelEntryState(),
+      '',
+      '2026-09-05',
+    );
+    expect(reviewed).toHaveLength(7);
+    expect(reviewed[6]).toMatchObject({ fieldId: 'stationBrand', value: 'opet' });
+    expect(buildFuelReceiptFormPatch(reviewed)).toEqual({ liters: '6,55', stationBrand: 'opet' });
+  });
+
   it('copies only non-empty reviewed suggestions into the unsaved form patch', () => {
     expect(
       buildFuelReceiptFormPatch([
