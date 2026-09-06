@@ -20,6 +20,8 @@ const PREMIUM_BENEFITS = [
   // Reads as a capability the user gains, not a cap they are held to.
   `${PLAN_ENTITLEMENTS.premium.maxVehicles} araç ekleme özelliği`,
   'Gelişmiş araç raporları',
+  'Detaylı PDF araç raporu',
+  'Bulut belge arşivi ve yeniden indirme',
   `Ayda ${PLAN_ENTITLEMENTS.premium.ocrMonthlyQuota} OCR taraması`,
   `Günde ${PLAN_ENTITLEMENTS.premium.aiDailyQuota} Araç Asistanı yanıtı`,
   `Kayıt başına ${PLAN_ENTITLEMENTS.premium.maxAttachmentsPerEntity} ek dosya`,
