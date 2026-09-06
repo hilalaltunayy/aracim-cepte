@@ -8,6 +8,7 @@ import {
   AppHeader,
   Card,
   EmptyState,
+  ErrorBanner,
   FadeIn,
   LoadingScreen,
   Screen,
@@ -23,7 +24,12 @@ import {
   type AppTheme,
 } from '@/shared/theme';
 import { formatCurrency, formatNumber } from '@/shared/utils/format';
+import { getFriendlyError } from '@/shared/utils/errors';
 import { useDataStore } from '@/store/dataStore';
+import { buildVehicleReportDocument } from '../pdf/vehicleReportDocument';
+import { renderVehicleReportHtml } from '../pdf/vehicleReportHtml';
+import { buildVehicleReportFileName, exportVehicleReportPdf } from '../pdf/vehicleReportPdf';
+import { expoReportPdfGateway } from '../pdf/expoReportPdfGateway';
 import {
   buildVehicleComparisons,
   buildVehicleReport,
@@ -126,12 +132,25 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useAppTheme();
-  const { vehicles, activeVehicleId, records, entitlements, bootstrapped, loading } =
-    useDataStore();
+  const {
+    vehicles,
+    activeVehicleId,
+    records,
+    reminders,
+    bodyConditions,
+    documents,
+    expertiseReports,
+    notes,
+    entitlements,
+    bootstrapped,
+    loading,
+  } = useDataStore();
   const [periodId, setPeriodId] = useState<ReportPeriodId>('six_months');
   const [periodOpen, setPeriodOpen] = useState(false);
   const [vehicleComparisons, setVehicleComparisons] = useState<VehicleComparison[]>([]);
   const [comparisonError, setComparisonError] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
   const report = useMemo(
     () => (vehicle ? buildVehicleReport(records, vehicle, periodId) : null),
@@ -172,6 +191,40 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     vehicle,
     vehicles,
   ]);
+  // Premium gate lives here as well as on the screen: the export must be
+  // impossible to trigger without an active entitlement, not merely hidden.
+  const exportPdf = async () => {
+    if (!vehicle || !report || exporting) return;
+    if (!entitlements.advancedReports) {
+      onUpgrade?.();
+      return;
+    }
+    setExportError(null);
+    setExporting(true);
+    try {
+      const document = buildVehicleReportDocument({
+        vehicle,
+        records,
+        reminders,
+        bodyConditions,
+        documents,
+        expertiseReports,
+        notes,
+        periodId,
+        report,
+      });
+      await exportVehicleReportPdf(
+        renderVehicleReportHtml(document),
+        buildVehicleReportFileName(vehicle),
+        expoReportPdfGateway,
+      );
+    } catch (caught) {
+      setExportError(getFriendlyError(caught));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (!bootstrapped || loading) return <LoadingScreen />;
   if (!vehicle)
     return (
@@ -194,9 +247,19 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
           </View>
           <Text style={styles.lockedTitle}>Premium raporlar</Text>
           <Text style={styles.lockedText}>
-            Kayıtlı gider, yakıt ve bakım verilerinizi dönem bazında tek yerde görün.
+            Kayıtlı gider, yakıt ve bakım verilerinizi dönem bazında tek yerde görün ve
+            paylaşılabilir bir PDF araç raporu oluşturun.
           </Text>
           <Text style={styles.lockedHint}>Bu özellik Premium plan ile kullanılabilir.</Text>
+          {/* Present for Free users too, so the feature is discoverable; it routes
+              to the paywall rather than producing a report. */}
+          <AppButton
+            title="PDF Araç Raporunu Dışa Aktar"
+            icon="document-text-outline"
+            variant="secondary"
+            compact
+            onPress={() => onUpgrade?.()}
+          />
           {onUpgrade ? <AppButton title="Premium’u incele" compact onPress={onUpgrade} /> : null}
         </Card>
       </Screen>
@@ -251,6 +314,26 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
               </Pressable>
             }
           />
+
+          {/* PDF export sits above the dashboard: it is the one action on this
+              screen that produces something the user can keep or hand over. */}
+          <Card style={styles.exportCard}>
+            <View style={styles.exportText}>
+              <Text style={styles.cardTitle}>PDF araç raporu</Text>
+              <Text style={styles.cardCaption}>
+                Araç kimliği, harcamalar, bakım geçmişi ve gövde durumu tek bir
+                paylaşılabilir dosyada.
+              </Text>
+            </View>
+            <AppButton
+              title={exporting ? 'Rapor hazırlanıyor' : 'PDF Araç Raporunu Dışa Aktar'}
+              icon="document-text-outline"
+              loading={exporting}
+              disabled={exporting}
+              onPress={() => void exportPdf()}
+            />
+            {exportError ? <ErrorBanner message={exportError} /> : null}
+          </Card>
 
           {/* Hero summary — total cost, period and period-over-period change. */}
           <Card style={styles.hero}>
@@ -516,6 +599,8 @@ const createStyles = ({ colors }: AppTheme) =>
       fontFamily: fontFamilies.semibold,
       flexShrink: 1,
     },
+    exportCard: { gap: spacing.md },
+    exportText: { gap: 2 },
     hero: { gap: spacing.sm, backgroundColor: colors.elevatedSurface },
     eyebrow: { color: colors.primary, ...typography.eyebrow },
     total: {

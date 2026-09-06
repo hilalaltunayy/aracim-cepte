@@ -4,6 +4,9 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 const loadReportsForVehicles = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const exportVehicleReportPdf = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ uri: 'file:///r.pdf', fileName: 'r.pdf', shared: true }),
+);
 vi.mock('react-native', () => {
   class Value {
     addListener() {
@@ -76,6 +79,7 @@ vi.mock('@/shared/components/ui', async () => {
     AppHeader: AppHeaderMock,
     Card: wrap('Card'),
     EmptyState: wrap('EmptyState'),
+    ErrorBanner: wrap('ErrorBanner'),
     FadeIn: wrap('FadeIn'),
     LoadingScreen: wrap('LoadingScreen'),
     Screen: wrap('Screen'),
@@ -84,6 +88,13 @@ vi.mock('@/shared/components/ui', async () => {
 });
 vi.mock('@/store/dataStore', () => ({ useDataStore: () => state.value }));
 vi.mock('../services/vehicleReportLoader', () => ({ loadReportsForVehicles }));
+// Keeps expo-print / expo-file-system out of this render test's module graph;
+// the export flow itself is covered by vehicleReportPdf.test.ts.
+vi.mock('../pdf/expoReportPdfGateway', () => ({ expoReportPdfGateway: {} }));
+vi.mock('../pdf/vehicleReportPdf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../pdf/vehicleReportPdf')>()),
+  exportVehicleReportPdf,
+}));
 
 import { VehicleReportsScreen } from './VehicleReportsScreen';
 
@@ -91,8 +102,26 @@ const base = {
   bootstrapped: true,
   loading: false,
   activeVehicleId: 'a',
-  vehicles: [{ id: 'a', brand: 'Kia', model: 'Sportage' }],
+  vehicles: [
+    {
+      id: 'a',
+      brand: 'Kia',
+      model: 'Sportage',
+      year: 2022,
+      plate: '34 ABC 123',
+      currentKm: 86_400,
+      fuelType: 'diesel',
+      bodyType: 'suv',
+      colorId: 'blue',
+      color: null,
+    },
+  ],
   records: [],
+  reminders: [],
+  bodyConditions: [],
+  documents: [],
+  expertiseReports: [],
+  notes: [],
   entitlements: { advancedReports: true, maxVehicles: 3 },
 };
 async function mount(props: { onUpgrade?: () => void } = {}) {
@@ -125,6 +154,45 @@ describe('VehicleReportsScreen', () => {
     expect(texts(renderer)).toContain('Premium raporlar');
     await act(async () => renderer.root.findByProps({ title: 'Premium’u incele' }).props.onPress());
     expect(onUpgrade).toHaveBeenCalledOnce();
+  });
+
+  it('routes a Free user to the paywall instead of generating a PDF', async () => {
+    const onUpgrade = vi.fn();
+    state.value = { ...base, entitlements: { advancedReports: false } };
+    const renderer = await mount({ onUpgrade });
+    await act(async () =>
+      renderer.root
+        .findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' })
+        .props.onPress(),
+    );
+    expect(onUpgrade).toHaveBeenCalled();
+    expect(exportVehicleReportPdf).not.toHaveBeenCalled();
+  });
+
+  it('exports a real PDF for a Premium user', async () => {
+    exportVehicleReportPdf.mockClear();
+    state.value = base;
+    const renderer = await mount();
+    await act(async () =>
+      renderer.root.findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' }).props.onPress(),
+    );
+    expect(exportVehicleReportPdf).toHaveBeenCalledOnce();
+    const [html, fileName] = exportVehicleReportPdf.mock.calls[0];
+    // Generated from data, never a screenshot of this screen.
+    expect(html).toContain('Araç Geçmiş ve Durum Raporu');
+    expect(html).toContain('Kia');
+    expect(fileName).toMatch(/^Aracim_Cepte_Rapor_.*\.pdf$/);
+  });
+
+  it('surfaces an export failure without crashing the report', async () => {
+    exportVehicleReportPdf.mockRejectedValueOnce(new Error('boom'));
+    state.value = base;
+    const renderer = await mount();
+    await act(async () =>
+      renderer.root.findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' }).props.onPress(),
+    );
+    expect(renderer.root.findAll((node) => String(node.type) === 'ErrorBanner')).toHaveLength(1);
+    expect(texts(renderer)).toContain('KAYITLI ARAÇ MALİYETİ');
   });
   it('renders one donut, one trend line and comparison bars instead of repeated line charts', async () => {
     state.value = {
