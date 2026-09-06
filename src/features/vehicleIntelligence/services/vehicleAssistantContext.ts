@@ -4,13 +4,18 @@ import type { VehicleAssistantContext } from '@/features/vehicleAssistant/domain
 /** Canonical, privacy-minimized TASK-034 → TASK-035 hand-off. */
 export function buildVehicleAssistantContext(
   snapshot: VehicleIntelligenceSnapshot,
-  vehicle?: { displayName: string; year: number | null },
+  vehicle?: Partial<VehicleAssistantContext['vehicle']>,
 ): VehicleAssistantContext {
   return {
     vehicleId: snapshot.vehicleId,
     generatedAt: snapshot.generatedAt,
     vehicle: {
       displayName: vehicle?.displayName ?? 'Araç',
+      brand: vehicle?.brand ?? null,
+      model: vehicle?.model ?? null,
+      color: vehicle?.color ?? null,
+      fuelType: vehicle?.fuelType ?? null,
+      bodyType: vehicle?.bodyType ?? null,
       year: vehicle?.year ?? null,
       currentOdometer: snapshot.facts.currentOdometer,
     },

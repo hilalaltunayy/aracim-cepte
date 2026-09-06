@@ -1,6 +1,70 @@
-import type { VehicleAssistantContext } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
+import type {
+  VehicleAssistantContext,
+  VehicleAssistantPrivateFacts,
+} from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 
 type SupabaseLike = { from: (table: string) => any };
+
+/**
+ * Turkish labels for the two enum-backed profile columns.
+ *
+ * Duplicated from `src/features/vehicles/config/vehicleColors.ts` and
+ * `src/shared/constants/labels.ts` because those modules import through the
+ * `@/` alias, which Deno cannot resolve. `assistantVehicleLabels.test.ts` fails
+ * if the app-side catalogs and these ever drift apart.
+ */
+export const COLOR_LABELS: Readonly<Record<string, string>> = {
+  white: 'Beyaz',
+  black: 'Siyah',
+  gray: 'Gri',
+  silver: 'Gümüş',
+  red: 'Kırmızı',
+  blue: 'Mavi',
+  green: 'Yeşil',
+  brown: 'Kahverengi',
+  beige: 'Bej',
+  gold: 'Altın',
+  yellow: 'Sarı',
+  orange: 'Turuncu',
+};
+
+export const FUEL_LABELS: Readonly<Record<string, string>> = {
+  gasoline: 'Benzin',
+  diesel: 'Dizel',
+  lpg: 'LPG',
+  electric: 'Elektrik',
+  hybrid: 'Hibrit',
+};
+
+export const BODY_LABELS: Readonly<Record<string, string>> = {
+  sedan: 'Sedan',
+  hatchback: 'Hatchback',
+  crossover: 'Crossover',
+  suv: 'SUV',
+  station_wagon: 'Station Wagon',
+  coupe: 'Coupe',
+  cabrio: 'Cabrio',
+  roadster: 'Roadster',
+  pickup: 'Pickup',
+  mpv_minivan: 'MPV / Minivan',
+  van: 'Van',
+  sports_car: 'Sports Car',
+  campervan: 'Campervan',
+  minibus: 'Minibus',
+};
+
+function labelled(map: Readonly<Record<string, string>>, value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return map[trimmed] ?? trimmed;
+}
+
+function textValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 const DAY_MS = 86_400_000;
 
@@ -46,12 +110,21 @@ function latestByDate(rows: readonly Record<string, unknown>[], key: string) {
 
 export interface LoadedVehicleAssistantContext {
   context: VehicleAssistantContext;
+  /**
+   * Owner-identifying facts kept out of `context` so they are never serialised
+   * into the provider prompt. Only the deterministic lookup path reads them.
+   */
+  privateFacts: VehicleAssistantPrivateFacts;
   ownerVerified: true;
 }
 
 /**
  * Loads only purpose-limited structured columns through the caller's RLS-scoped client.
- * Plate, title/note text, document numbers, OCR and attachment metadata are never selected.
+ * Title/note text, document numbers, OCR and attachment metadata are never selected.
+ *
+ * The plate IS selected, but only into {@link LoadedVehicleAssistantContext.privateFacts};
+ * it must never be copied into `context`, which is JSON-serialised into the
+ * third-party model prompt in full.
  */
 export async function loadVehicleAssistantContext(
   client: SupabaseLike,
@@ -61,7 +134,7 @@ export async function loadVehicleAssistantContext(
 ): Promise<LoadedVehicleAssistantContext | null> {
   const vehicleResult = await client
     .from('vehicles')
-    .select('id,owner_id,brand,model,year,current_km')
+    .select('id,owner_id,brand,model,year,current_km,color,color_id,fuel_type,body_type,plate')
     .eq('id', vehicleId)
     .eq('owner_id', userId)
     .is('archived_at', null)
@@ -234,6 +307,13 @@ export async function loadVehicleAssistantContext(
     generatedAt: now.toISOString(),
     vehicle: {
       displayName: `${String(vehicle.brand ?? '')} ${String(vehicle.model ?? '')}`.trim(),
+      brand: textValue(vehicle.brand),
+      model: textValue(vehicle.model),
+      // `color_id` is the normalized taxonomy value; `color` is the legacy free
+      // text kept for vehicles saved before TASK-018.
+      color: labelled(COLOR_LABELS, vehicle.color_id) ?? textValue(vehicle.color),
+      fuelType: labelled(FUEL_LABELS, vehicle.fuel_type),
+      bodyType: labelled(BODY_LABELS, vehicle.body_type),
       year: finiteNumber(vehicle.year),
       currentOdometer,
     },
@@ -307,5 +387,9 @@ export async function loadVehicleAssistantContext(
       hasSufficientDistanceData: distanceKm !== null && distanceKm > 0,
     },
   };
-  return { context, ownerVerified: true };
+  return {
+    context,
+    privateFacts: { plate: textValue(vehicle.plate) },
+    ownerVerified: true,
+  };
 }

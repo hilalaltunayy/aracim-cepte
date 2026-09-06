@@ -59,8 +59,11 @@ export default {
         signal: controller.signal,
         onDiagnostic: (diagnostic) =>
           console.log('[ai:assistant:trace]', JSON.stringify(diagnostic)),
-        loadContext: async (vehicleId, userId) =>
-          (await loadVehicleAssistantContext(context.supabase, vehicleId, userId))?.context ?? null,
+        loadContext: async (vehicleId, userId) => {
+          const loaded = await loadVehicleAssistantContext(context.supabase, vehicleId, userId);
+          if (!loaded) return null;
+          return { context: loaded.context, privateFacts: loaded.privateFacts };
+        },
         getQuota: async () => {
           const { data, error } = await context.supabase.rpc('get_my_ai_usage');
           return firstRow(data, error);

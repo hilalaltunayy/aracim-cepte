@@ -47,6 +47,13 @@ export interface VehicleAssistantContext {
   generatedAt: string;
   vehicle: {
     displayName: string;
+    /** Discrete profile attributes, so a lookup is answerable without splitting
+     *  `displayName`. Descriptive only — never an identifier. */
+    brand: string | null;
+    model: string | null;
+    color: string | null;
+    fuelType: string | null;
+    bodyType: string | null;
     year: number | null;
     currentOdometer: number;
   };
@@ -65,6 +72,22 @@ export interface VehicleAssistantContext {
     facts: Record<string, string | number | boolean | null>;
   }[];
   dataQuality: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Owner-identifying vehicle data that is deliberately kept OUT of
+ * {@link VehicleAssistantContext}.
+ *
+ * The provider adapter serialises the whole context into the prompt
+ * (`JSON.stringify(input.context)`), so anything placed there is transferred to
+ * a third-party model. The plate is a personal identifier under KVKK and the
+ * context loader has always documented that it is never selected. These facts
+ * therefore stay inside the Edge Function: they answer a direct lookup
+ * deterministically and are never sent to the model, never added to the
+ * evidence catalog, and never logged.
+ */
+export interface VehicleAssistantPrivateFacts {
+  plate: string | null;
 }
 
 export type DomainGateResult =
@@ -187,6 +210,204 @@ export function classifyQuestion(question: string): DomainGateResult {
   return { kind: 'pass', externalDataMentioned };
 }
 
+/* ------------------------------------------------------------------ *
+ * Deterministic profile lookups
+ *
+ * "Rengim ne?" is a database read, not a judgement call. Answering it from
+ * trusted context is more accurate than asking a model to restate the context
+ * back, and it means a simple lookup never spends the daily allowance.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Anything analytical is left to the model. These words mean the user wants an
+ * interpretation ("km başına maliyetim ne?"), not a stored value, so they veto
+ * the deterministic path even when a field name also appears.
+ */
+const analyticalTerms = [
+  'maliyet',
+  'masraf',
+  'harcama',
+  'tuketim',
+  'ortalama',
+  'basina',
+  'karsilastir',
+  'trend',
+  'degisim',
+  'oneri',
+  'tavsiye',
+  'sorun',
+  'ariza',
+  'dikkat',
+  'ne zaman',
+  'gecikmis',
+  'yaklasan',
+  'planla',
+  'bakim',
+  'servis',
+  'sigorta',
+  'kasko',
+  'muayene',
+  'belge',
+  'hatirlatici',
+  'litre',
+  'depo',
+  'uzun yol',
+  'ozet',
+  // "ne kadar" is a quantity question ("ne kadar km yaptım?"), not a lookup.
+  'ne kadar',
+] as const;
+
+const lookupIntentWords = new Set([
+  'ne',
+  'nedir',
+  'neydi',
+  'kac',
+  'kacti',
+  'hangi',
+  'nelerdir',
+  'bilgi',
+  'bilgileri',
+  'bilgilerim',
+]);
+
+function turkishNumber(value: number): string {
+  return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(value);
+}
+
+/** Evidence labels and values always come from the trusted catalog, as elsewhere. */
+function factResponse(
+  context: VehicleAssistantContext,
+  answer: string,
+  factCodes: readonly string[],
+): VehicleAssistantResponse {
+  return normalizeVehicleAssistantEvidence(
+    {
+      answer,
+      domain: 'general',
+      severity: 'info',
+      evidence: factCodes.map((factCode) => ({ factCode, label: '', value: '' })),
+      suggestions: ['Araç profilinden bu bilgileri güncelleyebilirsiniz.'],
+      safetyEscalation: false,
+      externalDataRequired: false,
+    },
+    context,
+  );
+}
+
+function missingFieldAnswer(field: string): string {
+  return `Aracınız için kayıtlı bir ${field} bilgisi bulunmuyor. Araç profilinden ekleyebilirsiniz.`;
+}
+
+/**
+ * Answers a simple stored-profile question straight from trusted context.
+ *
+ * Returns `null` whenever the question is not an unambiguous lookup, so the
+ * normal deterministic-signals + model interpretation flow stays in charge of
+ * everything analytical.
+ */
+export function resolveDeterministicVehicleFact(
+  question: string,
+  context: VehicleAssistantContext,
+  privateFacts?: VehicleAssistantPrivateFacts,
+): VehicleAssistantResponse | null {
+  const normalized = foldTurkish(question);
+  if (!normalized) return null;
+  if (containsAny(normalized, analyticalTerms)) return null;
+  // A safety report never takes the fast path; it must reach the deterministic
+  // safety override in the normal flow.
+  if (requiresSafetyEscalation(question)) return null;
+
+  const tokens = normalized.split(' ').filter(Boolean);
+  const tokenSet = new Set(tokens);
+  const asksLookup = tokens.some((token) => lookupIntentWords.has(token)) || tokens.length <= 5;
+  if (!asksLookup) return null;
+
+  const vehicle = context.vehicle;
+
+  // Plate is resolved from the private facts, never from the model context.
+  if (normalized.includes('plaka')) {
+    const plate = privateFacts?.plate?.trim();
+    return factResponse(
+      context,
+      plate ? `Aracınızın kayıtlı plakası ${plate}.` : missingFieldAnswer('plaka'),
+      [],
+    );
+  }
+  if (normalized.includes('renk') || normalized.includes('reng')) {
+    return factResponse(
+      context,
+      vehicle.color
+        ? `Aracınızın kayıtlı rengi ${vehicle.color.toLocaleLowerCase('tr-TR')}dir.`
+        : missingFieldAnswer('renk'),
+      vehicle.color ? ['vehicle.color'] : [],
+    );
+  }
+  // Year before model: "kaç model?" and "model yılı" both ask for the year.
+  if (
+    normalized.includes('model yili') ||
+    normalized.includes('kac model') ||
+    tokenSet.has('yil') ||
+    tokenSet.has('yili')
+  ) {
+    return factResponse(
+      context,
+      vehicle.year !== null
+        ? `Aracınızın kayıtlı model yılı ${vehicle.year}.`
+        : missingFieldAnswer('model yılı'),
+      vehicle.year !== null ? ['vehicle.year'] : [],
+    );
+  }
+  if (normalized.includes('marka')) {
+    return factResponse(
+      context,
+      vehicle.brand
+        ? `Aracınızın kayıtlı markası ${vehicle.brand}.`
+        : missingFieldAnswer('marka'),
+      vehicle.brand ? ['vehicle.brand'] : [],
+    );
+  }
+  if (normalized.includes('model')) {
+    return factResponse(
+      context,
+      vehicle.model
+        ? `Aracınızın kayıtlı modeli ${vehicle.model}.`
+        : missingFieldAnswer('model'),
+      vehicle.model ? ['vehicle.model'] : [],
+    );
+  }
+  if (
+    normalized.includes('yakit tipi') ||
+    normalized.includes('yakit turu') ||
+    normalized.includes('yakit cinsi') ||
+    normalized.includes('hangi yakit')
+  ) {
+    return factResponse(
+      context,
+      vehicle.fuelType
+        ? `Aracınızın kayıtlı yakıt tipi ${vehicle.fuelType}.`
+        : missingFieldAnswer('yakıt tipi'),
+      vehicle.fuelType ? ['vehicle.fuelType'] : [],
+    );
+  }
+  if (normalized.includes('kasa tipi') || normalized.includes('kasa turu')) {
+    return factResponse(
+      context,
+      vehicle.bodyType
+        ? `Aracınızın kayıtlı kasa tipi ${vehicle.bodyType}.`
+        : missingFieldAnswer('kasa tipi'),
+      vehicle.bodyType ? ['vehicle.bodyType'] : [],
+    );
+  }
+  if (tokenSet.has('km') || normalized.includes('kilometre')) {
+    return factResponse(
+      context,
+      `Aracınızın kayıtlı güncel kilometresi ${turkishNumber(vehicle.currentOdometer)} km.`,
+      ['vehicle.currentOdometer'],
+    );
+  }
+  return null;
+}
+
 const safetyTerms = [
   'fren tutm',
   'fren bos',
@@ -262,6 +483,13 @@ export function canonicalEvidenceCodes(context: VehicleAssistantContext): Set<st
 }
 
 const evidenceLabels: Readonly<Record<string, string>> = {
+  'vehicle.displayName': 'Araç',
+  'vehicle.brand': 'Marka',
+  'vehicle.model': 'Model',
+  'vehicle.year': 'Model yılı',
+  'vehicle.color': 'Renk',
+  'vehicle.fuelType': 'Yakıt tipi',
+  'vehicle.bodyType': 'Kasa tipi',
   'vehicle.currentOdometer': 'Güncel kilometre',
   'maintenanceFacts.lastDate': 'Son bakım tarihi',
   'maintenanceFacts.kmSinceLast': 'Son bakımdan beri',

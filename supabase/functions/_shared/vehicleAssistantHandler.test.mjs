@@ -10,7 +10,16 @@ const body = {
 const context = {
   vehicleId: body.vehicleId,
   generatedAt: '2026-08-15T00:00:00Z',
-  vehicle: { displayName: 'Kia Sportage', year: 2022, currentOdometer: 86400 },
+  vehicle: {
+    displayName: 'Kia Sportage',
+    brand: 'Kia',
+    model: 'Sportage',
+    color: 'Mavi',
+    fuelType: 'Dizel',
+    bodyType: 'SUV',
+    year: 2022,
+    currentOdometer: 86400,
+  },
   maintenanceFacts: { kmSinceLast: 9400 },
   documentFacts: {},
   expertiseFacts: {},
@@ -36,7 +45,7 @@ const response = {
 function dependencies(overrides = {}) {
   const calls = { reserve: 0, commit: 0, release: 0, provider: 0 };
   const deps = {
-    loadContext: async () => context,
+    loadContext: async () => ({ context, privateFacts: { plate: '34 ABC 123' } }),
     getQuota: async () => ({ used_count: 0, monthly_quota: 3, period_start: '2026-08-01' }),
     reserveQuota: async () => {
       calls.reserve += 1;
@@ -80,6 +89,51 @@ test('rejects a vehicle outside the authenticated owner scope', async () => {
     () => handleVehicleAssistant('user-a', body, deps),
     (error) => error.status === 403,
   );
+});
+
+test('answers a stored profile lookup deterministically without spending quota', async () => {
+  for (const [question, expected] of [
+    ['Aracımın rengi ne?', 'Aracınızın kayıtlı rengi mavidir.'],
+    ['Modelim ne?', 'Aracınızın kayıtlı modeli Sportage.'],
+    ['Markam ne?', 'Aracınızın kayıtlı markası Kia.'],
+    ['Kaç model?', 'Aracınızın kayıtlı model yılı 2022.'],
+    ['Yakıt tipi ne?', 'Aracınızın kayıtlı yakıt tipi Dizel.'],
+    ['Güncel km kaç?', 'Aracınızın kayıtlı güncel kilometresi 86.400 km.'],
+  ]) {
+    const { deps, calls } = dependencies();
+    const result = await handleVehicleAssistant('user-a', { ...body, question }, deps);
+    assert.equal(result.response.answer, expected, question);
+    assert.equal(result.source, 'local');
+    assert.deepEqual(calls, { reserve: 0, commit: 0, release: 0, provider: 0 }, question);
+  }
+});
+
+test('answers the plate from private facts and never sends it to the provider', async () => {
+  const { deps, calls } = dependencies();
+  const result = await handleVehicleAssistant(
+    'user-a',
+    { ...body, question: 'Plakam ne?' },
+    deps,
+  );
+  assert.equal(result.response.answer, 'Aracınızın kayıtlı plakası 34 ABC 123.');
+  assert.equal(result.source, 'local');
+  assert.equal(calls.provider, 0);
+  // The plate has no canonical evidence code because it is not in the context.
+  assert.deepEqual(result.response.evidence, []);
+});
+
+test('leaves analytical questions to the normal provider flow', async () => {
+  for (const question of [
+    'Km başına maliyetim ne?',
+    'Ortalama tüketimim ne kadar?',
+    'Bakım durumumu özetler misin?',
+  ]) {
+    const { deps, calls } = dependencies();
+    const result = await handleVehicleAssistant('user-a', { ...body, question }, deps);
+    assert.equal(result.source, 'provider', question);
+    assert.equal(calls.provider, 1, question);
+    assert.equal(calls.commit, 1, question);
+  }
 });
 
 test('rejects unrelated questions locally without reserving quota or calling provider', async () => {

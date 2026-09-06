@@ -8,6 +8,7 @@ import {
   MODEL_OWNED_RESPONSE_FIELDS,
   normalizeVehicleAssistantEvidence,
   requiresSafetyEscalation,
+  resolveDeterministicVehicleFact,
   toTrustedVehicleAssistantResponse,
   validateFinalVehicleAssistantResponse,
   validateModelVehicleAssistantResponse,
@@ -19,7 +20,16 @@ import {
 const context: VehicleAssistantContext = {
   vehicleId: 'vehicle-a',
   generatedAt: '2026-08-15T00:00:00.000Z',
-  vehicle: { displayName: 'Kia Sportage', year: 2022, currentOdometer: 86_400 },
+  vehicle: {
+    displayName: 'Kia Sportage',
+    brand: 'Kia',
+    model: 'Sportage',
+    color: 'Mavi',
+    fuelType: 'Dizel',
+    bodyType: 'SUV',
+    year: 2022,
+    currentOdometer: 86_400,
+  },
   maintenanceFacts: { kmSinceLast: 9_400, daysSinceLast: 180 },
   documentFacts: { inspectionDaysUntil: 10 },
   expertiseFacts: { hasReport: true, latestDate: '2026-01-01' },
@@ -324,5 +334,60 @@ describe('vehicle assistant contract (continued)', () => {
       true,
     );
     expect(result.externalDataRequired).toBe(true);
+  });
+});
+
+describe('resolveDeterministicVehicleFact', () => {
+  it('answers a stored profile lookup from trusted context', () => {
+    expect(resolveDeterministicVehicleFact('Aracımın rengi ne?', context)?.answer).toBe(
+      'Aracınızın kayıtlı rengi mavidir.',
+    );
+    expect(resolveDeterministicVehicleFact('Modelim nedir?', context)?.answer).toBe(
+      'Aracınızın kayıtlı modeli Sportage.',
+    );
+    expect(resolveDeterministicVehicleFact('Kaç model?', context)?.answer).toBe(
+      'Aracınızın kayıtlı model yılı 2022.',
+    );
+    expect(resolveDeterministicVehicleFact('Güncel km kaç?', context)?.answer).toBe(
+      'Aracınızın kayıtlı güncel kilometresi 86.400 km.',
+    );
+  });
+
+  it('carries canonical evidence so the answer stays auditable', () => {
+    const result = resolveDeterministicVehicleFact('Rengim ne?', context);
+    expect(result?.evidence).toEqual([
+      { factCode: 'vehicle.color', label: 'Renk', value: 'Mavi' },
+    ]);
+  });
+
+  it('reads the plate from private facts, which are not part of the context', () => {
+    expect(
+      resolveDeterministicVehicleFact('Plakam ne?', context, { plate: '34 ABC 123' })?.answer,
+    ).toBe('Aracınızın kayıtlı plakası 34 ABC 123.');
+    expect(JSON.stringify(context)).not.toContain('34 ABC 123');
+  });
+
+  it('is honest when a profile field was never filled in', () => {
+    const withoutColor = { ...context, vehicle: { ...context.vehicle, color: null } };
+    const result = resolveDeterministicVehicleFact('Rengim ne?', withoutColor);
+    expect(result?.answer).toContain('kayıtlı bir renk bilgisi bulunmuyor');
+    expect(result?.evidence).toEqual([]);
+  });
+
+  it('defers anything analytical to the model', () => {
+    for (const question of [
+      'Km başına maliyetim ne?',
+      'Ortalama tüketimim ne kadar?',
+      'Bakım durumumu özetler misin?',
+      'Bu ay yakıta ne kadar harcadım?',
+      'Uzun yola çıkabilir miyim?',
+    ]) {
+      expect(resolveDeterministicVehicleFact(question, context)).toBeNull();
+    }
+  });
+
+  it('never short-circuits a safety report', () => {
+    expect(requiresSafetyEscalation('Fren tutmuyor, rengim ne?')).toBe(true);
+    expect(resolveDeterministicVehicleFact('Fren tutmuyor, rengim ne?', context)).toBeNull();
   });
 });

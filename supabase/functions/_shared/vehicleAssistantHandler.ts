@@ -2,12 +2,14 @@ import {
   canonicalEvidenceCodes,
   classifyQuestion,
   diagnoseVehicleAssistantResponse,
+  resolveDeterministicVehicleFact,
   toTrustedVehicleAssistantResponse,
   validateFinalVehicleAssistantResponse,
   validateModelVehicleAssistantResponse,
   type AssistantQuotaState,
   type AssistantResponseValidationDiagnostic,
   type VehicleAssistantContext,
+  type VehicleAssistantPrivateFacts,
   type VehicleAssistantResult,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
 import type {
@@ -52,8 +54,14 @@ interface QuotaRow {
   period_start: string;
 }
 
+export interface LoadedAssistantContext {
+  context: VehicleAssistantContext;
+  /** Never reaches the provider; only the deterministic lookup path reads it. */
+  privateFacts?: VehicleAssistantPrivateFacts;
+}
+
 export interface VehicleAssistantHandlerDependencies {
-  loadContext(vehicleId: string, userId: string): Promise<VehicleAssistantContext | null>;
+  loadContext(vehicleId: string, userId: string): Promise<LoadedAssistantContext | null>;
   getQuota(): Promise<QuotaRow>;
   reserveQuota(operationId: string, vehicleId: string): Promise<QuotaRow>;
   commitQuota(operationId: string): Promise<QuotaRow>;
@@ -104,10 +112,11 @@ export async function handleVehicleAssistant(
 ): Promise<VehicleAssistantResult> {
   if (!userId) throw new VehicleAssistantHttpError(401, 'AUTH_REQUIRED');
   const request = parseVehicleAssistantRequest(rawBody);
-  const context = await dependencies.loadContext(request.vehicleId, userId);
-  if (!context || context.vehicleId !== request.vehicleId) {
+  const loaded = await dependencies.loadContext(request.vehicleId, userId);
+  if (!loaded || loaded.context.vehicleId !== request.vehicleId) {
     throw new VehicleAssistantHttpError(403, 'VEHICLE_FORBIDDEN');
   }
+  const context = loaded.context;
 
   const trace = dependencies.onDiagnostic ?? (() => undefined);
   trace({ stage: 'config', providerConfigured: Boolean(dependencies.provider) });
@@ -118,6 +127,23 @@ export async function handleVehicleAssistant(
     trace({ stage: 'result', outcome: 'local' });
     return {
       response: gate.response,
+      quota: quotaState(await dependencies.getQuota()),
+      source: 'local',
+    };
+  }
+
+  // A stored-profile lookup ("Rengim ne?") is answered from trusted context.
+  // It never calls the provider, so it never reserves or spends the allowance.
+  const deterministicFact = resolveDeterministicVehicleFact(
+    request.question,
+    context,
+    loaded.privateFacts,
+  );
+  if (deterministicFact) {
+    trace({ stage: 'gate', kind: 'deterministic_fact' });
+    trace({ stage: 'result', outcome: 'local' });
+    return {
+      response: deterministicFact,
       quota: quotaState(await dependencies.getQuota()),
       source: 'local',
     };
