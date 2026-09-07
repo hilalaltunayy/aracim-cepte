@@ -39,8 +39,13 @@ import {
 } from '@/features/entitlements/domain/entitlementResolution';
 import { loadEntitlementMirrorStatus } from '@/features/entitlements/services/entitlementService';
 import { reconcileEntitlement } from '@/features/entitlements/services/entitlementReconciliation';
-import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
+import {
+  canApplyVehicleData,
+  getVehicleCreationGate,
+  getVehicleDisplayName,
+} from '@/features/vehicles/domain/multiVehicle';
 import { getVehicleWriteTargetError } from '@/features/vehicles/domain/vehicleWriteTarget';
+import { useAssistantSessionStore } from '@/features/vehicleAssistant/state/assistantSessionStore';
 import {
   DEFAULT_REPORT_PERIOD_ID,
   isReportPeriodId,
@@ -201,8 +206,13 @@ export const useDataStore = create<DataState>()(
         )
           return;
         set(bundle);
+        const vehicle = get().vehicles.find((item) => item.id === vehicleId);
         void appRepository
-          .reconcileVehicleData(vehicleId, bundle.reminders)
+          .reconcileVehicleData(
+            vehicleId,
+            bundle.reminders,
+            vehicle ? getVehicleDisplayName(vehicle) : undefined,
+          )
           .then((reconciled) => {
             if (
               canApplyVehicleData(
@@ -364,9 +374,20 @@ export const useDataStore = create<DataState>()(
 
         saveVehicle: (draft, id, options) => {
           const existing = id ? get().vehicles.find((vehicle) => vehicle.id === id) : null;
-          if (!id && get().vehicles.length >= get().entitlements.maxVehicles) {
+          const creationGate = getVehicleCreationGate(
+            get().vehicles.length,
+            get().entitlementStatus,
+            get().entitlements,
+          );
+          if (!id && creationGate.status === 'verifying') {
             set({
-              error: `Planınızda en fazla ${get().entitlements.maxVehicles} araç ekleyebilirsiniz.`,
+              error: 'Araç ekleme hakkınız doğrulanıyor. Lütfen kısa süre sonra tekrar deneyin.',
+            });
+            return Promise.resolve(false);
+          }
+          if (!id && creationGate.status === 'limit_reached') {
+            set({
+              error: `Planınızda en fazla ${creationGate.capacity.maximum} araç ekleyebilirsiniz.`,
             });
             return Promise.resolve(false);
           }
@@ -387,6 +408,7 @@ export const useDataStore = create<DataState>()(
         deleteVehicle: (id) =>
           mutate(async () => {
             await appRepository.deleteVehicle(id);
+            useAssistantSessionStore.getState().clearVehicleSession(id);
           }),
 
         saveVehiclePhoto: async (targetVehicleId, attachment, replacesPhotoId) => {
@@ -485,8 +507,14 @@ export const useDataStore = create<DataState>()(
         saveReminder: (targetVehicleId, draft, id) => {
           const vehicleId = resolveWriteTarget(targetVehicleId);
           if (!vehicleId) return Promise.resolve(false);
+          const vehicle = get().vehicles.find((item) => item.id === vehicleId);
           return mutate(async () => {
-            const saved = await appRepository.saveReminder(vehicleId, draft, id);
+            const saved = await appRepository.saveReminder(
+              vehicleId,
+              draft,
+              id,
+              vehicle ? getVehicleDisplayName(vehicle) : undefined,
+            );
             const notificationFailed =
               Boolean(saved.dueDate) &&
               saved.notificationStatus !== 'scheduled' &&
@@ -501,10 +529,16 @@ export const useDataStore = create<DataState>()(
           });
         },
 
-        toggleReminder: (reminder) =>
-          mutate(async () => {
-            await appRepository.setReminderCompleted(reminder, !reminder.completed);
-          }),
+        toggleReminder: (reminder) => {
+          const vehicle = get().vehicles.find((item) => item.id === reminder.vehicleId);
+          return mutate(async () => {
+            await appRepository.setReminderCompleted(
+              reminder,
+              !reminder.completed,
+              vehicle ? getVehicleDisplayName(vehicle) : undefined,
+            );
+          });
+        },
 
         deleteReminder: (id) => mutate(() => appRepository.deleteReminder(id)),
 

@@ -374,14 +374,21 @@ export class SupabaseAppRepository implements AppRepository {
     };
   }
 
-  async reconcileVehicleData(vehicleId: string, reminders: Reminder[]) {
+  async reconcileVehicleData(
+    vehicleId: string,
+    reminders: Reminder[],
+    vehicleDisplayName?: string,
+  ) {
     const client = getSupabaseClient();
     const metadataRepair = await client.rpc('reconcile_my_attachment_metadata');
     if (metadataRepair.error) throw metadataRepair.error;
     void reconcileAttachments().catch(() => undefined);
     const reconciledReminders = await Promise.all(
       reminders.map(async (reminder) => {
-        const sync = await reconcileReminderNotification(reminder, { requestPermission: false });
+        const sync = await reconcileReminderNotification(reminder, {
+          requestPermission: false,
+          vehicleDisplayName,
+        });
         if (
           sync.status === reminder.notificationStatus &&
           sync.notificationId === reminder.notificationId &&
@@ -526,7 +533,12 @@ export class SupabaseAppRepository implements AppRepository {
     if (error) throw error;
   }
 
-  async saveReminder(vehicleId: string, draft: ReminderDraft, id?: string) {
+  async saveReminder(
+    vehicleId: string,
+    draft: ReminderDraft,
+    id?: string,
+    vehicleDisplayName?: string,
+  ) {
     const dateTimeValidation = validateReminderDateTime(draft.dueDate, draft.dueTime);
     if (!dateTimeValidation.valid) {
       throw new AppError('Geçmiş bir tarih için hatırlatıcı oluşturamazsınız.', 'VALIDATION');
@@ -570,6 +582,7 @@ export class SupabaseAppRepository implements AppRepository {
       forceReschedule: true,
       staleIds: previous?.notificationId ? [previous.notificationId] : [],
       leadDays: draft.notificationLeadDays,
+      vehicleDisplayName,
     });
     const synced = await client
       .from('reminders')
@@ -593,7 +606,7 @@ export class SupabaseAppRepository implements AppRepository {
     return mapReminder(required(synced.data, 'Hatırlatıcı kaydedilemedi.'));
   }
 
-  async setReminderCompleted(reminder: Reminder, completed: boolean) {
+  async setReminderCompleted(reminder: Reminder, completed: boolean, vehicleDisplayName?: string) {
     const { data, error } = await getSupabaseClient()
       .from('reminders')
       .update({
@@ -613,6 +626,7 @@ export class SupabaseAppRepository implements AppRepository {
       requestPermission: false,
       forceReschedule: true,
       staleIds: reminder.notificationId ? [reminder.notificationId] : [],
+      vehicleDisplayName,
     });
     const synced = await getSupabaseClient()
       .from('reminders')

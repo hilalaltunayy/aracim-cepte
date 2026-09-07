@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mirror, reconcile, repository } = vi.hoisted(() => ({
   mirror: { status: 'unknown' as 'unknown' | 'unavailable' | 'free' | 'premium', calls: 0 },
   reconcile: { calls: 0, outcome: 'applied' as const },
-  repository: { vehicles: [] as { id: string }[] },
+  repository: { vehicles: [] as { id: string }[], saveVehicle: vi.fn() },
 }));
 
 vi.mock('@/features/entitlements/services/entitlementService', () => ({
@@ -24,6 +24,7 @@ vi.mock('@/data/repositories/SupabaseAppRepository', () => ({
     listVehicles: vi.fn(async () => repository.vehicles),
     loadVehicleData: vi.fn(async () => ({})),
     reconcileVehicleData: vi.fn(async () => ({})),
+    saveVehicle: repository.saveVehicle,
   },
 }));
 vi.mock('@/data/storage/safeStorage', () => ({
@@ -50,6 +51,7 @@ describe('data store entitlement lifecycle', () => {
     mirror.calls = 0;
     reconcile.calls = 0;
     repository.vehicles = [];
+    repository.saveVehicle.mockReset();
     state().clear();
   });
 
@@ -57,6 +59,15 @@ describe('data store entitlement lifecycle', () => {
     expect(state().entitlementStatus).toBe('unknown');
     expect(state().entitlements.planId).toBe('free');
     expect(state().entitlementAwaitingSync).toBe(false);
+  });
+
+  it('blocks an unresolved Add Vehicle attempt with verification, not a Free-limit error', async () => {
+    const saved = await state().saveVehicle({ brand: 'Kia', model: 'Ceed' } as never);
+
+    expect(saved).toBe(false);
+    expect(repository.saveVehicle).not.toHaveBeenCalled();
+    expect(state().error).toContain('doğrulanıyor');
+    expect(state().error).not.toContain('en fazla 1');
   });
 
   it('unlocks Premium immediately from the store while the mirror still says Free', async () => {

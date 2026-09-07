@@ -40,6 +40,7 @@ import {
   NOTIFICATION_SETTINGS_ERROR_MESSAGE,
   openNotificationSystemSettings,
 } from '@/features/settings/systemSettings';
+import { getVehicleDeletionOutcome } from '@/features/vehicles/domain/multiVehicle';
 
 function SettingsRow({
   icon,
@@ -357,8 +358,13 @@ export default function SettingsScreen() {
                 'Araç, kayıtlar, planlar, notlar ve belgeler kalıcı olarak silinecek.',
                 async () => {
                   if (await deleteVehicle(vehicle.id)) {
+                    const state = useDataStore.getState();
+                    const outcome = getVehicleDeletionOutcome(
+                      state.vehicles,
+                      state.activeVehicleId,
+                    );
                     router.dismissAll();
-                    router.replace('/vehicle/edit');
+                    router.replace(outcome.destination);
                   }
                 },
               )

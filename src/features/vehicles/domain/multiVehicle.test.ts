@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { Vehicle } from '@/domain/entities';
 import { PLAN_ENTITLEMENTS } from '@/features/entitlements/domain/entitlements';
 import {
   canApplyVehicleData,
   getVehicleCapacity,
+  getVehicleCreationGate,
+  getVehicleDeletionOutcome,
   getVehicleDisplayName,
   getVehicleLimitMessage,
 } from './multiVehicle';
@@ -26,8 +29,18 @@ describe('multi-vehicle domain rules', () => {
     expect(downgradedCapacity).toMatchObject({ current: 3, maximum: 1, canAdd: false });
   });
 
-  it('fails closed when an entitlement snapshot is unavailable', () => {
-    expect(getVehicleCapacity(1, undefined).canAdd).toBe(false);
+  it('keeps unknown entitlement out of the definitive Free-limit state', () => {
+    expect(getVehicleCreationGate(1, 'unknown', undefined)).toMatchObject({
+      status: 'verifying',
+    });
+    expect(getVehicleCreationGate(1, 'free', undefined)).toMatchObject({
+      status: 'limit_reached',
+      capacity: { maximum: 1 },
+    });
+    expect(getVehicleCreationGate(2, 'premium', PLAN_ENTITLEMENTS.premium)).toMatchObject({
+      status: 'allowed',
+      capacity: { maximum: 3 },
+    });
   });
 
   it('keeps display names concise and exposes a capacity-safe message', () => {
@@ -38,5 +51,20 @@ describe('multi-vehicle domain rules', () => {
   it('rejects stale vehicle bundle responses after an A to B switch', () => {
     expect(canApplyVehicleData('vehicle-b', 'vehicle-a', 1, 2)).toBe(false);
     expect(canApplyVehicleData('vehicle-b', 'vehicle-b', 2, 2)).toBe(true);
+  });
+
+  it('selects a valid remaining vehicle after deleting active C and avoids Add Vehicle', () => {
+    const remaining = [{ id: 'vehicle-a' }, { id: 'vehicle-b' }] as Vehicle[];
+    expect(getVehicleDeletionOutcome(remaining, 'vehicle-c')).toEqual({
+      activeVehicleId: 'vehicle-a',
+      destination: '/(tabs)/vehicle',
+    });
+  });
+
+  it('opens Add Vehicle only after the last vehicle is deleted', () => {
+    expect(getVehicleDeletionOutcome([], 'vehicle-a')).toEqual({
+      activeVehicleId: null,
+      destination: '/vehicle/edit',
+    });
   });
 });

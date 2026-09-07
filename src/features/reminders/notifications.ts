@@ -8,6 +8,7 @@ import {
 } from './notificationRecovery';
 import { getNotificationLeadDays } from './notificationPreferences';
 import { getReminderNotificationBody } from './notificationSchedule';
+import { createReminderNotificationData } from './notificationRouting';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -40,9 +41,13 @@ const notificationGateway: ReminderNotificationGateway = {
         typeof request.content.data?.reminderId === 'string'
           ? request.content.data.reminderId
           : null,
+      vehicleId:
+        typeof request.content.data?.vehicleId === 'string'
+          ? request.content.data.vehicleId
+          : null,
     }));
   },
-  async schedule(reminder, date, leadDays) {
+  async schedule(reminder, date, leadDays, vehicleDisplayName) {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('reminders', {
         name: 'Araç hatırlatıcıları',
@@ -53,8 +58,10 @@ const notificationGateway: ReminderNotificationGateway = {
       identifier: `reminder-${reminder.id}-lead-${leadDays}`,
       content: {
         title: 'Aracım Cepte',
-        body: getReminderNotificationBody(reminder.title, leadDays),
-        data: { route: '/(tabs)/reminders', reminderId: reminder.id },
+        body: vehicleDisplayName
+          ? `${vehicleDisplayName} · ${getReminderNotificationBody(reminder.title, leadDays)}`
+          : getReminderNotificationBody(reminder.title, leadDays),
+        data: createReminderNotificationData(reminder, vehicleDisplayName),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -79,6 +86,7 @@ export async function reconcileReminderNotification(
     forceReschedule?: boolean;
     staleIds?: string[];
     leadDays?: number;
+    vehicleDisplayName?: string;
     now?: Date;
   },
 ): Promise<ReminderNotificationSyncResult> {

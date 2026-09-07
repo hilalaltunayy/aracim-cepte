@@ -14,12 +14,18 @@ export type ReminderNotificationStatus =
 export interface LocalReminderSchedule {
   id: string;
   reminderId: string | null;
+  vehicleId: string | null;
 }
 
 export interface ReminderNotificationGateway {
   getPermission(requestIfUndetermined: boolean): Promise<'granted' | 'denied' | 'undetermined'>;
   list(): Promise<LocalReminderSchedule[]>;
-  schedule(reminder: Reminder, date: Date, leadDays: number): Promise<string>;
+  schedule(
+    reminder: Reminder,
+    date: Date,
+    leadDays: number,
+    vehicleDisplayName?: string,
+  ): Promise<string>;
   cancel(id: string): Promise<void>;
 }
 
@@ -41,6 +47,7 @@ export async function synchronizeReminderNotification(
     forceReschedule?: boolean;
     staleIds?: string[];
     leadDays?: number;
+    vehicleDisplayName?: string;
     now?: Date;
   },
 ): Promise<ReminderNotificationSyncResult> {
@@ -71,7 +78,11 @@ export async function synchronizeReminderNotification(
       };
     }
 
-    if (!options.forceReschedule && matching.length === 1) {
+    if (
+      !options.forceReschedule &&
+      matching.length === 1 &&
+      matching[0].vehicleId === reminder.vehicleId
+    ) {
       const [existing] = matching;
       await cancelAll(
         gateway,
@@ -93,7 +104,12 @@ export async function synchronizeReminderNotification(
       return { status: 'pending', notificationId: null, errorCode: null };
     }
 
-    const notificationId = await gateway.schedule(reminder, date, leadDays);
+    const notificationId = await gateway.schedule(
+      reminder,
+      date,
+      leadDays,
+      options.vehicleDisplayName,
+    );
     return { status: 'scheduled', notificationId, errorCode: null };
   } catch {
     return {

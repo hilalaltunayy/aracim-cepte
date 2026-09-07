@@ -23,12 +23,14 @@ vi.mock('@/features/auth/returningUser', () => ({
 }));
 
 import { useAuthStore } from './authStore';
+import { useAssistantSessionStore } from '@/features/vehicleAssistant/state/assistantSessionStore';
 
 describe('auth store signup confirmation boundary', () => {
   beforeEach(() => {
     authMock.signUp.mockReset();
     authMock.signOut.mockClear();
     useAuthStore.setState({ busy: false, error: null, session: null });
+    useAssistantSessionStore.getState().resetAllSessions();
   });
 
   it('accepts only a user created in verification-pending state', async () => {
@@ -75,7 +77,23 @@ describe('auth store signup confirmation boundary', () => {
     expect(useAuthStore.getState().homeIntroPending).toBe(false);
 
     useAuthStore.setState({ homeIntroPending: true });
+    useAssistantSessionStore
+      .getState()
+      .appendMessages('vehicle-a', [{ id: 'm1', role: 'user', text: 'Geçmiş bakım nedir?' }]);
+    useAssistantSessionStore.getState().setDraft('vehicle-a', 'özel taslak');
     await useAuthStore.getState().signOut();
     expect(useAuthStore.getState().homeIntroPending).toBe(false);
+    expect(useAssistantSessionStore.getState().threads).toEqual({});
+    expect(useAssistantSessionStore.getState().drafts).toEqual({});
+  });
+
+  it('clears all assistant sessions when the auth session expires', () => {
+    useAssistantSessionStore
+      .getState()
+      .appendMessages('vehicle-a', [{ id: 'm1', role: 'user', text: 'Yakıt özeti' }]);
+
+    useAuthStore.getState().markSessionExpired();
+
+    expect(useAssistantSessionStore.getState().threads).toEqual({});
   });
 });

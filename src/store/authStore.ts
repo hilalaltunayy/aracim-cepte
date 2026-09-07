@@ -26,6 +26,7 @@ import {
   classifyRegistrationResponse,
   createRegistrationAuthOptions,
 } from '@/features/auth/registrationFlow';
+import { useAssistantSessionStore } from '@/features/vehicleAssistant/state/assistantSessionStore';
 
 interface AuthState {
   session: Session | null;
@@ -53,6 +54,10 @@ interface AuthState {
 
 let intentionalSessionEnd = false;
 
+function resetAssistantSessions() {
+  useAssistantSessionStore.getState().resetAllSessions();
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   recoveryMode: false,
@@ -67,6 +72,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     if (!isSupabaseConfigured) {
+      resetAssistantSessions();
       set({ ready: true, session: null });
       return () => undefined;
     }
@@ -76,6 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       readHasSignedInBefore(),
     ]);
     const hasSignedInBefore = storedReturningUser || Boolean(data.session);
+    if (!data.session) resetAssistantSessions();
     if (data.session && !storedReturningUser) void markHasSignedInBefore();
     set({
       session: data.session,
@@ -88,6 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const previousSession = get().session;
       const unexpectedSignOut =
         event === 'SIGNED_OUT' && Boolean(previousSession) && !intentionalSessionEnd;
+      if (!session) resetAssistantSessions();
       set((state) => ({
         session,
         sessionNotice: session
@@ -228,6 +236,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         sessionNotice: null,
         homeIntroPending: false,
       });
+      resetAssistantSessions();
       intentionalSessionEnd = false;
       return true;
     } catch (error) {
@@ -255,6 +264,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         sessionNotice: null,
         homeIntroPending: false,
       });
+      resetAssistantSessions();
       intentionalSessionEnd = false;
       return true;
     } catch (error) {
@@ -271,6 +281,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await getSupabaseClient().auth.signOut();
     } finally {
       intentionalSessionEnd = false;
+      resetAssistantSessions();
       set({
         busy: false,
         session: null,
@@ -282,6 +293,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   markSessionExpired: () => {
+    resetAssistantSessions();
     set({
       session: null,
       recoveryMode: false,

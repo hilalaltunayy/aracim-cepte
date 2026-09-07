@@ -74,7 +74,9 @@ describe('reminder notification recovery', () => {
   });
 
   it('cancels the old schedule before an edit and avoids duplicates', async () => {
-    const fake = gateway({ scheduled: [{ id: 'duplicate', reminderId: 'reminder-a' }] });
+    const fake = gateway({
+      scheduled: [{ id: 'duplicate', reminderId: 'reminder-a', vehicleId: 'vehicle-a' }],
+    });
     const result = await synchronizeReminderNotification(
       reminder({ notificationId: 'old' }),
       fake.value,
@@ -93,7 +95,9 @@ describe('reminder notification recovery', () => {
   });
 
   it('cancels a completed reminder schedule', async () => {
-    const fake = gateway({ scheduled: [{ id: 'local-old', reminderId: 'reminder-a' }] });
+    const fake = gateway({
+      scheduled: [{ id: 'local-old', reminderId: 'reminder-a', vehicleId: 'vehicle-a' }],
+    });
     const result = await synchronizeReminderNotification(
       reminder({ completed: true, notificationId: 'local-old' }),
       fake.value,
@@ -115,5 +119,18 @@ describe('reminder notification recovery', () => {
       notificationId: null,
       errorCode: 'NOTIFICATION_TRIGGER_PAST',
     });
+  });
+
+  it('replaces an older scheduled notification that lacks vehicle context', async () => {
+    const fake = gateway({
+      scheduled: [{ id: 'legacy-local', reminderId: 'reminder-a', vehicleId: null }],
+    });
+
+    const result = await synchronizeReminderNotification(reminder(), fake.value, {
+      requestPermission: false,
+    });
+
+    expect(fake.cancelled).toContain('legacy-local');
+    expect(result.notificationId).toBe('local-new');
   });
 });

@@ -33,11 +33,15 @@ import {
   getVehicleColorPersistence,
   getVehicleTaxonomyFormState,
 } from '@/features/vehicles/domain/vehicleProfile';
-import { getVehicleCapacity, getVehicleLimitMessage } from '@/features/vehicles/domain/multiVehicle';
+import {
+  getVehicleCreationGate,
+  getVehicleLimitMessage,
+} from '@/features/vehicles/domain/multiVehicle';
 
 export default function VehicleEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { vehicles, saveVehicle, loading, error, bootstrapped, entitlements } = useDataStore();
+  const { vehicles, saveVehicle, loading, error, bootstrapped, entitlements, entitlementStatus } =
+    useDataStore();
   const existing = useMemo(() => vehicles.find((vehicle) => vehicle.id === id), [vehicles, id]);
   const [brand, setBrand] = useState(existing?.brand ?? '');
   const [model, setModel] = useState(existing?.model ?? '');
@@ -70,7 +74,7 @@ export default function VehicleEditScreen() {
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, vehicles, bootstrapped);
-  const capacity = getVehicleCapacity(vehicles.length, entitlements);
+  const creationGate = getVehicleCreationGate(vehicles.length, entitlementStatus, entitlements);
   const parsedKm = parseDecimal(km);
   const parsedYear = year ? parseDecimal(year) : null;
   const validYear =
@@ -124,10 +128,11 @@ export default function VehicleEditScreen() {
       </Screen>
     );
   }
-  if (routeState === 'create' && !capacity.canAdd) {
+  if (routeState === 'create' && creationGate.status === 'verifying') return <LoadingScreen />;
+  if (routeState === 'create' && creationGate.status === 'limit_reached') {
     return (
       <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
-        <ErrorBanner message={getVehicleLimitMessage(capacity)} />
+        <ErrorBanner message={getVehicleLimitMessage(creationGate.capacity)} />
         <AppButton title="Araç ekranına dön" onPress={() => router.replace('/(tabs)/vehicle')} />
       </Screen>
     );

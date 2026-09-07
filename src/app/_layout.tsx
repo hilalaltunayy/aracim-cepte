@@ -28,7 +28,10 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import { shouldRedirectExpiredSession } from '@/features/auth/sessionRouting';
-import { getReminderNotificationDestination } from '@/features/reminders/notificationRouting';
+import {
+  routeReminderNotificationTap,
+  type ReminderNotificationTap,
+} from '@/features/reminders/notificationRouting';
 import { AppErrorBoundary } from '@/shared/components/AppErrorBoundary';
 import { useBillingStore } from '@/features/billing/store/billingStore';
 import { startAuthCallbackCapture } from '@/features/auth/authCallbackCapture';
@@ -103,7 +106,10 @@ function RootNavigator() {
   const bootstrap = useDataStore((state) => state.bootstrap);
   const clear = useDataStore((state) => state.clear);
   const bootstrapped = useDataStore((state) => state.bootstrapped);
+  const vehicles = useDataStore((state) => state.vehicles);
+  const activeVehicleId = useDataStore((state) => state.activeVehicleId);
   const reminders = useDataStore((state) => state.reminders);
+  const setActiveVehicle = useDataStore((state) => state.setActiveVehicle);
   const syncBillingUser = useBillingStore((state) => state.syncUser);
   const clearBillingUser = useBillingStore((state) => state.clearUser);
   const billingStatus = useBillingStore((state) => state.subscription.status);
@@ -111,7 +117,8 @@ function RootNavigator() {
   const syncEntitlements = useDataStore((state) => state.syncEntitlements);
   const entitlementAwaitingSync = useDataStore((state) => state.entitlementAwaitingSync);
   const segments = useSegments();
-  const [pendingNotificationId, setPendingNotificationId] = useState<string | null>(null);
+  const [pendingNotificationTap, setPendingNotificationTap] =
+    useState<ReminderNotificationTap | null>(null);
   const processingNotification = useRef(false);
 
   useEffect(() => {
@@ -162,10 +169,18 @@ function RootNavigator() {
   useEffect(() => {
     let mounted = true;
     void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (mounted && response) setPendingNotificationId(response.notification.request.identifier);
+      if (mounted && response) {
+        setPendingNotificationTap({
+          notificationIdentifier: response.notification.request.identifier,
+          data: response.notification.request.content.data,
+        });
+      }
     });
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      setPendingNotificationId(response.notification.request.identifier);
+      setPendingNotificationTap({
+        notificationIdentifier: response.notification.request.identifier,
+        data: response.notification.request.content.data,
+      });
     });
     return () => {
       mounted = false;
@@ -174,18 +189,29 @@ function RootNavigator() {
   }, []);
 
   useEffect(() => {
-    if (!pendingNotificationId || !session || !bootstrapped || processingNotification.current)
+    if (!pendingNotificationTap || !session || !bootstrapped || processingNotification.current)
       return;
     processingNotification.current = true;
-    const destination = getReminderNotificationDestination(pendingNotificationId, reminders);
-    const timer = setTimeout(() => {
-      setPendingNotificationId(null);
+    void routeReminderNotificationTap(pendingNotificationTap, {
+      vehicles,
+      activeVehicleId,
+      activeVehicleReminders: reminders,
+      setActiveVehicle,
+      navigate: (destination) => router.push(destination),
+    }).finally(() => {
+      setPendingNotificationTap(null);
       Notifications.clearLastNotificationResponse();
-      router.push(destination);
       processingNotification.current = false;
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [bootstrapped, pendingNotificationId, reminders, session]);
+    });
+  }, [
+    activeVehicleId,
+    bootstrapped,
+    pendingNotificationTap,
+    reminders,
+    session,
+    setActiveVehicle,
+    vehicles,
+  ]);
 
   useEffect(() => {
     if (!fontsLoaded && !fontError) return;

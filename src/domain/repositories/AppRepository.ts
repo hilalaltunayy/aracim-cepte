@@ -45,6 +45,7 @@ export interface AppRepository {
   reconcileVehicleData(
     vehicleId: string,
     reminders: Reminder[],
+    vehicleDisplayName?: string,
   ): Promise<Pick<VehicleDataBundle, 'reminders' | 'expertiseReports' | 'documents'>>;
   saveRecord(
     vehicleId: string,
@@ -58,8 +59,17 @@ export interface AppRepository {
     id?: string,
   ): Promise<MaintenanceTemplate>;
   deleteMaintenanceTemplate(id: string): Promise<void>;
-  saveReminder(vehicleId: string, draft: ReminderDraft, id?: string): Promise<Reminder>;
-  setReminderCompleted(reminder: Reminder, completed: boolean): Promise<Reminder>;
+  saveReminder(
+    vehicleId: string,
+    draft: ReminderDraft,
+    id?: string,
+    vehicleDisplayName?: string,
+  ): Promise<Reminder>;
+  setReminderCompleted(
+    reminder: Reminder,
+    completed: boolean,
+    vehicleDisplayName?: string,
+  ): Promise<Reminder>;
   deleteReminder(id: string): Promise<void>;
   saveBodyCondition(
     vehicle: Vehicle,
