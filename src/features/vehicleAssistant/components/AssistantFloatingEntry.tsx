@@ -1,10 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
+import {
+  getBottomTabLayout,
+  getFloatingControlRightOffset,
+} from '@/shared/utils/bottomTabLayout';
 import { useReducedMotion } from '@/shared/hooks/useReducedMotion';
 import { spacing, useAppTheme, useThemedStyles, type AppTheme } from '@/shared/theme';
 
@@ -19,18 +30,23 @@ const SIZE = 56;
  *
  * Positioned from the real tab-bar geometry (`getBottomTabLayout`) plus the
  * bottom safe-area inset, never a fixed pixel guess, so the whole circle clears
- * the tab bar on every device and Android navigation mode.
+ * the tab bar on every device and Android navigation mode. The horizontal
+ * offset is derived from the same tab grid (`getFloatingControlRightOffset`),
+ * so the circle centres on the last-two-tabs boundary — never over the Settings
+ * tab — and its edge gap scales from phone to tablet.
  */
 export function AssistantFloatingEntry() {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const { bottom } = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
 
   // Tab bar top edge from the screen bottom = its own offset + its height.
   // A small float gap lifts the button clearly clear of the bar.
   const { bottomOffset, height } = getBottomTabLayout(bottom);
   const anchorBottom = bottomOffset + height + spacing.md;
+  const anchorRight = getFloatingControlRightOffset(width, SIZE, spacing.xl);
 
   const [floatY] = useState(() => new Animated.Value(0));
   const [floatX] = useState(() => new Animated.Value(0));
@@ -111,7 +127,14 @@ export function AssistantFloatingEntry() {
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[styles.anchor, { bottom: anchorBottom, transform: [{ translateX }, { translateY }, { rotate }] }]}
+      style={[
+        styles.anchor,
+        {
+          bottom: anchorBottom,
+          right: anchorRight,
+          transform: [{ translateX }, { translateY }, { rotate }],
+        },
+      ]}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
         <Pressable
@@ -156,7 +179,7 @@ const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
     anchor: {
       position: 'absolute',
-      right: spacing.xl,
+      // `right` is set inline from the live window width — see the component.
       // Lift above the Home scroll content and backdrop. The tab bar sits lower
       // now, so there is nothing left to fight over; the button's own elevation
       // (below) carries the Android z-order and the shadow.

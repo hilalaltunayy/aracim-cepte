@@ -2,10 +2,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { routerMock, loop, reducedMotion } = vi.hoisted(() => ({
+const { routerMock, loop, reducedMotion, windowSize } = vi.hoisted(() => ({
   routerMock: { push: vi.fn() },
   loop: { start: vi.fn(), stop: vi.fn() },
   reducedMotion: { value: false },
+  windowSize: { width: 390, height: 844 },
 }));
 
 vi.mock('react-native', () => {
@@ -23,6 +24,7 @@ vi.mock('react-native', () => {
     Pressable: 'Pressable',
     StyleSheet: { create: <T,>(s: T) => s, absoluteFill: { position: 'absolute' } },
     View: 'View',
+    useWindowDimensions: () => windowSize,
     Easing: {
       inOut: () => () => 0,
       out: () => () => 0,
@@ -85,7 +87,14 @@ describe('AssistantFloatingEntry', () => {
     loop.start.mockClear();
     loop.stop.mockClear();
     reducedMotion.value = false;
+    windowSize.width = 390;
+    windowSize.height = 844;
   });
+
+  const anchorStyle = (renderer: ReactTestRenderer) =>
+    anchor(renderer).props.style.find(
+      (s: unknown) => s && typeof s === 'object' && 'bottom' in (s as object),
+    );
 
   it('renders unconditionally — no plan prop, no entitlement branch', async () => {
     const renderer = await mount();
@@ -109,6 +118,27 @@ describe('AssistantFloatingEntry', () => {
     );
     // getBottomTabLayout(34): bottomOffset 34 + height (61 + 14) + spacing.md 12
     expect(style.bottom).toBe(121);
+  });
+
+  it('on a narrow phone, sits just inside the right edge — not a fixed right: 24', async () => {
+    windowSize.width = 390;
+    const renderer = await mount();
+    // tabWidth (390-24)/5 = 73.2; boundary from right edge = 12 + 73.2 = 85.2;
+    // right = max(24, 85.2 - 56/2) = 57.2
+    expect(anchorStyle(renderer).right).toBeCloseTo(57.2);
+  });
+
+  it('on a wide/tablet layout, moves further in as the tabs spread out', async () => {
+    windowSize.width = 800;
+    const renderer = await mount();
+    // tabWidth (800-24)/5 = 155.2; boundary from right edge = 12 + 155.2 = 167.2;
+    // right = max(24, 167.2 - 28) = 139.2
+    const style = anchorStyle(renderer);
+    expect(style.right).toBeCloseTo(139.2);
+    // The circle's centre (right + SIZE/2) lands on the last-two-tabs boundary,
+    // one full tab-width in from the edge — never over the Settings tab.
+    expect(style.right + 28).toBeCloseTo((800 - 24) / 5 + 12);
+    expect(style.right).toBeGreaterThan(24);
   });
 
   it('runs the ambient float and glint loops, and stops them on unmount', async () => {

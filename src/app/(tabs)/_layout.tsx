@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontFamilies, radii, useAppTheme } from '@/shared/theme';
-import { getBottomTabLayout } from '@/shared/utils/bottomTabLayout';
+import { getBottomTabLayout, TAB_BAR_SIDE_MARGIN } from '@/shared/utils/bottomTabLayout';
 
 const icons = {
   index: ['home-outline', 'home'],
@@ -27,7 +27,7 @@ export default function TabLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: layout.bottomOffset,
-          marginHorizontal: 12,
+          marginHorizontal: TAB_BAR_SIDE_MARGIN,
           height: layout.height,
           borderRadius: radii.lg,
           borderTopWidth: 0,
