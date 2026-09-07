@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { VehicleDocument } from '@/domain/entities';
 
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -101,5 +102,38 @@ describe('DocumentCard polish', () => {
         accessibilityLabel: 'Trafik sigortası belgesini aç, ekli dosya var',
       }),
     ).toBeDefined();
+  });
+
+  it('offers a device-download action for a document that has a stored file', async () => {
+    const onDownload = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <DocumentCard
+          document={document({ attachmentPath: 'private/path' })}
+          onPress={vi.fn()}
+          onDownload={onDownload}
+        />,
+      );
+    });
+    const button = renderer!.root.findByProps({
+      accessibilityLabel: 'Trafik sigortası belgesini cihaza indir',
+    });
+    await act(async () => button.props.onPress());
+    expect(onDownload).toHaveBeenCalledOnce();
+  });
+
+  it('shows no download action when the document has no stored file', async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <DocumentCard document={document()} onPress={vi.fn()} onDownload={vi.fn()} />,
+      );
+    });
+    expect(
+      renderer!.root.findAllByProps({
+        accessibilityLabel: 'Trafik sigortası belgesini cihaza indir',
+      }),
+    ).toHaveLength(0);
   });
 });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { AppButton, EmptyState, Screen, StatusBadge } from '@/shared/components/ui';
+import { AppButton, EmptyState, ErrorBanner, Screen, StatusBadge } from '@/shared/components/ui';
 import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { DocumentCard } from '@/shared/components/entityCards';
 import { useDataStore } from '@/store/dataStore';
@@ -10,7 +10,10 @@ import {
   getDocumentArchiveCounts,
   type DocumentArchiveFilter,
 } from '@/features/documents/domain/documentArchive';
+import { downloadPersistedAttachment } from '@/features/attachments/services/attachmentDownload';
+import { getFriendlyError } from '@/shared/utils/errors';
 import { radii, spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import type { VehicleDocument } from '@/domain/entities';
 
 const FILTERS: readonly { value: DocumentArchiveFilter; label: string }[] = [
   { value: 'active', label: 'Aktif' },
@@ -37,12 +40,34 @@ export default function DocumentsListScreen() {
   const styles = useThemedStyles(createStyles);
   const documents = useDataStore((state) => state.documents);
   const [filter, setFilter] = useState<DocumentArchiveFilter>('active');
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const counts = getDocumentArchiveCounts(documents);
   const visibleDocuments = filterDocumentsForArchive(documents, filter);
   const emptyState = EMPTY_STATES[filter];
+
+  // Re-download a stored document straight from the list. A single stored file
+  // saves to the device via the existing signed-URL helper; a document with
+  // several files opens the editor where each file has its own download.
+  const downloadDocument = async (document: VehicleDocument) => {
+    setDownloadError(null);
+    const stored = document.attachments ?? [];
+    if (stored.length !== 1) {
+      router.push({ pathname: '/documents/edit', params: { id: document.id } });
+      return;
+    }
+    try {
+      await downloadPersistedAttachment(stored[0], {
+        label: document.title,
+        date: document.expiryDate ?? document.startDate,
+      });
+    } catch (caught) {
+      setDownloadError(getFriendlyError(caught));
+    }
+  };
   return (
     <Screen backdrop={<AutomotiveBackdrop />}>
       <AppButton title="Yeni belge" icon="add" onPress={() => router.push('/documents/edit')} />
+      {downloadError ? <ErrorBanner message={downloadError} /> : null}
       {documents.length ? (
         <>
           <View accessibilityRole="tablist" style={styles.filterBar}>
@@ -81,6 +106,7 @@ export default function DocumentsListScreen() {
                   onPress={() =>
                     router.push({ pathname: '/documents/edit', params: { id: document.id } })
                   }
+                  onDownload={downloadDocument}
                 />
               ))}
             </View>

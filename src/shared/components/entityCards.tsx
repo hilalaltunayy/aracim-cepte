@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Reminder, VehicleDocument, VehicleRecord } from '@/domain/entities';
 import { reminderTypeLabels, documentTypeLabels } from '@/shared/constants/labels';
@@ -148,15 +149,30 @@ const documentLabels = {
 export function DocumentCard({
   document,
   onPress,
+  onDownload,
 }: {
   document: VehicleDocument;
   onPress?: () => void;
+  /** Saves the document's stored file to the device. Available to every plan. */
+  onDownload?: (document: VehicleDocument) => Promise<void> | void;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const status = getDocumentStatus(document.expiryDate);
   const [label, tone] = documentLabels[status];
   const hasAttachment = Boolean(document.attachmentPath || document.attachments?.length);
+  const [downloading, setDownloading] = useState(false);
+
+  const download = async () => {
+    if (!onDownload || downloading) return;
+    setDownloading(true);
+    try {
+      await onDownload(document);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -201,6 +217,23 @@ export function DocumentCard({
             <Text style={styles.meta}>Bitiş: {formatDate(document.expiryDate)}</Text>
           ) : null}
         </View>
+        {hasAttachment && onDownload ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${document.title} belgesini cihaza indir`}
+            accessibilityState={{ busy: downloading, disabled: downloading }}
+            disabled={downloading}
+            hitSlop={8}
+            onPress={() => void download()}
+            style={({ pressed }) => [styles.downloadButton, pressed && styles.cardPressed]}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name="download-outline" size={19} color={colors.primary} accessible={false} />
+            )}
+          </Pressable>
+        ) : null}
       </Card>
     </Pressable>
   );
@@ -243,4 +276,13 @@ const createStyles = ({ colors }: AppTheme) =>
     documentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
     documentMeta: { flex: 1 },
     description: { color: colors.navy, fontSize: 13, lineHeight: 18, marginTop: 2 },
+    downloadButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.paleAqua,
+      alignSelf: 'center',
+    },
   });
