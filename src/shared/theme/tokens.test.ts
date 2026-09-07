@@ -53,6 +53,26 @@ describe('semantic theme tokens', () => {
     expect(new Set(Object.values(darkColors.bodyCondition)).size).toBe(6);
   });
 
+  it('gives the report chart palette distinct, readable category hues in both themes', () => {
+    for (const colors of [lightColors, darkColors]) {
+      const categories = [colors.chart.fuel, colors.chart.maintenance, colors.chart.other];
+      // Three visually separable category colours — never one flat blue.
+      expect(new Set(categories).size).toBe(3);
+      for (const hue of categories) {
+        // Legible as a bar/slice fill against both the screen and card surfaces.
+        expect(contrast(hue, colors.screenBackground)).toBeGreaterThanOrEqual(1.6);
+        expect(contrast(hue, colors.cardBackground)).toBeGreaterThanOrEqual(1.6);
+      }
+      // The comparison pill text stays readable on its own surface.
+      expect(contrast(colors.chart.positive, colors.chart.positiveSurface)).toBeGreaterThanOrEqual(
+        4.5,
+      );
+      expect(contrast(colors.chart.negative, colors.chart.negativeSurface)).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
   it('keeps primary and secondary copy readable on the main dark surfaces', () => {
     for (const background of [darkColors.screenBackground, darkColors.cardBackground]) {
       expect(contrast(darkColors.textPrimary, background)).toBeGreaterThanOrEqual(4.5);

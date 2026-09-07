@@ -12,6 +12,9 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
+// Subpath imports so Metro bundles only these two weights, not all eight.
+import { Lora_500Medium } from '@expo-google-fonts/lora/500Medium';
+import { Lora_600SemiBold } from '@expo-google-fonts/lora/600SemiBold';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
@@ -87,6 +90,11 @@ function RootNavigator() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // Editorial serif for the Reports headline figures and section headings.
+    // A load failure is tolerated below (splash still hides); named-family
+    // fallback resolves to the platform serif rather than breaking a screen.
+    Lora_500Medium,
+    Lora_600SemiBold,
   });
   const initialize = useAuthStore((state) => state.initialize);
   const session = useAuthStore((state) => state.session);

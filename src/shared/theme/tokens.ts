@@ -26,6 +26,65 @@ const darkBodyCondition: Record<BodyCondition, string> = {
   unknown: '#6F8791',
 };
 
+/**
+ * Reporting palette — theme-aware and shared, so no screen hardcodes a chart
+ * colour. Brand blue stays the anchor but is never the only hue. Categories map
+ * to fixed roles: fuel = blue, maintenance = seafoam, other = warm amber. Trend
+ * bars cycle blue → aqua → lilac by height band so a six-bar chart never reads
+ * as one flat colour.
+ */
+export interface ChartPalette {
+  fuel: string;
+  maintenance: string;
+  other: string;
+  aqua: string;
+  lilac: string;
+  warm: string;
+  /** Empty-bucket ghost fill and donut track. */
+  track: string;
+  /** Axis / gridline. */
+  grid: string;
+  /** Diagonal hatch stroke marking an incomplete interval. */
+  hatch: string;
+  /** Positive/negative comparison text + pill. */
+  positive: string;
+  negative: string;
+  positiveSurface: string;
+  negativeSurface: string;
+}
+
+const lightChart: ChartPalette = {
+  fuel: '#2F7FBE',
+  maintenance: '#2FA79A',
+  other: '#D98A3A',
+  aqua: '#3FB6C4',
+  lilac: '#8A78C9',
+  warm: '#DFA23C',
+  track: '#E3ECEF',
+  grid: '#D9E8EC',
+  hatch: '#B7C9CE',
+  positive: '#0B6B50',
+  negative: '#A2442A',
+  positiveSurface: '#E2F5EF',
+  negativeSurface: '#FBEDE4',
+};
+
+const darkChart: ChartPalette = {
+  fuel: '#5AB3ED',
+  maintenance: '#48C9BB',
+  other: '#F0A857',
+  aqua: '#54CBD8',
+  lilac: '#B69BE8',
+  warm: '#F0B65F',
+  track: '#22343D',
+  grid: '#29414D',
+  hatch: '#3C5560',
+  positive: '#5FCB9F',
+  negative: '#F0956E',
+  positiveSurface: '#173B32',
+  negativeSurface: '#3E2A22',
+};
+
 export interface ThemeColors {
   scheme: ResolvedTheme;
   screenBackground: string;
@@ -73,6 +132,7 @@ export interface ThemeColors {
   diagramWheel: string;
   diagramCenterLine: string;
   bodyCondition: Record<BodyCondition, string>;
+  chart: ChartPalette;
   primary: string;
   primaryDark: string;
   aqua: string;
@@ -135,6 +195,7 @@ export const lightColors: ThemeColors = {
   diagramWheel: '#163244',
   diagramCenterLine: 'rgba(22, 50, 68, 0.34)',
   bodyCondition: lightBodyCondition,
+  chart: lightChart,
   navy: '#163244',
   muted: '#4F6570',
   background: '#F3F8FA',
@@ -196,6 +257,7 @@ export const darkColors: ThemeColors = {
   diagramWheel: '#081116',
   diagramCenterLine: 'rgba(237, 247, 250, 0.42)',
   bodyCondition: darkBodyCondition,
+  chart: darkChart,
   navy: '#EDF7FA',
   muted: '#A5B8C1',
   background: '#0B151B',

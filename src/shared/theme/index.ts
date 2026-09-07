@@ -30,6 +30,9 @@ export const fontFamilies = {
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
+  /** Editorial serif accent — headings and headline figures only, never body. */
+  serif: 'Lora_500Medium',
+  serifSemibold: 'Lora_600SemiBold',
 } as const;
 
 export const typography = {
