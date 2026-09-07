@@ -90,3 +90,30 @@ light+dark çalışır; dışa aktarma görünür + kanonik hesabı kullanır.
 
 Her faz ayrı commit; `git revert` yeterli. Migration / remote mutasyon yok. Serif eklenirse
 revert bağımlılığı da geri alır.
+
+## Completion (2026-09-07)
+
+- Phase B `9300b1a` — `resolvePeriod` centralised; half-open date-only ranges; end capped at
+  anchor+1 day; weekly buckets for single-month periods; `isPartial` flag; distance prior-baseline;
+  `vehicleReports.test.ts` replaced with a boundary suite. `23cdc0d` refined the baseline to apply
+  only with <2 in-range readings.
+- Phase C `676935f` — `reportPeriodId` persisted in `aracim-cepte-preferences`;
+  `sanitizeStoredReportPeriod` fallback; screen reads from store.
+- Phase D `1d45659` (`colors.chart` palette + `Lora` serif) and `cd330cd` (screen + `ReportCharts`
+  rebuilt; screen test rewritten).
+- Phase E `cd330cd` (export moved to a header share icon) and `6840dce` (documents-list download).
+- Docs: `docs/product/premium-reports-v1.md` updated.
+
+### Validation
+
+- `git diff --check` clean · `tsc --noEmit` clean · `expo lint` clean.
+- `vitest run` — 779 passed, 4 pre-existing failures (`criticalRoutes`/`vehicle3dProfile` suite-load
+  Flow parse errors, `selectField` ×3, `EpdkFuelPriceProvider` — all failing before this task).
+- Android production bundle `expo export:embed --eager --platform android --dev false` — 2269
+  modules, 16.1 MB, both Lora weights + redesign strings present, only two font assets copied.
+
+### Manual verification required
+
+Physical / emulator visual QA in light and dark themes (MD §14 Scenario D), and one real PDF export
+compared against the on-screen figures on a device (Scenario A/B step 7-8). Not possible from this
+environment.
