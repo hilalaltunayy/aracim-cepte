@@ -106,6 +106,10 @@ function RootNavigator() {
   const reminders = useDataStore((state) => state.reminders);
   const syncBillingUser = useBillingStore((state) => state.syncUser);
   const clearBillingUser = useBillingStore((state) => state.clearUser);
+  const billingStatus = useBillingStore((state) => state.subscription.status);
+  const applyBillingStatus = useDataStore((state) => state.applyBillingStatus);
+  const syncEntitlements = useDataStore((state) => state.syncEntitlements);
+  const entitlementAwaitingSync = useDataStore((state) => state.entitlementAwaitingSync);
   const segments = useSegments();
   const [pendingNotificationId, setPendingNotificationId] = useState<string | null>(null);
   const processingNotification = useRef(false);
@@ -127,6 +131,20 @@ function RootNavigator() {
     if (session?.user.id) void syncBillingUser(session.user.id);
     else void clearBillingUser();
   }, [session?.user.id, syncBillingUser, clearBillingUser]);
+
+  // The one place RevenueCat state reaches the rest of the app. Screens read the
+  // resolved entitlement from the data store and never call RevenueCat or invent
+  // their own loading state.
+  useEffect(() => {
+    applyBillingStatus(billingStatus);
+  }, [applyBillingStatus, billingStatus]);
+
+  // Store says Premium, trusted mirror does not yet: close the gap once, here,
+  // instead of retrying from each Premium screen.
+  useEffect(() => {
+    if (!session?.user.id || !entitlementAwaitingSync) return;
+    void syncEntitlements();
+  }, [entitlementAwaitingSync, session?.user.id, syncEntitlements]);
 
   useEffect(() => {
     if (

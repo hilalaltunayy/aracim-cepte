@@ -4,19 +4,6 @@ import { useBillingStore } from '@/features/billing/store/billingStore';
 import { revenueCatBillingProvider } from '@/features/billing/services/RevenueCatBillingProvider';
 import { useDataStore } from '@/store/dataStore';
 
-/** Poll the authoritative entitlement until the RevenueCat webhook lands. */
-async function waitForServerPremium(
-  refresh: () => Promise<void>,
-  isPremium: () => boolean,
-  attempts = 5,
-): Promise<void> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    await refresh();
-    if (isPremium()) return;
-    await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
-  }
-}
-
 export default function PremiumRoute() {
   const subscription = useBillingStore((state) => state.subscription);
   const offering = useBillingStore((state) => state.offering);
@@ -27,8 +14,9 @@ export default function PremiumRoute() {
   const selectPackage = useBillingStore((state) => state.selectPackage);
   const purchaseSelected = useBillingStore((state) => state.purchaseSelected);
   const restore = useBillingStore((state) => state.restore);
-  const entitlements = useDataStore((state) => state.entitlements);
-  const refresh = useDataStore((state) => state.refresh);
+  const entitlementStatus = useDataStore((state) => state.entitlementStatus);
+  const awaitingServerSync = useDataStore((state) => state.entitlementAwaitingSync);
+  const syncEntitlements = useDataStore((state) => state.syncEntitlements);
   const billingEnabled = revenueCatBillingProvider.getAvailability().enabled;
   const [reconciling, setReconciling] = useState(false);
 
@@ -36,13 +24,13 @@ export default function PremiumRoute() {
     void loadOffering();
   }, [loadOffering]);
 
+  // The purchase result already unlocked the UI through the billing store; this
+  // asks the backend to re-verify against RevenueCat so server-enforced Premium
+  // operations work too, instead of blind-polling for a webhook that may lag.
   const syncEntitlement = async () => {
     setReconciling(true);
     try {
-      await waitForServerPremium(
-        refresh,
-        () => useDataStore.getState().entitlements.planId === 'premium',
-      );
+      await syncEntitlements();
     } finally {
       setReconciling(false);
     }
@@ -60,7 +48,8 @@ export default function PremiumRoute() {
 
   return (
     <PremiumPaywallScreen
-      authoritativePlanId={entitlements.planId}
+      entitlementStatus={entitlementStatus}
+      awaitingServerSync={awaitingServerSync}
       billingEnabled={billingEnabled}
       subscription={subscription}
       offering={offering}

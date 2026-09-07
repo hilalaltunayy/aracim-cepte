@@ -13,7 +13,8 @@ import {
   useThemedStyles,
   type AppTheme,
 } from '@/shared/theme';
-import { PLAN_ENTITLEMENTS, type PlanId } from '@/features/entitlements/domain/entitlements';
+import { PLAN_ENTITLEMENTS } from '@/features/entitlements/domain/entitlements';
+import type { EntitlementStatus } from '@/features/entitlements/domain/entitlementResolution';
 import type { BillingOffering, BillingSubscriptionState } from '../domain/billing';
 
 const PREMIUM_BENEFITS = [
@@ -34,7 +35,8 @@ const packageLabel = (type: 'monthly' | 'annual' | 'other', title: string) =>
   type === 'monthly' ? 'Aylık' : type === 'annual' ? 'Yıllık' : title;
 
 export function PremiumPaywallScreen({
-  authoritativePlanId,
+  entitlementStatus,
+  awaitingServerSync = false,
   billingEnabled,
   subscription,
   offering,
@@ -47,7 +49,10 @@ export function PremiumPaywallScreen({
   onRestore,
   onReload,
 }: {
-  authoritativePlanId: PlanId;
+  /** Resolved plan. `unknown` is still loading and must not show the purchase card. */
+  entitlementStatus: EntitlementStatus;
+  /** Premium is active in the store, but server-side permissions still lag. */
+  awaitingServerSync?: boolean;
   billingEnabled: boolean;
   subscription: BillingSubscriptionState;
   offering: BillingOffering | null;
@@ -62,11 +67,12 @@ export function PremiumPaywallScreen({
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  const premiumActive = authoritativePlanId === 'premium';
-  // Store confirmed the purchase but the trusted webhook -> user_entitlements
-  // sync has not landed yet.
-  const awaitingServerSync =
-    !premiumActive && (reconciling || subscription.entitlementActive);
+  // An active store entitlement counts as Premium here, so a purchased account
+  // is never sent back to the purchase card while the mirror catches up.
+  const premiumActive = entitlementStatus === 'premium';
+  const resolving = entitlementStatus === 'unknown';
+  // Premium is already usable; only the server-enforced half is still syncing.
+  const syncing = premiumActive && (reconciling || awaitingServerSync);
   const selectedPackage = offering?.packages.find((item) => item.id === selectedPackageId) ?? null;
 
   return (
@@ -105,12 +111,23 @@ export function PremiumPaywallScreen({
         </View>
       </Card>
 
-      {awaitingServerSync ? (
+      {syncing ? (
         <Card style={styles.noticeCard}>
-          <Text style={styles.sectionTitle}>Premium doğrulanıyor</Text>
+          <Text style={styles.sectionTitle}>Hesap yetkileri eşitleniyor</Text>
           <Text style={styles.noticeText}>
-            Satın alma mağazada onaylandı. Hesap yetkileriniz birkaç saniye içinde eşitlenecek;
-            bu ekranı kapatıp yeniden açabilirsiniz.
+            Premium özellikleriniz açık. Sunucu tarafındaki yetkiler arka planda eşitleniyor;
+            bu sırada yeni belge, ek dosya veya özel hatırlatıcı saati kaydı kısa süre
+            gecikebilir.
+          </Text>
+        </Card>
+      ) : null}
+
+      {resolving ? (
+        <Card style={styles.noticeCard}>
+          <Text style={styles.sectionTitle}>Hesap yetkileriniz kontrol ediliyor</Text>
+          <Text style={styles.noticeText}>
+            Mevcut planınız okunuyor. Bu birkaç saniye sürer; hesabınız zaten Premium ise satın
+            alma adımına yönlendirilmezsiniz.
           </Text>
         </Card>
       ) : !premiumActive ? (

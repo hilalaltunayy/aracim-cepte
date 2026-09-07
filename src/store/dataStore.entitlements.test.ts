@@ -1,0 +1,152 @@
+/* eslint-disable import/first */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mirror, reconcile, repository } = vi.hoisted(() => ({
+  mirror: { status: 'unknown' as 'unknown' | 'unavailable' | 'free' | 'premium', calls: 0 },
+  reconcile: { calls: 0, outcome: 'applied' as const },
+  repository: { vehicles: [] as { id: string }[] },
+}));
+
+vi.mock('@/features/entitlements/services/entitlementService', () => ({
+  loadEntitlementMirrorStatus: vi.fn(async () => {
+    mirror.calls += 1;
+    return mirror.status;
+  }),
+}));
+vi.mock('@/features/entitlements/services/entitlementReconciliation', () => ({
+  reconcileEntitlement: vi.fn(async () => {
+    reconcile.calls += 1;
+    return reconcile.outcome;
+  }),
+}));
+vi.mock('@/data/repositories/SupabaseAppRepository', () => ({
+  appRepository: {
+    listVehicles: vi.fn(async () => repository.vehicles),
+    loadVehicleData: vi.fn(async () => ({})),
+    reconcileVehicleData: vi.fn(async () => ({})),
+  },
+}));
+vi.mock('@/data/storage/safeStorage', () => ({
+  createSafeStringStorage: () => ({
+    getItem: async () => null,
+    setItem: async () => undefined,
+    removeItem: async () => undefined,
+  }),
+}));
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: vi.fn(async () => null), setItem: vi.fn(async () => undefined), removeItem: vi.fn(async () => undefined) },
+}));
+vi.mock('@/store/authStore', () => ({
+  useAuthStore: { getState: () => ({ markSessionExpired: vi.fn() }) },
+}));
+
+import { useDataStore } from './dataStore';
+
+const state = () => useDataStore.getState();
+
+describe('data store entitlement lifecycle', () => {
+  beforeEach(() => {
+    mirror.status = 'unknown';
+    mirror.calls = 0;
+    reconcile.calls = 0;
+    repository.vehicles = [];
+    state().clear();
+  });
+
+  it('starts unknown rather than Free, with Free limits as the fail-closed default', () => {
+    expect(state().entitlementStatus).toBe('unknown');
+    expect(state().entitlements.planId).toBe('free');
+    expect(state().entitlementAwaitingSync).toBe(false);
+  });
+
+  it('unlocks Premium immediately from the store while the mirror still says Free', async () => {
+    // Cold start: the mirror answers Free because the webhook has not landed.
+    mirror.status = 'free';
+    await state().bootstrap();
+    expect(state().entitlementStatus).toBe('unknown');
+
+    // RevenueCat then confirms the purchase through the single billing bridge.
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+    expect(state().entitlements.advancedReports).toBe(true);
+    expect(state().entitlementAwaitingSync).toBe(true);
+  });
+
+  it('resolves Free only once both sources answered Free', async () => {
+    mirror.status = 'free';
+    await state().bootstrap();
+    state().applyBillingStatus('free');
+    expect(state().entitlementStatus).toBe('free');
+    expect(state().entitlementAwaitingSync).toBe(false);
+  });
+
+  it('keeps a mirror-confirmed Premium even when the store reports Free', async () => {
+    // A support grant exists only server-side.
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('free');
+    expect(state().entitlementStatus).toBe('premium');
+  });
+
+  it('reconciles once, not per screen, and then re-reads the trusted mirror', async () => {
+    mirror.status = 'free';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementAwaitingSync).toBe(true);
+
+    mirror.status = 'premium';
+    await Promise.all([state().syncEntitlements(), state().syncEntitlements()]);
+
+    expect(reconcile.calls).toBe(1);
+    expect(state().entitlementStatus).toBe('premium');
+    expect(state().entitlementAwaitingSync).toBe(false);
+  });
+
+  it('does not spend a reconciliation round-trip when the sources already agree', async () => {
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    await state().syncEntitlements();
+    expect(reconcile.calls).toBe(0);
+  });
+
+  it('drops the previous account entitlement on sign-out so the next user cannot inherit it', async () => {
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+
+    state().clear();
+
+    expect(state().entitlementStatus).toBe('unknown');
+    expect(state().entitlements.planId).toBe('free');
+    expect(state().billingStatus).toBe('unknown');
+    expect(state().entitlementMirror).toBe('unknown');
+  });
+
+  it('survives a cold restart of the same Premium account without any user action', async () => {
+    // Restart: stores are fresh, then both sources answer as they would on device.
+    state().clear();
+    mirror.status = 'premium';
+    await state().bootstrap();
+    expect(state().entitlementStatus).toBe('premium');
+    expect(state().entitlements.ocrMonthlyQuota).toBe(30);
+    expect(state().entitlements.maxAttachmentsPerEntity).toBe(10);
+    expect(state().entitlements.aiDailyQuota).toBe(10);
+    expect(state().entitlements.customReminderTime).toBe(true);
+  });
+
+  it('treats an unreadable mirror as unresolved while the store is still answering', async () => {
+    mirror.status = 'unavailable';
+    await state().bootstrap();
+    state().applyBillingStatus('unknown');
+    expect(state().entitlementStatus).toBe('unknown');
+  });
+
+  it('does not hang forever when the mirror is unreachable and the store says Free', async () => {
+    mirror.status = 'unavailable';
+    await state().bootstrap();
+    state().applyBillingStatus('free');
+    expect(state().entitlementStatus).toBe('free');
+  });
+});

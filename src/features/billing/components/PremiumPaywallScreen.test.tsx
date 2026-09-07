@@ -63,7 +63,7 @@ const offering = {
   ],
 };
 const base: ComponentProps<typeof PremiumPaywallScreen> = {
-  authoritativePlanId: 'free' as const,
+  entitlementStatus: 'free' as const,
   billingEnabled: true,
   subscription: { status: 'free' as const, entitlementActive: false },
   offering,
@@ -152,15 +152,17 @@ describe('PremiumPaywallScreen', () => {
     expect(onRestore).toHaveBeenCalledOnce();
   });
 
-  it('shows a calm reconciling state after a store purchase before the webhook lands', async () => {
+  it('treats a store-confirmed purchase as Premium while the server mirror catches up', async () => {
     const renderer = await mount({
       ...base,
-      authoritativePlanId: 'free',
-      reconciling: true,
+      // The billing bridge already resolved this to Premium from CustomerInfo.
+      entitlementStatus: 'premium',
+      awaitingServerSync: true,
       subscription: { status: 'premium', entitlementActive: true },
     });
-    expect(texts(renderer)).toContain('Premium doğrulanıyor');
-    // No purchase or restore buttons while the entitlement is syncing.
+    // Premium is presented as active, not as a pending verification dead end.
+    expect(texts(renderer)).toContain('Premium hesabınız aktif');
+    expect(texts(renderer)).toContain('Hesap yetkileri eşitleniyor');
     expect(
       renderer.root.findAll(
         (node) => String(node.type) === 'AppButton' && node.props.title === 'Satın alımları geri yükle',
@@ -168,10 +170,17 @@ describe('PremiumPaywallScreen', () => {
     ).toHaveLength(0);
   });
 
+  it('never shows the purchase card while entitlement is still unknown', async () => {
+    const renderer = await mount({ ...base, entitlementStatus: 'unknown' });
+    expect(texts(renderer)).toContain('Hesap yetkileriniz kontrol ediliyor');
+    expect(texts(renderer).join(' ')).not.toContain('Planınızı seçin');
+    expect(renderer.root.findAll((node) => String(node.type) === 'AppButton')).toHaveLength(0);
+  });
+
   it('shows authoritative Premium as active without rendering purchase controls', async () => {
     const renderer = await mount({
       ...base,
-      authoritativePlanId: 'premium',
+      entitlementStatus: 'premium',
       subscription: {
         status: 'premium',
         entitlementActive: true,
@@ -186,7 +195,7 @@ describe('PremiumPaywallScreen', () => {
   it('documents cancelled-but-active downgrade semantics without deletion', async () => {
     const renderer = await mount({
       ...base,
-      authoritativePlanId: 'premium',
+      entitlementStatus: 'premium',
       subscription: {
         status: 'premium',
         entitlementActive: true,

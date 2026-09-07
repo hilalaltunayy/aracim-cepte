@@ -31,7 +31,14 @@ import {
   FREE_ENTITLEMENTS,
   type PlanEntitlements,
 } from '@/features/entitlements/domain/entitlements';
-import { loadCurrentEntitlements } from '@/features/entitlements/services/entitlementService';
+import {
+  resolveEntitlementSnapshot,
+  type EntitlementMirrorStatus,
+  type EntitlementStatus,
+  type StoreEntitlementStatus,
+} from '@/features/entitlements/domain/entitlementResolution';
+import { loadEntitlementMirrorStatus } from '@/features/entitlements/services/entitlementService';
+import { reconcileEntitlement } from '@/features/entitlements/services/entitlementReconciliation';
 import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
 import {
   DEFAULT_REPORT_PERIOD_ID,
@@ -43,7 +50,19 @@ import {
 interface DataState {
   vehicles: Vehicle[];
   activeVehicleId: string | null;
+  /** Effective plan limits for display. Fail-closed to Free while unresolved. */
   entitlements: Readonly<PlanEntitlements>;
+  /**
+   * Canonical resolved plan. `unknown` means entitlement is still being read —
+   * screens must show a short loading state, never the Free upgrade lock.
+   */
+  entitlementStatus: EntitlementStatus;
+  /** The store says Premium but the trusted mirror has not caught up yet. */
+  entitlementAwaitingSync: boolean;
+  /** Raw trusted-mirror answer, kept so the two sources stay separable. */
+  entitlementMirror: EntitlementMirrorStatus;
+  /** Raw RevenueCat answer, pushed in by the single app-level billing bridge. */
+  billingStatus: StoreEntitlementStatus;
   records: VehicleRecord[];
   reminders: Reminder[];
   bodyConditions: BodyPartCondition[];
@@ -64,6 +83,10 @@ interface DataState {
   lastBootstrapDurationMs: number | null;
   setOnboardingSeen: () => void;
   setReportPeriod: (id: ReportPeriodId) => void;
+  /** Single entry point for RevenueCat state; only the app-level bridge calls it. */
+  applyBillingStatus: (status: StoreEntitlementStatus) => void;
+  /** Re-reads the trusted mirror, reconciling with the store first when it lags. */
+  syncEntitlements: () => Promise<void>;
   setActiveVehicle: (id: string) => Promise<void>;
   bootstrap: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -115,6 +138,23 @@ export const useDataStore = create<DataState>()(
   persist(
     (set, get) => {
       let vehicleLoadSequence = 0;
+      // One in-flight reconciliation at a time. The gap is closed by asking the
+      // server once, not by retrying from every screen that notices it.
+      let reconciling: Promise<void> | null = null;
+      /** Recomputes the one canonical answer from the two raw sources. */
+      const applyEntitlementSources = (
+        mirror: EntitlementMirrorStatus,
+        billing: StoreEntitlementStatus,
+      ) => {
+        const snapshot = resolveEntitlementSnapshot(mirror, billing);
+        set({
+          entitlementMirror: mirror,
+          billingStatus: billing,
+          entitlements: snapshot.entitlements,
+          entitlementStatus: snapshot.status,
+          entitlementAwaitingSync: snapshot.awaitingServerSync,
+        });
+      };
       const handleError = (error: unknown) => {
         if (isSessionExpiredError(error)) useAuthStore.getState().markSessionExpired();
         return getFriendlyError(error);
@@ -143,12 +183,13 @@ export const useDataStore = create<DataState>()(
           .catch(() => undefined);
       };
       const reloadAvailableData = async () => {
-        const [vehicles, entitlements] = await Promise.all([
+        const [vehicles, mirror] = await Promise.all([
           appRepository.listVehicles(),
-          loadCurrentEntitlements(),
+          loadEntitlementMirrorStatus(),
         ]);
         const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
-        set({ vehicles, activeVehicleId, entitlements, ...emptyVehicleData });
+        set({ vehicles, activeVehicleId, ...emptyVehicleData });
+        applyEntitlementSources(mirror, get().billingStatus);
         if (activeVehicleId) await loadActiveData(activeVehicleId);
         else set(emptyVehicleData);
       };
@@ -179,7 +220,14 @@ export const useDataStore = create<DataState>()(
       return {
         vehicles: [],
         activeVehicleId: null,
+        // Limits fail closed to Free, but the *status* starts unknown so no
+        // screen renders an entitled user through the Free upgrade lock while
+        // the mirror and the store are still answering.
         entitlements: FREE_ENTITLEMENTS,
+        entitlementStatus: 'unknown',
+        entitlementAwaitingSync: false,
+        entitlementMirror: 'unknown',
+        billingStatus: 'unknown',
         ...emptyVehicleData,
         onboardingSeen: false,
         reportPeriodId: DEFAULT_REPORT_PERIOD_ID,
@@ -195,6 +243,26 @@ export const useDataStore = create<DataState>()(
 
         setReportPeriod: (id) => {
           if (isReportPeriodId(id)) set({ reportPeriodId: id });
+        },
+
+        applyBillingStatus: (status) => {
+          if (get().billingStatus === status) return;
+          applyEntitlementSources(get().entitlementMirror, status);
+        },
+
+        syncEntitlements: async () => {
+          if (reconciling) return reconciling;
+          reconciling = (async () => {
+            try {
+              // Only pay for a round-trip when the two sources actually disagree;
+              // otherwise re-reading the mirror is enough.
+              if (get().entitlementAwaitingSync) await reconcileEntitlement();
+              applyEntitlementSources(await loadEntitlementMirrorStatus(), get().billingStatus);
+            } finally {
+              reconciling = null;
+            }
+          })();
+          return reconciling;
         },
 
         setActiveVehicle: async (id) => {
@@ -216,12 +284,13 @@ export const useDataStore = create<DataState>()(
           const startedAt = Date.now();
           set({ loading: true, error: null, bootstrapError: null, bootstrapped: false });
           try {
-            const [vehicles, entitlements] = await Promise.all([
+            const [vehicles, mirror] = await Promise.all([
               appRepository.listVehicles(),
-              loadCurrentEntitlements(),
+              loadEntitlementMirrorStatus(),
             ]);
             const activeVehicleId = resolveActiveVehicleId(vehicles, get().activeVehicleId);
-            set({ vehicles, activeVehicleId, entitlements, ...emptyVehicleData });
+            set({ vehicles, activeVehicleId, ...emptyVehicleData });
+            applyEntitlementSources(mirror, get().billingStatus);
             if (activeVehicleId) await loadActiveData(activeVehicleId);
             else set(emptyVehicleData);
             set({
@@ -433,6 +502,8 @@ export const useDataStore = create<DataState>()(
           }),
 
         clear: () =>
+          // Sign-out must drop the previous account's entitlement entirely, or
+          // the next account inherits it until its own bootstrap finishes.
           set({
             vehicles: [],
             activeVehicleId: null,
@@ -440,6 +511,11 @@ export const useDataStore = create<DataState>()(
             bootstrapError: null,
             lastReminderNotice: null,
             lastBootstrapDurationMs: null,
+            entitlements: FREE_ENTITLEMENTS,
+            entitlementStatus: 'unknown',
+            entitlementAwaitingSync: false,
+            entitlementMirror: 'unknown',
+            billingStatus: 'unknown',
             ...emptyVehicleData,
           }),
         clearError: () => set({ error: null }),

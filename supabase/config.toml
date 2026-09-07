@@ -464,3 +464,10 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/revenuecat-webhook/deno.json"
 entrypoint = "./functions/revenuecat-webhook/index.ts"
+
+[functions.sync-entitlement]
+enabled = true
+# The Edge wrapper validates the user token and derives the user id from it.
+verify_jwt = false
+import_map = "./functions/sync-entitlement/deno.json"
+entrypoint = "./functions/sync-entitlement/index.ts"

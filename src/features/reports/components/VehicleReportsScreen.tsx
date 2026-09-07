@@ -126,6 +126,7 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     expertiseReports,
     notes,
     entitlements,
+    entitlementStatus,
     bootstrapped,
     loading,
     reportPeriodId,
@@ -214,7 +215,10 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     }
   };
 
-  if (!bootstrapped || loading) return <LoadingScreen />;
+  // An entitlement that has not resolved yet is not Free: showing the upgrade
+  // lock here is exactly what made a purchased account look downgraded after a
+  // cold start. Wait for the resolved answer instead.
+  if (!bootstrapped || loading || entitlementStatus === 'unknown') return <LoadingScreen />;
 
   if (!vehicle) {
     return (

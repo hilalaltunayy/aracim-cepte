@@ -37,7 +37,21 @@ import {
   titleAfterReminderTypeChange,
 } from '@/features/reminders/reminderTitle';
 
+/**
+ * Entitlement gate.
+ *
+ * The form below seeds `time` from the Premium custom-time gate in a `useState`
+ * initialiser, which only runs once. Mounting it while entitlement is still
+ * `unknown` would freeze a Premium user into the Free 09:00 value even after
+ * the real answer arrives, so the form is not mounted until the plan resolves.
+ */
 export default function ReminderEditScreen() {
+  const entitlementStatus = useDataStore((state) => state.entitlementStatus);
+  if (entitlementStatus === 'unknown') return <LoadingScreen />;
+  return <ReminderEditForm />;
+}
+
+function ReminderEditForm() {
   const params = useLocalSearchParams<{
     id?: string | string[];
     dueDate?: string | string[];
