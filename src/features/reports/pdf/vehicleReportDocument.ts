@@ -214,8 +214,12 @@ export function buildVehicleReportDocument(
       sharePercent: distributionTotal > 0 ? Math.round((amount / distributionTotal) * 100) : 0,
     }));
 
+  // The same half-open range every on-screen metric uses, so the PDF's record
+  // tables can never disagree with the totals above them.
   const periodRecords = scopedRecords.filter(
-    (record) => record.recordDate >= report.period.start && record.recordDate <= report.period.end,
+    (record) =>
+      record.recordDate >= report.resolvedPeriod.startInclusive &&
+      record.recordDate < report.resolvedPeriod.endExclusive,
   );
   const maintenanceRecords = byDateDescending(
     periodRecords.filter((record) => record.recordType === 'maintenance'),

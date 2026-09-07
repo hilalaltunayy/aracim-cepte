@@ -1,82 +1,351 @@
 import { describe, expect, it } from 'vitest';
-import { buildVehicleComparisons, buildVehicleReport, getReportPeriod } from './vehicleReports';
+import {
+  buildVehicleComparisons,
+  buildVehicleReport,
+  DEFAULT_REPORT_PERIOD_ID,
+  isReportPeriodId,
+  resolvePeriod,
+} from './vehicleReports';
 import type { VehicleRecord } from '@/domain/entities';
 
-const record = (overrides: Partial<VehicleRecord>): VehicleRecord => ({ id: Math.random().toString(), vehicleId: 'a', ownerId: 'u', recordType: 'fuel', category: 'Yakıt', amount: 0, recordDate: '2026-08-01', kilometer: null, liters: null, description: null, createdAt: '2026-08-01T12:00:00Z', updatedAt: '2026-08-01T12:00:00Z', ...overrides });
-const anchor = new Date('2026-08-20T12:00:00');
+const record = (overrides: Partial<VehicleRecord>): VehicleRecord => ({
+  id: Math.random().toString(),
+  vehicleId: 'a',
+  ownerId: 'u',
+  recordType: 'fuel',
+  category: 'Yakıt',
+  amount: 0,
+  recordDate: '2026-08-15',
+  kilometer: null,
+  liters: null,
+  description: null,
+  createdAt: '2026-08-15T12:00:00Z',
+  updatedAt: '2026-08-15T12:00:00Z',
+  ...overrides,
+});
 
-describe('buildVehicleReport', () => {
-  it('calculates vehicle-scoped costs, fuel, maintenance and period comparison', () => {
-    const report = buildVehicleReport([
-      record({ amount: 2000, liters: 40, kilometer: 150000 }), record({ id: 'm', recordType: 'maintenance', amount: 1000, partsCost: 650, laborCost: 350, kilometer: 150400 }),
-      record({ id: 'old', recordDate: '2026-07-02', amount: 1500 }), record({ id: 'b', vehicleId: 'b', amount: 9999 }),
-    ], { id: 'a' }, 'month', anchor);
-    expect(report.totalCost).toBe(3000); expect(report.fuelCost).toBe(2000); expect(report.maintenanceCost).toBe(1000);
-    expect(report.fuelLiters).toBe(40); expect(report.distanceKm).toBe(400); expect(report.costPerKm).toBe(7.5); expect(report.consumption).toBe(10);
-    expect(report.partsCost).toBe(650); expect(report.laborCost).toBe(350); expect(report.comparisons.total.percentage).toBe(100);
+// "Today" for every test. "Last month" therefore means 1–31 August 2026.
+const NOW = new Date('2026-09-07T10:00:00');
+
+describe('resolvePeriod — one authoritative date range', () => {
+  it('"Geçen ay" is exactly the previous complete calendar month', () => {
+    const period = resolvePeriod('last_month', NOW);
+    expect(period.startInclusive).toBe('2026-08-01');
+    expect(period.endExclusive).toBe('2026-09-01');
+    expect(period.previousStartInclusive).toBe('2026-07-01');
+    expect(period.previousEndExclusive).toBe('2026-08-01');
+    expect(period.granularity).toBe('week');
   });
-  it('keeps unknown values unknown and rejects inconsistent historical mileage for derived distance', () => {
-    const report = buildVehicleReport([record({ kilometer: 150000 }), record({ id: 'lower', recordDate: '2026-08-10', kilometer: 148000 })], { id: 'a' }, 'month', anchor);
-    expect(report.distanceKm).toBeNull(); expect(report.costPerKm).toBeNull(); expect(report.consumption).toBeNull();
+
+  it('"Son 6 ay" starts five months back and runs through today (not month end)', () => {
+    const period = resolvePeriod('six_months', NOW);
+    expect(period.startInclusive).toBe('2026-04-01');
+    // Capped at the day after "today" so future-dated records cannot leak.
+    expect(period.endExclusive).toBe('2026-09-08');
+    expect(period.previousStartInclusive).toBe('2025-10-01');
+    expect(period.previousEndExclusive).toBe('2026-04-01');
+    expect(period.buckets).toHaveLength(6);
+    expect(period.buckets.map((bucket) => bucket.key)).toEqual([
+      '2026-04',
+      '2026-05',
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+    ]);
   });
-  it('creates UTC-free calendar periods and safely avoids zero-base comparison', () => {
-    expect(getReportPeriod('six_months', anchor).start).toBe('2026-03-01');
-    expect(buildVehicleReport([record({ amount: 100 })], { id: 'a' }, 'month', anchor).comparisons.total.percentage).toBeNull();
+
+  it('"Son 3 ay" is this month plus the two before it', () => {
+    const period = resolvePeriod('three_months', NOW);
+    expect(period.startInclusive).toBe('2026-07-01');
+    expect(period.endExclusive).toBe('2026-09-08');
+    expect(period.buckets).toHaveLength(3);
   });
-  it('aggregates monthly, selected-period and year fuel totals without leaking another vehicle', () => {
-    const records = [record({ amount: 100, liters: 2 }), record({ id: 'july', recordDate: '2026-07-15', amount: 200, liters: 4 }), record({ id: 'january', recordDate: '2026-01-15', amount: 300, liters: 6 }), record({ id: 'other', vehicleId: 'b', amount: 999 })];
-    expect(buildVehicleReport(records, { id: 'a' }, 'month', anchor).fuelCost).toBe(100);
-    expect(buildVehicleReport(records, { id: 'a' }, 'three_months', anchor).fuelCost).toBe(300);
-    expect(buildVehicleReport(records, { id: 'a' }, 'year', anchor).fuelCost).toBe(600);
+
+  it('marks the current month bucket as the incomplete interval', () => {
+    const period = resolvePeriod('six_months', NOW);
+    const september = period.buckets.find((bucket) => bucket.key === '2026-09');
+    const august = period.buckets.find((bucket) => bucket.key === '2026-08');
+    expect(september?.isPartial).toBe(true);
+    expect(august?.isPartial).toBe(false);
   });
-  it('calculates litres, weighted price, frequency and fuel cost per kilometre only with valid inputs', () => {
-    const report = buildVehicleReport([record({ amount: 500, liters: 10, kilometer: 100 }), record({ id: 'second', amount: 1000, liters: 20, kilometer: 200 })], { id: 'a' }, 'month', anchor);
-    expect(report.fuelLiters).toBe(30); expect(report.averageFuelPrice).toBe(50); expect(report.refuelFrequency).toBe(2); expect(report.fuelCostPerKm).toBe(15);
+
+  it('breaks a single month into weekly buckets', () => {
+    const weeks = resolvePeriod('last_month', NOW).buckets;
+    expect(weeks.map((bucket) => bucket.label)).toEqual(['1–7', '8–14', '15–21', '22–28', '29–31']);
+    expect(weeks[0].startInclusive).toBe('2026-08-01');
+    expect(weeks[0].endExclusive).toBe('2026-08-08');
+    expect(weeks.at(-1)?.endExclusive).toBe('2026-09-01');
+    expect(weeks.every((bucket) => bucket.isPartial === false)).toBe(true);
   });
-  it('keeps litres and consumption unknown when legacy fuel records have no usable litres', () => {
-    const report = buildVehicleReport([record({ amount: 500, liters: null, kilometer: 100 }), record({ id: 'second', amount: 500, liters: 0, kilometer: 200 })], { id: 'a' }, 'month', anchor);
-    expect(report.fuelLiters).toBeNull(); expect(report.averageFuelPrice).toBeNull(); expect(report.consumption).toBeNull();
+
+  it('validates the persisted period id and names a stable default', () => {
+    expect(isReportPeriodId('last_month')).toBe(true);
+    expect(isReportPeriodId('last_30_days')).toBe(false);
+    expect(isReportPeriodId(undefined)).toBe(false);
+    expect(DEFAULT_REPORT_PERIOD_ID).toBe('six_months');
   });
-  it('does not derive consumption without valid distance coverage', () => {
-    const report = buildVehicleReport([record({ amount: 500, liters: 10, kilometer: null })], { id: 'a' }, 'month', anchor);
-    expect(report.distanceKm).toBeNull(); expect(report.consumption).toBeNull(); expect(report.costPerKm).toBeNull();
+});
+
+describe('buildVehicleReport — period boundaries', () => {
+  const vehicle = { id: 'a' };
+
+  it('includes a record on the first day of "Geçen ay"', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-08-01', recordType: 'expense', amount: 500 })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.otherCost).toBe(500);
+    expect(report.totalCost).toBe(500);
   });
-  it('derives maintenance totals, average, highest event, and parts/labor independently', () => {
-    const report = buildVehicleReport([record({ id: 'm1', recordType: 'maintenance', category: 'Bakım', amount: 1000, partsCost: 600, laborCost: 400 }), record({ id: 'm2', recordType: 'maintenance', category: 'Bakım', amount: 2500, partsCost: 1800, laborCost: 500 })], { id: 'a' }, 'month', anchor);
-    expect(report.maintenanceCost).toBe(3500); expect(report.maintenanceCount).toBe(2); expect(report.partsCost).toBe(2400); expect(report.laborCost).toBe(900); expect(report.averageMaintenanceCost).toBe(1750); expect(report.highestMaintenance?.id).toBe('m2');
+
+  it('includes a record on the final day of "Geçen ay"', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-08-31', recordType: 'maintenance', amount: 900 })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.maintenanceCost).toBe(900);
   });
-  it('groups maintenance operations and station spending conservatively', () => {
-    const item = { id: 'i', maintenanceRecordId: 'm', vehicleId: 'a', ownerId: 'u', itemType: 'engine_oil', cost: null, note: null, createdAt: 'x', updatedAt: 'x' };
-    const report = buildVehicleReport([record({ amount: 900, stationBrand: 'opet' }), record({ id: 'shell', amount: 500, stationBrand: 'shell' }), record({ id: 'm', recordType: 'maintenance', category: 'Bakım', amount: 700, maintenanceItems: [item] })], { id: 'a' }, 'month', anchor);
-    expect(report.stationDistribution).toEqual([{ id: 'opet', total: 900 }, { id: 'shell', total: 500 }]); expect(report.maintenanceBreakdown).toEqual([{ id: 'engine_oil', total: 700 }]);
+
+  it('excludes records immediately before and after the period', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-07-31', amount: 100 }),
+        record({ recordDate: '2026-09-01', amount: 200 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.totalCost).toBe(0);
   });
-  it('builds fuel and maintenance period buckets from their own records', () => {
-    const report = buildVehicleReport([record({ amount: 100 }), record({ id: 'm', recordType: 'maintenance', amount: 200, recordDate: '2026-07-11' })], { id: 'a' }, 'three_months', anchor);
-    expect(report.fuelBuckets.map((bucket) => bucket.fuel)).toEqual([0, 0, 100]); expect(report.maintenanceBuckets.map((bucket) => bucket.maintenance)).toEqual([0, 200, 0]);
+
+  it('never counts a future-dated record in the current period', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-09-07', amount: 300 }),
+        record({ recordDate: '2026-09-20', amount: 999 }),
+      ],
+      vehicle,
+      'six_months',
+      NOW,
+    );
+    expect(report.totalCost).toBe(300);
   });
-  it('uses valid equivalent previous periods and keeps absent or zero bases honest', () => {
-    const records = [record({ amount: 200 }), record({ id: 'previous', recordDate: '2026-07-03', amount: 100 })];
-    expect(buildVehicleReport(records, { id: 'a' }, 'month', anchor).comparisons.total.percentage).toBe(100);
-    expect(buildVehicleReport([record({ amount: 100 })], { id: 'a' }, 'three_months', anchor).comparisons.total.percentage).toBeNull();
-    expect(getReportPeriod('year', anchor).previousStart).toBe('2025-01-01');
+
+  it('sums every category in the same period and keeps Total = Fuel + Maintenance + Other', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-03', recordType: 'fuel', amount: 2000 }),
+        record({ recordDate: '2026-08-12', recordType: 'maintenance', amount: 1500 }),
+        record({ recordDate: '2026-08-25', recordType: 'expense', amount: 700 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.fuelCost).toBe(2000);
+    expect(report.maintenanceCost).toBe(1500);
+    expect(report.otherCost).toBe(700);
+    expect(report.totalCost).toBe(4200);
+    expect(report.fuelCost + report.maintenanceCost + report.otherCost).toBe(report.totalCost);
   });
-  it('uses high-water-safe record ordering for distance and never treats a historical lower event as travelled distance', () => {
-    const valid = buildVehicleReport([record({ kilometer: 100 }), record({ id: 'later', recordDate: '2026-08-10', kilometer: 150 })], { id: 'a' }, 'month', anchor);
-    const historical = buildVehicleReport([record({ kilometer: 150 }), record({ id: 'history', recordDate: '2026-08-10', kilometer: 120 })], { id: 'a' }, 'month', anchor);
-    expect(valid.distanceKm).toBe(50); expect(historical.distanceKm).toBeNull();
+
+  it('spreads records across six monthly buckets that align with the totals', () => {
+    const records = [
+      record({ recordDate: '2026-04-10', amount: 100 }),
+      record({ recordDate: '2026-06-10', amount: 200 }),
+      record({ recordDate: '2026-09-05', amount: 300 }),
+    ];
+    const report = buildVehicleReport(records, vehicle, 'six_months', NOW);
+    expect(report.totalCost).toBe(600);
+    expect(report.buckets.map((bucket) => bucket.total)).toEqual([100, 0, 200, 0, 0, 300]);
+    expect(report.buckets.reduce((sum, bucket) => sum + bucket.total, 0)).toBe(report.totalCost);
+    expect(report.hasTrend).toBe(true);
   });
-  it('keeps null legacy amounts out of cost totals instead of manufacturing a zero-valued metric', () => {
-    const legacy = record({ amount: Number.NaN, liters: null });
-    const report = buildVehicleReport([legacy], { id: 'a' }, 'month', anchor);
-    expect(report.totalCost).toBe(0); expect(report.hasTrend).toBe(false); expect(report.fuelLiters).toBeNull();
+
+  it('reports a vehicle with no records in the selected period as a true zero', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-01-05', amount: 5000 })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.totalCost).toBe(0);
+    expect(report.fuelLiters).toBeNull();
+    expect(report.distanceKm).toBeNull();
+    expect(report.hasTrend).toBe(false);
   });
-  it('builds an isolated two-vehicle comparison with every reported comparison metric', () => {
-    const comparisons = buildVehicleComparisons([{ vehicle: { id: 'a', brand: 'Kia', model: 'Sportage' }, records: [record({ amount: 100, kilometer: 100 }), record({ id: 'a2', amount: 100, kilometer: 200 })] }, { vehicle: { id: 'b', brand: 'Ford', model: 'Puma' }, records: [record({ id: 'b1', vehicleId: 'b', amount: 300, kilometer: 10 }), record({ id: 'b2', vehicleId: 'b', amount: 200, kilometer: 110, recordType: 'maintenance' })] }], 'month', anchor);
-    expect(comparisons).toHaveLength(2); expect(comparisons[0]).toMatchObject({ vehicleId: 'a', totalCost: 200, fuelCost: 200, maintenanceCost: 0, distanceKm: 100, costPerKm: 2 }); expect(comparisons[1]).toMatchObject({ vehicleId: 'b', totalCost: 500, fuelCost: 300, maintenanceCost: 200, distanceKm: 100, costPerKm: 5 });
+
+  it('never lets another vehicle contaminate the active report for overlapping dates', () => {
+    const records = [
+      record({ id: 'a1', vehicleId: 'a', recordDate: '2026-08-10', amount: 400 }),
+      record({ id: 'b1', vehicleId: 'b', recordDate: '2026-08-10', amount: 9999 }),
+    ];
+    expect(buildVehicleReport(records, { id: 'a' }, 'last_month', NOW).totalCost).toBe(400);
+    expect(buildVehicleReport(records, { id: 'b' }, 'last_month', NOW).totalCost).toBe(9999);
   });
-  it('bounds comparison to three vehicles and represents missing per-vehicle distance truthfully', () => {
-    const data = ['a', 'b', 'c', 'd'].map((id) => ({ vehicle: { id, brand: id, model: 'model' }, records: [record({ id, vehicleId: id, amount: 100 })] }));
-    const comparisons = buildVehicleComparisons(data, 'month', anchor);
-    expect(comparisons).toHaveLength(3); expect(comparisons.every((item) => item.distanceKm === null && item.costPerKm === null)).toBe(true);
+
+  it('shows a single-month trend from weekly buckets instead of a dead "need two months" state', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-02', amount: 300 }),
+        record({ recordDate: '2026-08-19', amount: 500 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.trendGranularity).toBe('week');
+    expect(report.buckets).toHaveLength(5);
+    expect(report.buckets.map((bucket) => bucket.total)).toEqual([300, 0, 500, 0, 0]);
+    expect(report.hasTrend).toBe(true);
+  });
+});
+
+describe('buildVehicleReport — derived distance and fuel metrics', () => {
+  const vehicle = { id: 'a' };
+
+  it('derives distance from odometer readings inside the period', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-05', kilometer: 10_000, liters: 40, amount: 2000 }),
+        record({ recordDate: '2026-08-25', kilometer: 10_500, liters: 30, amount: 1500 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.distanceKm).toBe(500);
+    expect(report.distanceUsesPriorBaseline).toBe(false);
+    expect(report.costPerKm).toBe(7);
+    expect(report.consumption).toBeCloseTo(14);
+  });
+
+  it('uses an odometer reading recorded before the period as the starting point', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-07-20', kilometer: 9_000, amount: 1000 }),
+        record({ recordDate: '2026-08-28', kilometer: 9_800, liters: 50, amount: 2500 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.distanceKm).toBe(800);
+    expect(report.distanceUsesPriorBaseline).toBe(true);
+    // The July record's amount must never enter the August totals.
+    expect(report.totalCost).toBe(2500);
+  });
+
+  it('returns unavailable — not zero — when there is only one usable odometer reading', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-08-10', kilometer: 12_000, liters: 40, amount: 2000 })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.distanceKm).toBeNull();
+    expect(report.costPerKm).toBeNull();
+    expect(report.consumption).toBeNull();
+  });
+
+  it('rejects a decreasing odometer as travelled distance', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-05', kilometer: 15_000 }),
+        record({ recordDate: '2026-08-20', kilometer: 14_000 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.distanceKm).toBeNull();
+  });
+
+  it('keeps litres, price and consumption unknown when legacy fuel rows have no litres', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-05', liters: null, kilometer: 100, amount: 500 }),
+        record({ recordDate: '2026-08-15', liters: 0, kilometer: 200, amount: 500 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.fuelLiters).toBeNull();
+    expect(report.averageFuelPrice).toBeNull();
+    expect(report.consumption).toBeNull();
+  });
+
+  it('computes weighted litre price and refuel frequency from valid rows only', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-05', amount: 500, liters: 10, kilometer: 100 }),
+        record({ recordDate: '2026-08-18', amount: 1500, liters: 20, kilometer: 300 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.fuelLiters).toBe(30);
+    expect(report.averageFuelPrice).toBeCloseTo(2000 / 30);
+    expect(report.refuelFrequency).toBe(2);
+  });
+});
+
+describe('buildVehicleReport — comparison and honesty', () => {
+  const vehicle = { id: 'a' };
+
+  it('compares against the equivalent immediately preceding window', () => {
+    const report = buildVehicleReport(
+      [
+        record({ recordDate: '2026-08-10', amount: 200 }),
+        record({ recordDate: '2026-07-10', amount: 100 }),
+      ],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.comparisons.total.percentage).toBe(100);
+  });
+
+  it('keeps a zero-base comparison null rather than dividing by zero', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-08-10', amount: 200 })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.comparisons.total.percentage).toBeNull();
+  });
+
+  it('does not manufacture a zero metric from a NaN legacy amount', () => {
+    const report = buildVehicleReport(
+      [record({ recordDate: '2026-08-10', amount: Number.NaN, liters: null })],
+      vehicle,
+      'last_month',
+      NOW,
+    );
+    expect(report.totalCost).toBe(0);
+    expect(report.fuelLiters).toBeNull();
+    expect(report.hasTrend).toBe(false);
+  });
+});
+
+describe('buildVehicleComparisons', () => {
+  it('builds an isolated multi-vehicle comparison bounded to three vehicles', () => {
+    const data = ['a', 'b', 'c', 'd'].map((id) => ({
+      vehicle: { id, brand: id, model: 'model' },
+      records: [record({ id, vehicleId: id, recordDate: '2026-08-10', amount: 100 })],
+    }));
+    const comparisons = buildVehicleComparisons(data, 'last_month', NOW);
+    expect(comparisons).toHaveLength(3);
+    expect(comparisons.every((item) => item.totalCost === 100)).toBe(true);
+    expect(comparisons.every((item) => item.distanceKm === null)).toBe(true);
   });
 });
