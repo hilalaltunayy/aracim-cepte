@@ -486,3 +486,119 @@ test('the redacted lifecycle trace never carries the prompt, context or output',
   assert.match(blob, /"stage":"commit"/);
   assert.match(blob, /"outcome":"committed"/);
 });
+
+const bodyConditionContext = {
+  ...context,
+  bodyCondition: {
+    hasDirectData: true,
+    recordedPanels: 2,
+    unrecordedPanels: 1,
+    damagedPanels: ['Kaput'],
+    paintedPanels: ['Kaput'],
+    replacedPanels: [],
+    originalPanels: ['Tavan'],
+    lastUpdatedAt: '2026-08-12T00:00:00Z',
+    panels: [
+      {
+        partKey: 'hood',
+        part: 'Kaput',
+        conditions: ['Boyalı', 'Hasarlı'],
+        state: 'Boyalı + Hasarlı',
+        recorded: true,
+        updatedAt: '2026-08-12T00:00:00Z',
+      },
+      {
+        partKey: 'roof',
+        part: 'Tavan',
+        conditions: ['Orijinal'],
+        state: 'Orijinal',
+        recorded: true,
+        updatedAt: '2026-08-11T00:00:00Z',
+      },
+      {
+        partKey: 'front_bumper',
+        part: 'Ön tampon',
+        conditions: [],
+        state: 'Durum girilmedi',
+        recorded: false,
+        updatedAt: null,
+      },
+    ],
+  },
+  expertiseFacts: { hasReport: true, latestDate: '2026-02-01' },
+};
+
+test('answers a body-condition question from stored panels without spending quota', async () => {
+  const { deps, calls } = dependencies({
+    loadContext: async () => ({ context: bodyConditionContext, privateFacts: { plate: null } }),
+  });
+  const result = await handleVehicleAssistant(
+    'user-a',
+    { ...body, question: 'Kaputun durumu ne?' },
+    deps,
+  );
+  assert.equal(result.source, 'local');
+  assert.match(result.response.answer, /Boyalı \+ Hasarlı/);
+  assert.equal(calls.provider, 0);
+  assert.equal(calls.reserve, 0);
+  assert.equal(calls.commit, 0);
+});
+
+test('never redirects to the expertise report while direct panel data exists', async () => {
+  const { deps } = dependencies({
+    loadContext: async () => ({ context: bodyConditionContext, privateFacts: { plate: null } }),
+  });
+  const result = await handleVehicleAssistant(
+    'user-a',
+    { ...body, question: 'Araç gövde durumu nedir?' },
+    deps,
+  );
+  assert.equal(result.source, 'local');
+  assert.equal(/ekspertiz/i.test(result.response.answer), false);
+  assert.equal(/bulunmamakta/i.test(result.response.answer), false);
+});
+
+test('passes the question to the context loader so Layer-2 detail can be selected', async () => {
+  const seen = [];
+  const { deps } = dependencies({
+    loadContext: async (vehicleId, userId, question) => {
+      seen.push({ vehicleId, userId, question });
+      return { context, privateFacts: { plate: null } };
+    },
+  });
+  await handleVehicleAssistant('user-a', { ...body, question: 'Son bakım ne zaman?' }, deps);
+  assert.deepEqual(seen, [
+    { vehicleId: body.vehicleId, userId: 'user-a', question: 'Son bakım ne zaman?' },
+  ]);
+});
+
+test('a body-condition read failure is not answered as "no record exists"', async () => {
+  const { deps, calls } = dependencies({
+    loadContext: async () => ({
+      context: { ...context, retrieval: { bodyCondition: 'unavailable' } },
+      privateFacts: { plate: null },
+    }),
+  });
+  const result = await handleVehicleAssistant(
+    'user-a',
+    { ...body, question: 'Araç gövde durumu nedir?' },
+    deps,
+  );
+  assert.match(result.response.answer, /ulaşılamıyor/);
+  assert.equal(/kayıtlı bir gövde durumu bulunmuyor/.test(result.response.answer), false);
+  assert.equal(calls.provider, 0);
+});
+
+test('one vehicle context never leaks another vehicle into the answer', async () => {
+  const { deps } = dependencies({
+    loadContext: async () => ({
+      // The loader returned a context for a DIFFERENT vehicle than requested.
+      context: { ...bodyConditionContext, vehicleId: 'a3510000-0000-4000-8000-000000000999' },
+      privateFacts: { plate: null },
+    }),
+  });
+  await assert.rejects(
+    () => handleVehicleAssistant('user-a', { ...body, question: 'Kaputun durumu ne?' }, deps),
+    (error) => error instanceof VehicleAssistantHttpError && error.code === 'VEHICLE_FORBIDDEN',
+  );
+});

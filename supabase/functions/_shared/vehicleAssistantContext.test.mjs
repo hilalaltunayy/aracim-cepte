@@ -49,7 +49,35 @@ function mockClient(ownerId) {
     vehicle_documents: [
       { document_type: 'inspection', issue_date: '2025-08-25', expiry_date: '2026-08-25' },
     ],
-    expertise_reports: [{ report_date: '2026-02-01' }],
+    expertise_reports: [{ report_date: '2026-02-01', company_name: 'Test Ekspertiz' }],
+    body_part_conditions: [
+      {
+        id: 'panel-hood',
+        part_key: 'hood',
+        condition: 'unknown',
+        condition_set_initialized: true,
+        updated_at: '2026-08-12T00:00:00Z',
+      },
+      {
+        id: 'panel-roof',
+        part_key: 'roof',
+        condition: 'unknown',
+        condition_set_initialized: true,
+        updated_at: '2026-08-11T00:00:00Z',
+      },
+      {
+        id: 'panel-bumper',
+        part_key: 'front_bumper',
+        condition: 'unknown',
+        condition_set_initialized: true,
+        updated_at: '2026-08-10T00:00:00Z',
+      },
+    ],
+    body_part_condition_values: [
+      { body_part_condition_id: 'panel-hood', condition: 'painted' },
+      { body_part_condition_id: 'panel-hood', condition: 'damaged' },
+      { body_part_condition_id: 'panel-roof', condition: 'original' },
+    ],
     reminders: [
       {
         reminder_type: 'periodic_maintenance',
@@ -179,4 +207,133 @@ test('fails closed when the RLS-scoped vehicle lookup returns no owned row', asy
     maybeSingle: async () => ({ data: null, error: null }),
   });
   assert.equal(await loadVehicleAssistantContext(client, 'vehicle-a', 'user-a'), null);
+});
+
+test('includes the direct body-condition state the Gövde durumu screen records', async () => {
+  const client = mockClient('user-a');
+  const loaded = await loadVehicleAssistantContext(
+    client,
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+  );
+  const body = loaded.context.bodyCondition;
+  assert.ok(body, 'body condition block must be present');
+  assert.equal(body.hasDirectData, true);
+  assert.equal(body.recordedPanels, 2);
+  assert.equal(body.unrecordedPanels, 1);
+  assert.deepEqual(body.damagedPanels, ['Kaput']);
+  assert.deepEqual(body.paintedPanels, ['Kaput']);
+  assert.deepEqual(body.originalPanels, ['Tavan']);
+  const hood = body.panels.find((panel) => panel.partKey === 'hood');
+  assert.equal(hood.part, 'Kaput');
+  assert.equal(hood.state, 'Boyalı + Hasarlı');
+  const bumper = body.panels.find((panel) => panel.partKey === 'front_bumper');
+  assert.equal(bumper.state, 'Durum girilmedi');
+  assert.equal(bumper.recorded, false);
+  // Panel notes are free text and must never reach the prompt.
+  const columns = client.selected.find((query) => query.table === 'body_part_conditions').columns;
+  assert.equal(/note/i.test(columns), false);
+});
+
+test('marks body condition unavailable on a read failure instead of reporting no data', async () => {
+  const client = mockClient('user-a');
+  const original = client.from.bind(client);
+  client.from = (table) => {
+    if (table !== 'body_part_conditions') return original(table);
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      then: (resolve) => Promise.resolve({ data: null, error: { message: 'boom' } }).then(resolve),
+    };
+    return chain;
+  };
+  const loaded = await loadVehicleAssistantContext(
+    client,
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+  );
+  assert.equal(loaded.context.retrieval.bodyCondition, 'unavailable');
+  assert.equal(loaded.context.bodyCondition, undefined);
+  // Every other domain still loaded, so the rest of the answer stays usable.
+  assert.equal(loaded.context.retrieval.records, 'loaded');
+});
+
+test('records provenance so a direct panel state can outrank an older report', async () => {
+  const client = mockClient('user-a');
+  const loaded = await loadVehicleAssistantContext(
+    client,
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+  );
+  assert.equal(loaded.context.provenance.bodyCondition.direct, true);
+  assert.equal(loaded.context.provenance.bodyCondition.source, 'body_part_conditions');
+  assert.equal(loaded.context.provenance.bodyCondition.recordedAt, '2026-08-12T00:00:00Z');
+  assert.equal(loaded.context.provenance.expertise.direct, false);
+  assert.equal(loaded.context.provenance.expertise.recordedAt, '2026-02-01');
+});
+
+test('scopes every domain query to the caller and the requested vehicle', async () => {
+  const client = mockClient('user-a');
+  const filters = [];
+  const original = client.from.bind(client);
+  client.from = (table) => {
+    const chain = original(table);
+    const eq = chain.eq.bind(chain);
+    chain.eq = (column, value) => {
+      filters.push({ table, column, value });
+      return eq(column, value);
+    };
+    return chain;
+  };
+  await loadVehicleAssistantContext(
+    client,
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+  );
+  const scoped = [
+    'vehicle_records',
+    'vehicle_documents',
+    'expertise_reports',
+    'reminders',
+    'body_part_conditions',
+    'body_part_condition_values',
+  ];
+  for (const table of scoped) {
+    const own = filters.filter((filter) => filter.table === table);
+    assert.ok(
+      own.some((filter) => filter.column === 'owner_id' && filter.value === 'user-a'),
+      `${table} must be owner-scoped`,
+    );
+    assert.ok(
+      own.some((filter) => filter.column === 'vehicle_id' && filter.value === 'vehicle-a'),
+      `${table} must be vehicle-scoped`,
+    );
+  }
+});
+
+test('attaches Layer-2 detail only for a question that needs it', async () => {
+  const client = mockClient('user-a');
+  const plain = await loadVehicleAssistantContext(
+    client,
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+    'Aracımın rengi ne?',
+  );
+  assert.equal(plain.context.details, undefined);
+
+  const detailed = await loadVehicleAssistantContext(
+    mockClient('user-a'),
+    'vehicle-a',
+    'user-a',
+    new Date('2026-08-15T12:00:00Z'),
+    'Son bakım ne zaman yapıldı?',
+  );
+  assert.equal(detailed.context.details.latestMaintenance.date, '2026-01-01');
+  assert.equal(detailed.context.details.latestFuel, undefined);
 });

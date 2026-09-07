@@ -15,7 +15,10 @@ vi.mock('@expo/vector-icons', async () => {
   const React = await import('react');
   return { Ionicons: (props: object) => React.createElement('Ionicons', props) };
 });
-vi.mock('@/shared/components/AutomotiveBackdrop', () => ({ AutomotiveBackdrop: () => null }));
+vi.mock('@/shared/components/AutomotiveBackdrop', async () => {
+  const React = await import('react');
+  return { AutomotiveBackdrop: () => React.createElement('AutomotiveBackdrop') };
+});
 vi.mock('@/shared/theme', () => {
   const theme = { colors: new Proxy({}, { get: (_target, key) => String(key) }) };
   return {
@@ -98,6 +101,17 @@ describe('VehicleAssistantScreen', () => {
   });
   beforeEach(() => {
     useAssistantSessionStore.getState().resetAllSessions();
+  });
+
+  it('reuses the shared Home automotive backdrop rather than a divergent copy', async () => {
+    const renderer = await mount(base);
+    const screen = renderer.root.findByType('Screen' as never);
+    const { AutomotiveBackdrop } = await import('@/shared/components/AutomotiveBackdrop');
+    // Literally the component Home passes, handed to the same Screen `backdrop`
+    // slot — the assistant cannot drift into its own background treatment.
+    expect(screen.props.backdrop.type).toBe(AutomotiveBackdrop);
+    // The chat body itself is unchanged: the screen still owns its own scroll.
+    expect(screen.props.scroll).toBe(false);
   });
 
   it('renders a vehicle-scoped empty chat with prompt suggestions and a daily quota chip', async () => {
