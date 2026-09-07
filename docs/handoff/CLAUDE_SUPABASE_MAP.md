@@ -44,6 +44,15 @@ mevcuttu**; local-only veya remote-only migration yoktu:
 27. `20260815143910_revenuecat_billing_foundation.sql`
 28. `20260901160000_free_ai_quota_one.sql`
 
+2026-09-07 `npx supabase migration list --linked` doğrulaması: bu listeden sonra eklenen
+`20260902120000_ai_daily_quota.sql` ve `20260903120000_ai_quota_reservation_hardening.sql` dahil
+**30/30 local migration remote'ta uygulanmıştır; drift yoktur**.
+
+Uygulanmamış (TASK-045, bu repository'de yazıldı, henüz push edilmedi):
+
+- `20260907120000_entitlement_reconciliation_rpc.sql` — `public.reconcile_revenuecat_subscriber_state`
+  service-role-only pull mutabakat RPC'si. Additive; mevcut tablo/politika değiştirmez.
+
 Uygulanmış migration dosyalarını değiştirme veya tek tek tekrar çalıştırma. Yeni schema işi için
 önce remote/local parity ve exact target project'i doğrula, sonra yeni additive migration oluştur.
 
@@ -116,7 +125,8 @@ limit hem current migration/RPC hem mobile entitlement source'tan birlikte doğr
 | `delete-account`        | ACTIVE v1                     | Auth/DB/Storage deletion path; physical UI acceptance remains separate.                              |
 | `reconcile-attachments` | ACTIVE v3                     | Trusted reconciliation/cleanup flow.                                                                 |
 | `vehicle-ai-assistant`  | ACTIVE v1                     | Provider/privacy config absent or unapproved must remain fail-closed.                                |
-| `revenuecat-webhook`    | **NOT LISTED / NOT DEPLOYED** | Source exists; requires backend-only auth secret, explicit deploy and RevenueCat event verification. |
+| `revenuecat-webhook`    | ACTIVE v3 (2026-09-07 doğrulandı) | Deploy edilmiş ve secret'ı yapılandırılmış: geçersiz Authorization ile `401 WEBHOOK_AUTH_INVALID` döner (`503 BILLING_SYNC_DISABLED` değil). RevenueCat dashboard tarafındaki hedef URL/secret eşleşmesi ayrıca doğrulanmalıdır. |
+| `sync-entitlement`      | **NOT DEPLOYED (TASK-045)**   | Kaynak `supabase/functions/sync-entitlement/`. İstek üzerine RevenueCat mutabakatı. `REVENUECAT_SYNC_ENABLED=true` ve `REVENUECAT_SECRET_API_KEY` olmadan fail-closed 503 döner. |
 
 `verify_jwt=false` CLI metadata does not mean unauthenticated access is allowed: current functions
 validate Authorization/session in handler code where required. Do not change this metadata or trust

@@ -160,7 +160,12 @@ export function DocumentCard({
   const styles = useThemedStyles(createStyles);
   const status = getDocumentStatus(document.expiryDate);
   const [label, tone] = documentLabels[status];
-  const hasAttachment = Boolean(document.attachmentPath || document.attachments?.length);
+  const storedCount = document.attachments?.length ?? 0;
+  const hasAttachment = Boolean(document.attachmentPath || storedCount);
+  // One stored file exports straight to the device; several open the file list,
+  // so the control has to say which of the two it is going to do. A legacy row
+  // that only carries `attachmentPath` still counts as the single-file case.
+  const exportsDirectly = storedCount <= 1;
   const [downloading, setDownloading] = useState(false);
 
   const download = async () => {
@@ -220,7 +225,11 @@ export function DocumentCard({
         {hasAttachment && onDownload ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${document.title} belgesini cihaza indir`}
+            accessibilityLabel={
+              exportsDirectly
+                ? `${document.title} belgesini cihaza indir`
+                : `${document.title} belgesinin ${storedCount} dosyasını aç`
+            }
             accessibilityState={{ busy: downloading, disabled: downloading }}
             disabled={downloading}
             hitSlop={8}
@@ -230,7 +239,17 @@ export function DocumentCard({
             {downloading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Ionicons name="download-outline" size={19} color={colors.primary} accessible={false} />
+              <>
+                <Ionicons
+                  name={exportsDirectly ? 'download-outline' : 'folder-open-outline'}
+                  size={19}
+                  color={colors.primary}
+                  accessible={false}
+                />
+                <Text style={styles.downloadLabel}>
+                  {exportsDirectly ? 'İndir' : `${storedCount} dosya`}
+                </Text>
+              </>
             )}
           </Pressable>
         ) : null}
@@ -277,12 +296,17 @@ const createStyles = ({ colors }: AppTheme) =>
     documentMeta: { flex: 1 },
     description: { color: colors.navy, fontSize: 13, lineHeight: 18, marginTop: 2 },
     downloadButton: {
-      width: 40,
-      height: 40,
+      minWidth: 56,
+      minHeight: 48,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 4,
       borderRadius: radii.md,
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 1,
       backgroundColor: colors.paleAqua,
       alignSelf: 'center',
     },
+    // A bare glyph read as decoration; the word is what makes the action findable.
+    downloadLabel: { color: colors.primaryAction, fontSize: 10, fontWeight: '600' },
   });

@@ -57,6 +57,20 @@ const document = (overrides: Partial<VehicleDocument> = {}): VehicleDocument => 
   ...overrides,
 });
 
+const storedFile = (name: string) => ({
+  id: `attachment-${name}`,
+  ownerId: 'owner-1',
+  vehicleId: 'vehicle-1',
+  parentType: 'vehicle_document' as const,
+  parentId: 'document-1',
+  source: 'document' as const,
+  originalName: name,
+  storagePath: `private/${name}`,
+  mimeType: 'application/pdf' as const,
+  sizeBytes: 1024,
+  createdAt: '2026-08-01T00:00:00Z',
+});
+
 async function mount(value: VehicleDocument): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
   await act(async () => {
@@ -121,6 +135,43 @@ describe('DocumentCard polish', () => {
     });
     await act(async () => button.props.onPress());
     expect(onDownload).toHaveBeenCalledOnce();
+  });
+
+  it('labels the single-file case as an export the user can find', async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <DocumentCard
+          document={document({ attachments: [storedFile('a.pdf')] })}
+          onPress={vi.fn()}
+          onDownload={vi.fn()}
+        />,
+      );
+    });
+    // A bare glyph is not discoverable; the word is what makes the action findable.
+    expect(texts(renderer!)).toContain('İndir');
+    expect(renderer!.root.findByProps({ name: 'download-outline' })).toBeDefined();
+  });
+
+  it('says a multi-file document opens its file list rather than downloading', async () => {
+    const onDownload = vi.fn();
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <DocumentCard
+          document={document({ attachments: [storedFile('a.pdf'), storedFile('b.pdf')] })}
+          onPress={vi.fn()}
+          onDownload={onDownload}
+        />,
+      );
+    });
+    expect(texts(renderer!)).toContain('2 dosya');
+    expect(renderer!.root.findByProps({ name: 'folder-open-outline' })).toBeDefined();
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: 'Trafik sigortası belgesinin 2 dosyasını aç',
+      }),
+    ).toBeDefined();
   });
 
   it('shows no download action when the document has no stored file', async () => {

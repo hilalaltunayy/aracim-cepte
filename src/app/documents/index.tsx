@@ -51,6 +51,8 @@ export default function DocumentsListScreen() {
   const downloadDocument = async (document: VehicleDocument) => {
     setDownloadError(null);
     const stored = document.attachments ?? [];
+    // Several files cannot be meaningfully "downloaded" from one row, so the
+    // card labels itself as a file list in that case and this opens it.
     if (stored.length !== 1) {
       router.push({ pathname: '/documents/edit', params: { id: document.id } });
       return;
