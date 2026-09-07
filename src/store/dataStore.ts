@@ -33,6 +33,12 @@ import {
 } from '@/features/entitlements/domain/entitlements';
 import { loadCurrentEntitlements } from '@/features/entitlements/services/entitlementService';
 import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
+import {
+  DEFAULT_REPORT_PERIOD_ID,
+  isReportPeriodId,
+  sanitizeStoredReportPeriod,
+  type ReportPeriodId,
+} from '@/features/reports/domain/vehicleReports';
 
 interface DataState {
   vehicles: Vehicle[];
@@ -47,6 +53,8 @@ interface DataState {
   maintenanceTemplates: MaintenanceTemplate[];
   vehiclePhotos: VehiclePhoto[];
   onboardingSeen: boolean;
+  /** Last report period the user chose; persisted so Reports reopens on it. */
+  reportPeriodId: ReportPeriodId;
   hydrated: boolean;
   bootstrapped: boolean;
   bootstrapError: string | null;
@@ -55,6 +63,7 @@ interface DataState {
   lastReminderNotice: string | null;
   lastBootstrapDurationMs: number | null;
   setOnboardingSeen: () => void;
+  setReportPeriod: (id: ReportPeriodId) => void;
   setActiveVehicle: (id: string) => Promise<void>;
   bootstrap: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -173,6 +182,7 @@ export const useDataStore = create<DataState>()(
         entitlements: FREE_ENTITLEMENTS,
         ...emptyVehicleData,
         onboardingSeen: false,
+        reportPeriodId: DEFAULT_REPORT_PERIOD_ID,
         hydrated: false,
         bootstrapped: false,
         bootstrapError: null,
@@ -182,6 +192,10 @@ export const useDataStore = create<DataState>()(
         lastBootstrapDurationMs: null,
 
         setOnboardingSeen: () => set({ onboardingSeen: true }),
+
+        setReportPeriod: (id) => {
+          if (isReportPeriodId(id)) set({ reportPeriodId: id });
+        },
 
         setActiveVehicle: async (id) => {
           const nextId = resolveActiveVehicleId(get().vehicles, id);
@@ -438,7 +452,18 @@ export const useDataStore = create<DataState>()(
       partialize: (state) => ({
         activeVehicleId: state.activeVehicleId,
         onboardingSeen: state.onboardingSeen,
+        reportPeriodId: state.reportPeriodId,
       }),
+      // A stored period id from an older build (or a corrupted value) falls back
+      // to the product default instead of being trusted blindly.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<DataState>;
+        return {
+          ...current,
+          ...saved,
+          reportPeriodId: sanitizeStoredReportPeriod(saved.reportPeriodId),
+        };
+      },
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
   ),

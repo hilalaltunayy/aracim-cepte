@@ -16,6 +16,15 @@ export function isReportPeriodId(value: unknown): value is ReportPeriodId {
 }
 
 /**
+ * Normalises a persisted period id read back from storage. An unknown value —
+ * an id removed in a later build, or corrupted storage — resolves to the
+ * product default instead of being trusted.
+ */
+export function sanitizeStoredReportPeriod(value: unknown): ReportPeriodId {
+  return isReportPeriodId(value) ? value : DEFAULT_REPORT_PERIOD_ID;
+}
+
+/**
  * The single authoritative interpretation of a selected period.
  *
  * Every report section, the trend chart and the PDF export read the same

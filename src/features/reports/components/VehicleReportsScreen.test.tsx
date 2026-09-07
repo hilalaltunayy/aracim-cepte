@@ -123,6 +123,8 @@ const base = {
   expertiseReports: [],
   notes: [],
   entitlements: { advancedReports: true, maxVehicles: 3 },
+  reportPeriodId: 'six_months',
+  setReportPeriod: vi.fn(),
 };
 async function mount(props: { onUpgrade?: () => void } = {}) {
   let renderer: ReactTestRenderer | undefined;

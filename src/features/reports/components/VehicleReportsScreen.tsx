@@ -144,8 +144,11 @@ export function VehicleReportsScreen({ onUpgrade }: { onUpgrade?: () => void }) 
     entitlements,
     bootstrapped,
     loading,
+    reportPeriodId,
+    setReportPeriod,
   } = useDataStore();
-  const [periodId, setPeriodId] = useState<ReportPeriodId>('six_months');
+  const periodId = reportPeriodId;
+  const setPeriodId = setReportPeriod;
   const [periodOpen, setPeriodOpen] = useState(false);
   const [vehicleComparisons, setVehicleComparisons] = useState<VehicleComparison[]>([]);
   const [comparisonError, setComparisonError] = useState(false);

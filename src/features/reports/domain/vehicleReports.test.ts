@@ -5,6 +5,7 @@ import {
   DEFAULT_REPORT_PERIOD_ID,
   isReportPeriodId,
   resolvePeriod,
+  sanitizeStoredReportPeriod,
 } from './vehicleReports';
 import type { VehicleRecord } from '@/domain/entities';
 
@@ -84,6 +85,14 @@ describe('resolvePeriod — one authoritative date range', () => {
     expect(isReportPeriodId('last_30_days')).toBe(false);
     expect(isReportPeriodId(undefined)).toBe(false);
     expect(DEFAULT_REPORT_PERIOD_ID).toBe('six_months');
+  });
+
+  it('keeps a valid persisted period and falls back safely for anything else', () => {
+    expect(sanitizeStoredReportPeriod('last_month')).toBe('last_month');
+    expect(sanitizeStoredReportPeriod('three_months')).toBe('three_months');
+    expect(sanitizeStoredReportPeriod('weekly')).toBe('six_months');
+    expect(sanitizeStoredReportPeriod(null)).toBe('six_months');
+    expect(sanitizeStoredReportPeriod(42)).toBe('six_months');
   });
 });
 
