@@ -133,6 +133,14 @@ export interface ThemeColors {
   diagramCenterLine: string;
   bodyCondition: Record<BodyCondition, string>;
   chart: ChartPalette;
+  /** Translucent "soft blue glass" surface for the Home assistant entry only. */
+  assistantGlass: {
+    fillStart: string;
+    fillEnd: string;
+    border: string;
+    glow: string;
+    icon: string;
+  };
   primary: string;
   primaryDark: string;
   aqua: string;
@@ -196,6 +204,13 @@ export const lightColors: ThemeColors = {
   diagramCenterLine: 'rgba(22, 50, 68, 0.34)',
   bodyCondition: lightBodyCondition,
   chart: lightChart,
+  assistantGlass: {
+    fillStart: 'rgba(126, 195, 236, 0.80)',
+    fillEnd: 'rgba(13, 108, 158, 0.82)',
+    border: 'rgba(255, 255, 255, 0.52)',
+    glow: 'rgba(8, 117, 168, 0.20)',
+    icon: '#FFFFFF',
+  },
   navy: '#163244',
   muted: '#4F6570',
   background: '#F3F8FA',
@@ -258,6 +273,13 @@ export const darkColors: ThemeColors = {
   diagramCenterLine: 'rgba(237, 247, 250, 0.42)',
   bodyCondition: darkBodyCondition,
   chart: darkChart,
+  assistantGlass: {
+    fillStart: 'rgba(96, 182, 238, 0.44)',
+    fillEnd: 'rgba(36, 118, 164, 0.52)',
+    border: 'rgba(233, 245, 250, 0.22)',
+    glow: 'rgba(40, 175, 224, 0.24)',
+    icon: '#F2FAFE',
+  },
   navy: '#EDF7FA',
   muted: '#A5B8C1',
   background: '#0B151B',

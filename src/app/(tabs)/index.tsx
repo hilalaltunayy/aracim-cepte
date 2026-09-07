@@ -42,6 +42,7 @@ import { getDashboardShortcutAccessibilityLabel } from '@/shared/utils/accessibi
 import { createRecordHref, detailRecordHref } from '@/shared/utils/routeParams';
 import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
+import { AssistantFloatingEntry } from '@/features/vehicleAssistant/components/AssistantFloatingEntry';
 import {
   getVehicleCapacity,
   getVehicleLimitMessage,
@@ -250,16 +251,7 @@ export default function DashboardScreen() {
           onClose={() => setSwitcherOpen(false)}
         />
       </Screen>
-      <Pressable
-        testID="dashboard-assistant-entry"
-        accessibilityRole="button"
-        accessibilityLabel="Araç Asistanını aç"
-        accessibilityHint="Seçili aracınız hakkında soru sorabileceğiniz ekranı açar."
-        style={({ pressed }) => [styles.assistantFab, pressed && styles.assistantFabPressed]}
-        onPress={() => router.push('/vehicle-assistant' as never)}
-      >
-        <Ionicons name="sparkles" size={21} color={colors.onBrand} accessible={false} />
-      </Pressable>
+      <AssistantFloatingEntry />
       {introVisible ? (
         <HomeIntroOverlay
           name={displayName}
@@ -340,17 +332,4 @@ const createStyles = ({ colors, shadows }: AppTheme) =>
     metricValue: { color: colors.navy, fontFamily: fontFamilies.bold, fontSize: 13 },
     insight: { color: colors.muted, ...typography.caption, marginTop: spacing.md },
     list: { gap: spacing.md },
-    assistantFab: {
-      position: 'absolute',
-      right: spacing.lg,
-      bottom: 94,
-      width: 56,
-      height: 56,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 28,
-      backgroundColor: colors.primaryAction,
-      ...shadows.floating,
-    },
-    assistantFabPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
   });
