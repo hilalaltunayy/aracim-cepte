@@ -329,16 +329,16 @@ interface DistanceResult {
 /**
  * Distance recorded across the selected period from odometer readings.
  *
- * When there is at least one reading inside the period, the last reading dated
- * strictly before the period is used as the starting odometer (its monetary
- * amount is never counted — it lives outside the range). Readings are ordered
- * high-water-safe; an out-of-order lower reading, a non-positive result or too
- * few readings all resolve to `null` rather than a misleading `0`.
+ * With two or more readings inside the period the delta is measured entirely
+ * within the range — a self-contained period measurement. With only one
+ * in-range reading the last odometer reading dated before the period is used as
+ * the starting point (its monetary amount is never counted — it lives outside
+ * the range), so a month with a single odometer entry still yields a distance
+ * instead of nothing. Readings are ordered high-water-safe; an out-of-order
+ * lower reading, a non-positive result or too few readings all resolve to
+ * `null` rather than a misleading `0`.
  */
-function distance(
-  inRange: VehicleRecord[],
-  prior: VehicleRecord[],
-): DistanceResult {
+function distance(inRange: VehicleRecord[], prior: VehicleRecord[]): DistanceResult {
   const withKm = (records: VehicleRecord[]) =>
     records
       .filter(
@@ -353,8 +353,8 @@ function distance(
   const inRangeReadings = withKm(inRange);
   if (inRangeReadings.length === 0) return { distanceKm: null, usesPriorBaseline: false };
 
-  const priorReadings = withKm(prior);
-  const baseline = priorReadings.at(-1) ?? null;
+  const baseline =
+    inRangeReadings.length < 2 ? (withKm(prior).at(-1) ?? null) : null;
   const sequence = baseline ? [baseline, ...inRangeReadings] : inRangeReadings;
   if (sequence.length < 2) return { distanceKm: null, usesPriorBaseline: false };
 

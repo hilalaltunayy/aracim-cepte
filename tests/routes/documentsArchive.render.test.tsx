@@ -55,10 +55,22 @@ vi.mock('@/shared/components/ui', async () => {
 vi.mock('@/shared/components/entityCards', async () => {
   const React = await import('react');
   return {
-    DocumentCard: ({ document, onPress }: { document: VehicleDocument; onPress: () => void }) =>
-      React.createElement('DocumentCard', { document, onPress }, document.title),
+    DocumentCard: ({
+      document,
+      onPress,
+      onDownload,
+    }: {
+      document: VehicleDocument;
+      onPress: () => void;
+      onDownload?: (document: VehicleDocument) => void;
+    }) =>
+      React.createElement('DocumentCard', { document, onPress, onDownload }, document.title),
   };
 });
+// The download service pulls in native modules through the storage layer.
+vi.mock('@/features/attachments/services/attachmentDownload', () => ({
+  downloadPersistedAttachment: vi.fn(async () => ({ fileName: 'x', saved: true })),
+}));
 vi.mock('@/store/dataStore', () => ({
   useDataStore: (selector: (state: typeof dataState) => unknown) => selector(dataState),
 }));
