@@ -63,6 +63,20 @@ export interface VehicleAssistantContext {
   fuelFacts: Record<string, string | number | boolean | null>;
   costFacts: Record<string, string | number | boolean | null>;
   reminderFacts: Record<string, string | number | boolean | null>;
+  /**
+   * Current, directly-recorded per-panel body state.
+   *
+   * This is the user's own structured entry on the Gövde durumu screen, so it
+   * outranks an expertise report for "what condition is this panel in" — see
+   * {@link VehicleAssistantContext.provenance}. Panel notes are free text and
+   * are deliberately NOT carried here; only the enum states and the update date.
+   */
+  bodyCondition?: BodyConditionContext;
+  /**
+   * Bounded latest-record detail, attached only for questions that need it
+   * (Layer 2). Absent means "not requested", never "does not exist".
+   */
+  details?: AssistantDetailContext;
   trends: Record<string, number | null>;
   highPrioritySignals: {
     code: string;
@@ -72,6 +86,51 @@ export interface VehicleAssistantContext {
     facts: Record<string, string | number | boolean | null>;
   }[];
   dataQuality: Record<string, string | number | boolean | null>;
+  /**
+   * Per-domain load outcome. A domain that failed to load is `unavailable`, and
+   * the model is instructed never to report it as "no record exists".
+   */
+  retrieval?: Record<string, AssistantRetrievalStatus>;
+  /** Which source answered a contested question, and when it was recorded. */
+  provenance?: Record<string, { source: string; recordedAt: string | null; direct: boolean }>;
+}
+
+export const ASSISTANT_RETRIEVAL_STATUSES = ['loaded', 'unavailable'] as const;
+export type AssistantRetrievalStatus = (typeof ASSISTANT_RETRIEVAL_STATUSES)[number];
+
+export interface BodyConditionPanel {
+  /** Stable schema key, e.g. `hood`. */
+  partKey: string;
+  /** Turkish panel name shown in the app, e.g. `Kaput`. */
+  part: string;
+  /** Turkish condition labels, e.g. `["Boyalı", "Hasarlı"]`. Empty = not entered. */
+  conditions: string[];
+  /** Ready-to-read state, e.g. `Boyalı + Hasarlı` or `Durum girilmedi`. */
+  state: string;
+  recorded: boolean;
+  updatedAt: string | null;
+}
+
+export interface BodyConditionContext {
+  /** True when at least one panel has a recorded state. */
+  hasDirectData: boolean;
+  recordedPanels: number;
+  unrecordedPanels: number;
+  damagedPanels: string[];
+  paintedPanels: string[];
+  replacedPanels: string[];
+  originalPanels: string[];
+  lastUpdatedAt: string | null;
+  panels: BodyConditionPanel[];
+}
+
+export interface AssistantDetailContext {
+  latestMaintenance?: Record<string, string | number | boolean | null>;
+  latestFuel?: Record<string, string | number | boolean | null>;
+  latestExpertise?: Record<string, string | number | boolean | null>;
+  documents?: Record<string, string | number | boolean | null>[];
+  reminders?: Record<string, string | number | boolean | null>[];
+  odometer?: Record<string, string | number | boolean | null>;
 }
 
 /**
@@ -298,6 +357,142 @@ function missingFieldAnswer(field: string): string {
   return `Aracınız için kayıtlı bir ${field} bilgisi bulunmuyor. Araç profilinden ekleyebilirsiniz.`;
 }
 
+/** A domain that failed to load must never be reported as "no record exists". */
+function isUnavailable(context: VehicleAssistantContext, domain: string): boolean {
+  return context.retrieval?.[domain] === 'unavailable';
+}
+
+const retrievalFailureAnswer =
+  'Bu bilgiye şu anda ulaşılamıyor; kayıtlarınız okunamadı. Birkaç saniye sonra tekrar deneyin.';
+
+/** Asks about the *type* of body (Sedan/Van), not the condition of its panels. */
+const bodyTypeTerms = ['govde tipi', 'govde turu', 'kasa tipi', 'kasa turu', 'arac tipi'] as const;
+
+const bodyConditionTerms = [
+  'govde durum',
+  'kaporta',
+  'boyali',
+  'boyasi',
+  'hasarli',
+  'hasar',
+  'orijinal',
+  'degisen',
+  'parca durum',
+  'parcalar',
+] as const;
+
+/**
+ * Panel names the user can ask about directly. Matched against the Turkish
+ * labels that ship in the context, so this stays correct for every body schema.
+ */
+function findPanel(
+  context: VehicleAssistantContext,
+  normalized: string,
+): BodyConditionPanel | null {
+  const panels = context.bodyCondition?.panels ?? [];
+  // Longest label first so "sol ön kapı" wins over a bare "kapı" style match.
+  return (
+    [...panels]
+      .sort((left, right) => right.part.length - left.part.length)
+      .find((panel) => normalized.includes(foldTurkish(panel.part))) ?? null
+  );
+}
+
+function panelList(parts: readonly string[]): string {
+  return parts.join(', ');
+}
+
+/**
+ * Answers a body-condition question straight from the user's own recorded panel
+ * state.
+ *
+ * This runs before the analytical-term bail-out because a panel summary is a
+ * pure lookup over structured data, not an inference — and because falling
+ * through to the model is exactly what produced "gövde durumu hakkında
+ * doğrudan bir veri bulunmamaktadır" while the data was sitting in
+ * `body_part_conditions`.
+ */
+function resolveBodyConditionFact(
+  question: string,
+  normalized: string,
+  context: VehicleAssistantContext,
+): VehicleAssistantResponse | null {
+  if (containsAny(normalized, bodyTypeTerms)) return null;
+  const panel = findPanel(context, normalized);
+  const asksCondition = containsAny(normalized, bodyConditionTerms);
+  if (!panel && !asksCondition) return null;
+  if (requiresSafetyEscalation(question)) return null;
+
+  const body = context.bodyCondition;
+  if (isUnavailable(context, 'bodyCondition')) {
+    return factResponse(context, retrievalFailureAnswer, []);
+  }
+  if (!body || !body.hasDirectData) {
+    // Genuinely nothing recorded — say so, and point at the screen that records it.
+    return factResponse(
+      context,
+      'Aracınız için kayıtlı bir gövde durumu bulunmuyor. Gövde durumu ekranından parça durumlarını girebilirsiniz.',
+      [],
+    );
+  }
+
+  if (panel) {
+    return factResponse(
+      context,
+      panel.recorded
+        ? `${panel.part} için kayıtlı durum: ${panel.state}.`
+        : `${panel.part} için henüz bir durum girilmemiş.`,
+      panel.recorded ? [`bodyCondition.panel.${panel.partKey}`] : [],
+    );
+  }
+
+  if (normalized.includes('hasar')) {
+    return factResponse(
+      context,
+      body.damagedPanels.length
+        ? `Hasarlı olarak kayıtlı parçalar: ${panelList(body.damagedPanels)}.`
+        : 'Hasarlı olarak kayıtlı bir parça bulunmuyor.',
+      body.damagedPanels.length ? ['bodyCondition.damagedPanels'] : [],
+    );
+  }
+  if (normalized.includes('boyali') || normalized.includes('boyasi')) {
+    const painted = [...body.paintedPanels];
+    return factResponse(
+      context,
+      painted.length
+        ? `Boyalı olarak kayıtlı parçalar: ${panelList(painted)}.`
+        : 'Boyalı olarak kayıtlı bir parça bulunmuyor.',
+      painted.length ? ['bodyCondition.paintedPanels'] : [],
+    );
+  }
+  if (normalized.includes('orijinal')) {
+    return factResponse(
+      context,
+      body.originalPanels.length
+        ? `Orijinal olarak kayıtlı parçalar: ${panelList(body.originalPanels)}.`
+        : 'Orijinal olarak kayıtlı bir parça bulunmuyor.',
+      body.originalPanels.length ? ['bodyCondition.originalPanels'] : [],
+    );
+  }
+  if (normalized.includes('degisen')) {
+    return factResponse(
+      context,
+      body.replacedPanels.length
+        ? `Değişen olarak kayıtlı parçalar: ${panelList(body.replacedPanels)}.`
+        : 'Değişen olarak kayıtlı bir parça bulunmuyor.',
+      body.replacedPanels.length ? ['bodyCondition.replacedPanels'] : [],
+    );
+  }
+
+  const recorded = body.panels.filter((item) => item.recorded);
+  const summary = recorded.map((item) => `${item.part}: ${item.state}`).join(', ');
+  return factResponse(
+    context,
+    `Kayıtlı gövde durumu — ${summary}. Kalan ${body.unrecordedPanels} parça için durum girilmemiş.`,
+    ['bodyCondition.recordedPanels'],
+  );
+}
+
 /**
  * Answers a simple stored-profile question straight from trusted context.
  *
@@ -312,10 +507,16 @@ export function resolveDeterministicVehicleFact(
 ): VehicleAssistantResponse | null {
   const normalized = foldTurkish(question);
   if (!normalized) return null;
-  if (containsAny(normalized, analyticalTerms)) return null;
   // A safety report never takes the fast path; it must reach the deterministic
   // safety override in the normal flow.
   if (requiresSafetyEscalation(question)) return null;
+
+  // Body condition is checked before the analytical bail-out: a panel summary is
+  // a lookup over structured state, and "özetle" must not push it to the model.
+  const bodyFact = resolveBodyConditionFact(question, normalized, context);
+  if (bodyFact) return bodyFact;
+
+  if (containsAny(normalized, analyticalTerms)) return null;
 
   const tokens = normalized.split(' ').filter(Boolean);
   const tokenSet = new Set(tokens);
@@ -389,12 +590,14 @@ export function resolveDeterministicVehicleFact(
       vehicle.fuelType ? ['vehicle.fuelType'] : [],
     );
   }
-  if (normalized.includes('kasa tipi') || normalized.includes('kasa turu')) {
+  // "Gövde tipi" is the label the vehicle form actually uses; "kasa tipi" is the
+  // wording an older build used. Both have to resolve to the same stored field.
+  if (containsAny(normalized, bodyTypeTerms)) {
     return factResponse(
       context,
       vehicle.bodyType
-        ? `Aracınızın kayıtlı kasa tipi ${vehicle.bodyType}.`
-        : missingFieldAnswer('kasa tipi'),
+        ? `Aracınızın kayıtlı gövde tipi ${vehicle.bodyType}.`
+        : missingFieldAnswer('gövde tipi'),
       vehicle.bodyType ? ['vehicle.bodyType'] : [],
     );
   }
@@ -563,7 +766,15 @@ const evidenceLabels: Readonly<Record<string, string>> = {
   'vehicle.year': 'Model yılı',
   'vehicle.color': 'Renk',
   'vehicle.fuelType': 'Yakıt tipi',
-  'vehicle.bodyType': 'Kasa tipi',
+  'vehicle.bodyType': 'Gövde tipi',
+  'bodyCondition.hasDirectData': 'Kayıtlı gövde durumu',
+  'bodyCondition.recordedPanels': 'Durumu girilmiş parça',
+  'bodyCondition.unrecordedPanels': 'Durumu girilmemiş parça',
+  'bodyCondition.lastUpdatedAt': 'Gövde durumu güncelleme tarihi',
+  'bodyCondition.damagedPanels': 'Hasarlı parçalar',
+  'bodyCondition.paintedPanels': 'Boyalı parçalar',
+  'bodyCondition.replacedPanels': 'Değişen parçalar',
+  'bodyCondition.originalPanels': 'Orijinal parçalar',
   'vehicle.currentOdometer': 'Güncel kilometre',
   'maintenanceFacts.lastDate': 'Son bakım tarihi',
   'maintenanceFacts.kmSinceLast': 'Son bakımdan beri',
@@ -618,6 +829,48 @@ export function canonicalEvidenceCatalog(
   visit(context.reminderFacts, 'reminderFacts');
   visit(context.trends, 'trends');
   visit(context.dataQuality, 'dataQuality');
+  if (context.bodyCondition) {
+    const body = context.bodyCondition;
+    // `visit` skips arrays, so the panel-derived codes are registered here with
+    // human-readable values instead of being silently dropped by normalization.
+    visit(
+      {
+        hasDirectData: body.hasDirectData,
+        recordedPanels: body.recordedPanels,
+        unrecordedPanels: body.unrecordedPanels,
+        lastUpdatedAt: body.lastUpdatedAt,
+      },
+      'bodyCondition',
+    );
+    const groups = [
+      ['damagedPanels', body.damagedPanels],
+      ['paintedPanels', body.paintedPanels],
+      ['replacedPanels', body.replacedPanels],
+      ['originalPanels', body.originalPanels],
+    ] as const;
+    for (const [key, parts] of groups) {
+      const path = `bodyCondition.${key}`;
+      catalog.set(path, {
+        label: evidenceLabels[path] ?? defaultEvidenceLabel(path),
+        value: parts.length ? parts.join(', ') : 'Yok',
+      });
+    }
+    for (const panel of body.panels) {
+      catalog.set(`bodyCondition.panel.${panel.partKey}`, {
+        label: panel.part,
+        value: panel.state,
+      });
+    }
+  }
+  if (context.details) {
+    for (const [key, value] of Object.entries(context.details)) {
+      if (Array.isArray(value)) {
+        value.forEach((entry, index) => visit(entry, `details.${key}.${index}`));
+      } else {
+        visit(value, `details.${key}`);
+      }
+    }
+  }
   for (const signal of context.highPrioritySignals) {
     catalog.set(`signals.${signal.code}`, {
       label: `Araç sinyali: ${signal.code}`,

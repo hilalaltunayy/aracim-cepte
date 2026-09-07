@@ -1,4 +1,7 @@
 import type {
+  AssistantRetrievalStatus,
+  BodyConditionContext,
+  BodyConditionPanel,
   VehicleAssistantContext,
   VehicleAssistantPrivateFacts,
 } from '../../../src/features/vehicleAssistant/domain/assistantContract.ts';
@@ -52,6 +55,58 @@ export const BODY_LABELS: Readonly<Record<string, string>> = {
   campervan: 'Campervan',
   minibus: 'Minibus',
 };
+
+/**
+ * Body-panel keys → the Turkish names the Gövde durumu screen shows.
+ *
+ * Mirrored from `src/features/bodyCondition/schemas.ts`, which cannot be
+ * imported here: it resolves through the `@/` alias and also carries SVG
+ * geometry the assistant has no use for. `assistantVehicleLabels.test.ts` fails
+ * if a panel is added to a body schema without being named here, so the model
+ * can never receive a raw key like `cargo_bed`.
+ */
+export const BODY_PART_LABELS: Readonly<Record<string, string>> = {
+  front_bumper: 'Ön tampon',
+  hood: 'Kaput',
+  left_front_fender: 'Sol ön çamurluk',
+  right_front_fender: 'Sağ ön çamurluk',
+  left_front_door: 'Sol ön kapı',
+  right_front_door: 'Sağ ön kapı',
+  left_rear_door: 'Sol arka kapı',
+  right_rear_door: 'Sağ arka kapı',
+  roof: 'Tavan',
+  left_rear_quarter: 'Sol arka çamurluk',
+  right_rear_quarter: 'Sağ arka çamurluk',
+  trunk: 'Bagaj kapağı',
+  cargo_bed: 'Kasa',
+  tailgate: 'Arka kapak',
+  rear_bumper: 'Arka tampon',
+};
+
+/**
+ * Condition enum → Turkish label, mirrored from
+ * `src/features/bodyCondition/config/bodyConditions.ts`. The catalog order is
+ * also the display order, so `Boyalı + Hasarlı` always reads the same way it
+ * does on the Gövde durumu screen.
+ */
+export const BODY_CONDITION_LABELS: Readonly<Record<string, string>> = {
+  original: 'Orijinal',
+  painted: 'Boyalı',
+  locally_painted: 'Lokal Boyalı',
+  replaced: 'Değişen',
+  damaged: 'Hasarlı',
+  unknown: 'Bilinmiyor',
+};
+
+/** Catalog order from the same config; drives the `A + B` rendering order. */
+export const BODY_CONDITION_ORDER: readonly string[] = [
+  'original',
+  'painted',
+  'locally_painted',
+  'replaced',
+  'damaged',
+  'unknown',
+];
 
 function labelled(map: Readonly<Record<string, string>>, value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -108,6 +163,95 @@ function latestByDate(rows: readonly Record<string, unknown>[], key: string) {
   );
 }
 
+/**
+ * Resolves one panel's effective conditions.
+ *
+ * Mirrors `resolvePersistedBodyConditions`: once the user has touched the
+ * multi-select the child value rows are the truth — including an explicitly
+ * empty set — and only an untouched legacy row falls back to the singleton
+ * `condition` column.
+ */
+export function resolvePanelConditions(
+  legacyCondition: unknown,
+  storedValues: readonly string[],
+  conditionSetInitialized: unknown,
+): string[] {
+  const source = conditionSetInitialized === true
+    ? storedValues
+    : typeof legacyCondition === 'string' && legacyCondition
+      ? [legacyCondition]
+      : [];
+  const unique = new Set(source);
+  return BODY_CONDITION_ORDER.filter((condition) => unique.has(condition));
+}
+
+/** `Boyalı + Hasarlı`, or the same "not entered" wording the screen shows. */
+export function formatPanelState(conditions: readonly string[]): string {
+  return conditions.length
+    ? conditions.map((condition) => BODY_CONDITION_LABELS[condition] ?? condition).join(' + ')
+    : 'Durum girilmedi';
+}
+
+export function buildBodyConditionContext(
+  panelRows: readonly Record<string, unknown>[],
+  valueRows: readonly Record<string, unknown>[],
+): BodyConditionContext {
+  const valuesByPanel = new Map<string, string[]>();
+  for (const row of valueRows) {
+    const parentId = textValue(row.body_part_condition_id);
+    const condition = textValue(row.condition);
+    if (!parentId || !condition) continue;
+    const current = valuesByPanel.get(parentId) ?? [];
+    current.push(condition);
+    valuesByPanel.set(parentId, current);
+  }
+
+  const panels: BodyConditionPanel[] = panelRows.map((row) => {
+    const id = textValue(row.id) ?? '';
+    const partKey = textValue(row.part_key) ?? '';
+    const conditions = resolvePanelConditions(
+      row.condition,
+      valuesByPanel.get(id) ?? [],
+      row.condition_set_initialized,
+    );
+    return {
+      partKey,
+      part: BODY_PART_LABELS[partKey] ?? partKey,
+      conditions: conditions.map((condition) => BODY_CONDITION_LABELS[condition] ?? condition),
+      state: formatPanelState(conditions),
+      recorded: conditions.length > 0,
+      updatedAt: textValue(row.updated_at),
+    };
+  });
+  panels.sort((left, right) => left.part.localeCompare(right.part, 'tr'));
+
+  const withCondition = (condition: string) =>
+    panels
+      .filter((panel) =>
+        panel.conditions.includes(BODY_CONDITION_LABELS[condition] ?? condition),
+      )
+      .map((panel) => panel.part);
+  const recorded = panels.filter((panel) => panel.recorded);
+  const lastUpdatedAt =
+    recorded
+      .map((panel) => panel.updatedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+
+  return {
+    hasDirectData: recorded.length > 0,
+    recordedPanels: recorded.length,
+    unrecordedPanels: panels.length - recorded.length,
+    damagedPanels: withCondition('damaged'),
+    paintedPanels: [...withCondition('painted'), ...withCondition('locally_painted')],
+    replacedPanels: withCondition('replaced'),
+    originalPanels: withCondition('original'),
+    lastUpdatedAt,
+    panels,
+  };
+}
+
 export interface LoadedVehicleAssistantContext {
   context: VehicleAssistantContext;
   /**
@@ -131,10 +275,12 @@ export async function loadVehicleAssistantContext(
   vehicleId: string,
   userId: string,
   now = new Date(),
+  /** Drives Layer-2 detail selection only; never stored or logged. */
+  question = '',
 ): Promise<LoadedVehicleAssistantContext | null> {
   const vehicleResult = await client
     .from('vehicles')
-    .select('id,owner_id,brand,model,year,current_km,color,color_id,fuel_type,body_type,plate')
+    .select('id,owner_id,brand,model,year,current_km,color,color_id,fuel_type,body_type,plate,updated_at')
     .eq('id', vehicleId)
     .eq('owner_id', userId)
     .is('archived_at', null)
@@ -142,10 +288,17 @@ export async function loadVehicleAssistantContext(
   if (vehicleResult.error || !vehicleResult.data || vehicleResult.data.owner_id !== userId)
     return null;
 
-  const [recordResult, documentResult, expertiseResult, reminderResult] = await Promise.all([
+  const [
+    recordResult,
+    documentResult,
+    expertiseResult,
+    reminderResult,
+    bodyPanelResult,
+    bodyValueResult,
+  ] = await Promise.all([
     client
       .from('vehicle_records')
-      .select('record_type,amount,record_date,kilometer,liters')
+      .select('record_type,amount,record_date,kilometer,liters,service_type')
       .eq('vehicle_id', vehicleId)
       .eq('owner_id', userId),
     client
@@ -155,7 +308,7 @@ export async function loadVehicleAssistantContext(
       .eq('owner_id', userId),
     client
       .from('expertise_reports')
-      .select('report_date')
+      .select('report_date,company_name')
       .eq('vehicle_id', vehicleId)
       .eq('owner_id', userId),
     client
@@ -163,10 +316,26 @@ export async function loadVehicleAssistantContext(
       .select('reminder_type,due_date,due_kilometer,completed')
       .eq('vehicle_id', vehicleId)
       .eq('owner_id', userId),
+    // The Gövde durumu screen's own structured state. Panel notes are free text
+    // and are deliberately not selected; only the enum state and its date.
+    client
+      .from('body_part_conditions')
+      .select('id,part_key,condition,condition_set_initialized,updated_at')
+      .eq('vehicle_id', vehicleId)
+      .eq('owner_id', userId),
+    client
+      .from('body_part_condition_values')
+      .select('body_part_condition_id,condition')
+      .eq('vehicle_id', vehicleId)
+      .eq('owner_id', userId),
   ]);
   if (recordResult.error || documentResult.error || expertiseResult.error || reminderResult.error) {
     throw new Error('CONTEXT_LOAD_FAILED');
   }
+  // A body-condition read failure is reported as `unavailable`, never as "no
+  // panels recorded" — the difference between "you have not entered it" and
+  // "we could not read it" is exactly what this issue is about.
+  const bodyConditionFailed = Boolean(bodyPanelResult.error || bodyValueResult.error);
 
   const vehicle = vehicleResult.data as Record<string, unknown>;
   const records = (recordResult.data ?? []) as Record<string, unknown>[];
@@ -194,6 +363,13 @@ export async function loadVehicleAssistantContext(
   );
   const latestMaintenance = latestByDate(maintenance, 'record_date');
   const latestExpertise = latestByDate(expertise, 'report_date');
+  const latestFuel = latestByDate(fuel, 'record_date');
+  const bodyCondition = bodyConditionFailed
+    ? null
+    : buildBodyConditionContext(
+        (bodyPanelResult.data ?? []) as Record<string, unknown>[],
+        (bodyValueResult.data ?? []) as Record<string, unknown>[],
+      );
   const currentOdometer = finiteNumber(vehicle.current_km) ?? 0;
   const lastMaintenanceOdometer = finiteNumber(latestMaintenance?.kilometer);
   const lastMaintenanceDate = dateValue(latestMaintenance?.record_date);
@@ -346,7 +522,10 @@ export async function loadVehicleAssistantContext(
       ageDays: latestExpertise
         ? Math.max(0, -daysBetween(today, dateValue(latestExpertise.report_date))!)
         : null,
+      reportCount: expertise.length,
+      latestCompany: textValue(latestExpertise?.company_name),
     },
+    bodyCondition: bodyCondition ?? undefined,
     fuelFacts: {
       recentSpend: sum(recentFuel, 'amount'),
       totalLiters: totalLiters > 0 ? Math.round(totalLiters * 100) / 100 : null,
@@ -386,10 +565,176 @@ export async function loadVehicleAssistantContext(
       hasSufficientFuelTrendData: validFuel.length >= 4,
       hasSufficientDistanceData: distanceKm !== null && distanceKm > 0,
     },
+    retrieval: {
+      vehicle: 'loaded',
+      records: 'loaded',
+      documents: 'loaded',
+      expertise: 'loaded',
+      reminders: 'loaded',
+      bodyCondition: bodyConditionFailed
+        ? ('unavailable' as AssistantRetrievalStatus)
+        : ('loaded' as AssistantRetrievalStatus),
+    },
+    provenance: {
+      // Panel state the user entered themselves outranks an expertise report for
+      // "what condition is this panel in"; the report keeps its own entry and
+      // date so a conflict is visible instead of silently merged.
+      bodyCondition: {
+        source: 'body_part_conditions',
+        recordedAt: bodyCondition?.lastUpdatedAt ?? null,
+        direct: true,
+      },
+      expertise: {
+        source: 'expertise_reports',
+        recordedAt:
+          typeof latestExpertise?.report_date === 'string' ? latestExpertise.report_date : null,
+        direct: false,
+      },
+      vehicleProfile: {
+        source: 'vehicles',
+        recordedAt: textValue(vehicle.updated_at),
+        direct: true,
+      },
+    },
+    details: buildDetailContext({
+      question,
+      today,
+      currentOdometer,
+      latestMaintenance,
+      latestFuel,
+      latestExpertise,
+      documents,
+      reminders: openReminders,
+      fuelOdometers,
+    }),
   };
   return {
     context,
     privateFacts: { plate: textValue(vehicle.plate) },
     ownerVerified: true,
   };
+}
+
+/** Question keywords that unlock each Layer-2 detail block. */
+const DETAIL_INTENTS: Readonly<Record<string, readonly string[]>> = {
+  latestMaintenance: ['bakim', 'servis', 'yag', 'onarim', 'tamir'],
+  latestFuel: ['yakit', 'benzin', 'dizel', 'lpg', 'depo', 'litre', 'tuketim', 'istasyon'],
+  latestExpertise: ['ekspertiz', 'rapor'],
+  documents: ['belge', 'muayene', 'sigorta', 'kasko', 'ruhsat', 'police', 'vergi'],
+  reminders: ['hatirlatici', 'yaklasan', 'gecikmis', 'ne zaman', 'kaldi'],
+  odometer: ['kilometre', 'km', 'yol', 'mesafe'],
+};
+
+/** Hard caps so the prompt stays bounded no matter how much history exists. */
+const MAX_DETAIL_DOCUMENTS = 6;
+const MAX_DETAIL_REMINDERS = 6;
+
+function wantsDetail(normalizedQuestion: string, block: keyof typeof DETAIL_INTENTS): boolean {
+  return DETAIL_INTENTS[block].some((term) => normalizedQuestion.includes(term));
+}
+
+/**
+ * Folds a question to the same ASCII form the assistant contract uses, so the
+ * intent keywords above match regardless of Turkish casing or diacritics.
+ */
+function foldQuestion(question: string): string {
+  return question
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replaceAll('ı', 'i')
+    .replaceAll('ş', 's')
+    .replaceAll('ğ', 'g')
+    .replaceAll('ç', 'c')
+    .replaceAll('ö', 'o')
+    .replaceAll('ü', 'u')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Layer 2: bounded latest-record detail, attached only for questions that need
+ * it. Nothing here is free text the user typed (titles, notes, document numbers)
+ * and nothing is a file path — only dates, enums and numbers.
+ */
+export function buildDetailContext(input: {
+  question: string;
+  today: Date;
+  currentOdometer: number;
+  latestMaintenance: Record<string, unknown> | null;
+  latestFuel: Record<string, unknown> | null;
+  latestExpertise: Record<string, unknown> | null;
+  documents: readonly Record<string, unknown>[];
+  reminders: readonly Record<string, unknown>[];
+  fuelOdometers: readonly number[];
+}): VehicleAssistantContext['details'] {
+  const normalized = foldQuestion(input.question);
+  const details: NonNullable<VehicleAssistantContext['details']> = {};
+
+  if (input.latestMaintenance && wantsDetail(normalized, 'latestMaintenance')) {
+    details.latestMaintenance = {
+      date: textValue(input.latestMaintenance.record_date),
+      amount: finiteNumber(input.latestMaintenance.amount),
+      odometer: finiteNumber(input.latestMaintenance.kilometer),
+      serviceType: textValue(input.latestMaintenance.service_type),
+    };
+  }
+  if (input.latestFuel && wantsDetail(normalized, 'latestFuel')) {
+    const liters = finiteNumber(input.latestFuel.liters);
+    const amount = finiteNumber(input.latestFuel.amount);
+    details.latestFuel = {
+      date: textValue(input.latestFuel.record_date),
+      liters,
+      amount,
+      odometer: finiteNumber(input.latestFuel.kilometer),
+      pricePerLiter:
+        liters && liters > 0 && amount !== null ? Math.round((amount / liters) * 100) / 100 : null,
+    };
+  }
+  if (input.latestExpertise && wantsDetail(normalized, 'latestExpertise')) {
+    details.latestExpertise = {
+      date: textValue(input.latestExpertise.report_date),
+      company: textValue(input.latestExpertise.company_name),
+    };
+  }
+  if (wantsDetail(normalized, 'documents')) {
+    details.documents = [...input.documents]
+      .sort((left, right) =>
+        String(left.expiry_date ?? '9999').localeCompare(String(right.expiry_date ?? '9999')),
+      )
+      .slice(0, MAX_DETAIL_DOCUMENTS)
+      .map((row) => ({
+        type: textValue(row.document_type),
+        issueDate: textValue(row.issue_date),
+        expiryDate: textValue(row.expiry_date),
+        daysUntilExpiry: daysBetween(input.today, dateValue(row.expiry_date)),
+      }));
+  }
+  if (wantsDetail(normalized, 'reminders')) {
+    details.reminders = [...input.reminders]
+      .sort((left, right) =>
+        String(left.due_date ?? '9999').localeCompare(String(right.due_date ?? '9999')),
+      )
+      .slice(0, MAX_DETAIL_REMINDERS)
+      .map((row) => ({
+        type: textValue(row.reminder_type),
+        dueDate: textValue(row.due_date),
+        dueKilometer: finiteNumber(row.due_kilometer),
+        daysUntilDue: daysBetween(input.today, dateValue(row.due_date)),
+      }));
+  }
+  if (wantsDetail(normalized, 'odometer')) {
+    const first = input.fuelOdometers[0] ?? null;
+    const last = input.fuelOdometers.at(-1) ?? null;
+    details.odometer = {
+      current: input.currentOdometer,
+      earliestRecorded: first,
+      latestRecorded: last,
+      recordedDistance: first !== null && last !== null ? last - first : null,
+      readings: input.fuelOdometers.length,
+    };
+  }
+
+  return Object.keys(details).length ? details : undefined;
 }

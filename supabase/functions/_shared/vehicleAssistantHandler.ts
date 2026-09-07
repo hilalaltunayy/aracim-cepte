@@ -65,7 +65,11 @@ export interface LoadedAssistantContext {
 }
 
 export interface VehicleAssistantHandlerDependencies {
-  loadContext(vehicleId: string, userId: string): Promise<LoadedAssistantContext | null>;
+  loadContext(
+    vehicleId: string,
+    userId: string,
+    question: string,
+  ): Promise<LoadedAssistantContext | null>;
   getQuota(): Promise<QuotaRow>;
   reserveQuota(operationId: string, vehicleId: string): Promise<QuotaRow>;
   commitQuota(operationId: string): Promise<QuotaRow>;
@@ -116,7 +120,7 @@ export async function handleVehicleAssistant(
 ): Promise<VehicleAssistantResult> {
   if (!userId) throw new VehicleAssistantHttpError(401, 'AUTH_REQUIRED');
   const request = parseVehicleAssistantRequest(rawBody);
-  const loaded = await dependencies.loadContext(request.vehicleId, userId);
+  const loaded = await dependencies.loadContext(request.vehicleId, userId, request.question);
   if (!loaded || loaded.context.vehicleId !== request.vehicleId) {
     throw new VehicleAssistantHttpError(403, 'VEHICLE_FORBIDDEN');
   }

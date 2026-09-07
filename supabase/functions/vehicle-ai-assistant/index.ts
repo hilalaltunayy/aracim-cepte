@@ -59,8 +59,15 @@ export default {
         signal: controller.signal,
         onDiagnostic: (diagnostic) =>
           console.log('[ai:assistant:trace]', JSON.stringify(diagnostic)),
-        loadContext: async (vehicleId, userId) => {
-          const loaded = await loadVehicleAssistantContext(context.supabase, vehicleId, userId);
+        // The question drives Layer-2 detail selection only; it is never stored.
+        loadContext: async (vehicleId, userId, question) => {
+          const loaded = await loadVehicleAssistantContext(
+            context.supabase,
+            vehicleId,
+            userId,
+            new Date(),
+            question,
+          );
           if (!loaded) return null;
           return { context: loaded.context, privateFacts: loaded.privateFacts };
         },
