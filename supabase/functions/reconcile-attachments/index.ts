@@ -2,16 +2,13 @@ import '@supabase/functions-js/edge-runtime.d.ts';
 import { withSupabase } from '@supabase/server';
 import { corsHeaders, jsonResponse } from '../_shared/http.ts';
 import { listFilesRecursively, removeFilesInBatches } from '../_shared/storageCleanup.ts';
+import {
+  planOrphanCleanup,
+  type ReconciliationReservation,
+} from '../_shared/attachmentReconciliation.ts';
 
 const bucketName = 'vehicle-attachments';
 const orphanGraceMs = 10 * 60 * 1000;
-
-type UploadOperation = {
-  id: string;
-  object_path: string;
-  status: 'reserved' | 'uploaded' | 'completed' | 'failed' | 'cleanup_required';
-  updated_at: string;
-};
 
 export default {
   fetch: withSupabase({ auth: 'user' }, async (request, context) => {
@@ -32,30 +29,33 @@ export default {
 
     const [operationsResult, queueResult, documentsResult, expertiseResult, attachmentsResult] =
       await Promise.all([
-      context.supabaseAdmin
-        .from('attachment_upload_reservations')
-        .select('id, object_path, status, updated_at')
-        .eq('owner_id', ownerId),
-      context.supabaseAdmin
-        .from('attachment_cleanup_queue')
-        .select('id, object_path')
-        .eq('owner_id', ownerId)
-        .in('status', ['pending', 'failed']),
-      context.supabaseAdmin
-        .from('vehicle_documents')
-        .select('attachment_path')
-        .eq('owner_id', ownerId)
-        .not('attachment_path', 'is', null),
-      context.supabaseAdmin
-        .from('expertise_reports')
-        .select('attachment_path')
-        .eq('owner_id', ownerId)
-        .not('attachment_path', 'is', null),
-      context.supabaseAdmin
-        .from('attachments')
-        .select('storage_path')
-        .eq('owner_id', ownerId),
-    ]);
+        context.supabaseAdmin
+          .from('attachment_upload_reservations')
+          .select('id, object_path, status, updated_at')
+          .eq('owner_id', ownerId),
+        context.supabaseAdmin
+          .from('attachment_cleanup_queue')
+          .select('id, object_path')
+          .eq('owner_id', ownerId)
+          .in('status', ['pending', 'failed']),
+        context.supabaseAdmin
+          .from('vehicle_documents')
+          .select('attachment_path')
+          .eq('owner_id', ownerId)
+          .not('attachment_path', 'is', null),
+        context.supabaseAdmin
+          .from('expertise_reports')
+          .select('attachment_path')
+          .eq('owner_id', ownerId)
+          .not('attachment_path', 'is', null),
+        // The unified attachment pool: vehicle photos, documents, maintenance and
+        // expertise receipts all keep their files here. Omitting this is what let
+        // a stale deployment delete every one of them as a false orphan.
+        context.supabaseAdmin
+          .from('attachments')
+          .select('storage_path')
+          .eq('owner_id', ownerId),
+      ]);
     if (
       operationsResult.error ||
       queueResult.error ||
@@ -83,31 +83,21 @@ export default {
       return jsonResponse(500, { code: 'ATTACHMENT_RECONCILIATION_LIST_FAILED' });
     }
 
-    const objectSet = new Set(objectPaths);
-    const referenced = new Set(
-      [
+    const reservations = (operationsResult.data ?? []) as ReconciliationReservation[];
+    const plan = planOrphanCleanup({
+      objectPaths,
+      referencedPaths: [
         ...(documentsResult.data ?? []).map((row) => row.attachment_path),
         ...(expertiseResult.data ?? []).map((row) => row.attachment_path),
         ...(attachmentsResult.data ?? []).map((row) => row.storage_path),
-      ]
-        .filter((path): path is string => Boolean(path)),
-    );
-    const operations = (operationsResult.data ?? []) as UploadOperation[];
-    const operationByPath = new Map(operations.map((operation) => [operation.object_path, operation]));
-    const queuedPaths = new Set((queueResult.data ?? []).map((row) => row.object_path));
-    const alreadyMissingQueuePaths = Array.from(queuedPaths).filter((path) => !objectSet.has(path));
-    const cutoff = Date.now() - orphanGraceMs;
-    const cleanupPaths = objectPaths.filter((path) => {
-      if (referenced.has(path)) return false;
-      if (queuedPaths.has(path)) return true;
-      const operation = operationByPath.get(path);
-      if (!operation) return true;
-      if (operation.status === 'failed' || operation.status === 'cleanup_required') return true;
-      return (
-        operation.status === 'completed' ||
-        (operation.status === 'uploaded' && new Date(operation.updated_at).getTime() <= cutoff)
-      );
+      ].filter((path): path is string => Boolean(path)),
+      queuedPaths: (queueResult.data ?? []).map((row) => row.object_path),
+      reservations,
+      graceMs: orphanGraceMs,
+      now: Date.now(),
     });
+    const { cleanupPaths, alreadyMissingQueuePaths, reservationsToComplete, reservationsToRecover } =
+      plan;
 
     try {
       await removeFilesInBatches(bucket, cleanupPaths);
@@ -154,26 +144,19 @@ export default {
         .in('object_path', alreadyMissingQueuePaths);
     }
 
-    const referencedOperations = operations.filter(
-      (operation) => referenced.has(operation.object_path) && objectSet.has(operation.object_path),
-    );
-    for (const operation of referencedOperations) {
-      if (operation.status === 'completed') continue;
+    for (const reservation of reservationsToComplete) {
       await context.supabaseAdmin
         .from('attachment_upload_reservations')
         .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', operation.id)
+        .eq('id', reservation.id)
         .eq('owner_id', ownerId);
     }
 
-    const recoveredUploads = operations.filter(
-      (operation) => operation.status === 'reserved' && objectSet.has(operation.object_path),
-    );
-    for (const operation of recoveredUploads) {
+    for (const reservation of reservationsToRecover) {
       await context.supabaseAdmin
         .from('attachment_upload_reservations')
         .update({ status: 'uploaded', uploaded_at: new Date().toISOString() })
-        .eq('id', operation.id)
+        .eq('id', reservation.id)
         .eq('owner_id', ownerId);
     }
 
