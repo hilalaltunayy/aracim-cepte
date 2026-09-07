@@ -108,3 +108,111 @@ completion report'ta "Manual verification required" altında raporlanır.
 Her faz ayrı commit. Kod: `git revert <sha>`. Backend: yeni RPC `drop function`; yeni Edge Function
 `npx supabase functions delete sync-entitlement`. Mevcut webhook yolu değişmediği için geri
 alındığında sistem bugünkü davranışına döner.
+
+## Backend rollout execution plan (2026-09-07)
+
+### Goal
+
+Yalnız `20260907120000_entitlement_reconciliation_rpc.sql` migration'ını bağlı production
+Supabase projesine uygulamak, güvenlik doğrulamasını çalıştırmak ve gerekli RevenueCat sync
+secret'ları varsa yalnız `sync-entitlement` Edge Function'ını deploy etmek.
+
+### Scope
+
+- Bağlı proje, migration geçmişi, Edge Function ve secret adlarını doğrula.
+- Bekleyen tek reconciliation migration'ını dry-run sonrası uygula ve remote geçmişini doğrula.
+- RPC'nin `SECURITY DEFINER`, boş `search_path` ve yalnız `service_role` execute sınırını test et.
+- Gerekli secret'lar eksikse Function deployment'ından önce dur.
+- Mevcut `revenuecat-webhook` sürüm/hash/durumunu değişmeden doğrula.
+
+### Out of scope / Do not change
+
+Uygulama kodu, diğer migration/RLS/RPC/Storage nesneleri, mevcut Edge Function'lar, RevenueCat/Play
+ürünleri ve secret değerleri değiştirilmeyecek; secret değerleri okunmayacak veya raporlanmayacak.
+
+### Risks and recovery
+
+Migration additive ve veri silmez. Beklenmeyen migration kapsamı dry-run'da görülürse uygulama
+durdurulur. RPC kaynaklı production sorunu için forward recovery, yalnız yeni imzayı
+`drop function public.reconcile_revenuecat_subscriber_state(...)` ile kaldırmaktır. Function ancak
+iki gerekli değişken de mevcutsa deploy edilir; deployment mevcut webhook'a dokunmaz.
+
+### Validation
+
+- `npx supabase migration list --linked`
+- `npx supabase db push --linked --dry-run`, ardından yalnız beklenen migration için gerçek push
+- `supabase/tests/entitlement_reconciliation.sql` içeriğini transaction + rollback ile remote çalıştırma
+- Remote function privilege/definition kontrolleri ve security advisor
+- Secret adları kontrolü; değerler raporlanmaz
+- `revenuecat-webhook` deployment kimliği, version, hash ve ACTIVE durumu öncesi/sonrası karşılaştırma
+
+### Rollout result
+
+#### Completed
+
+- Bağlı production proje `eiqxvvnqkbzbhzpthcwo` (`ACTIVE_HEALTHY`, eu-central-1, PostgreSQL
+  17.6) olarak doğrulandı.
+- Dry-run yalnız `20260907120000_entitlement_reconciliation_rpc.sql` migration'ını gösterdi; bu
+  migration remote'a uygulandı ve remote history/RPC varlığı bağımsız olarak doğrulandı.
+- Remote RPC: `SECURITY DEFINER`, `search_path=""`, advisory lock, auth-user doğrulaması, support
+  override ve upsert içeriyor; ACL yalnız `postgres` ve `service_role` execute veriyor. `anon` ve
+  `authenticated` execute kapalı.
+- Handler testleri 12/12 geçti.
+- `revenuecat-webhook` migration öncesi/sonrası `ACTIVE`, v3 ve aynı deployment hash'iyle kaldı.
+
+#### Skipped
+
+- `sync-entitlement` deploy edilmedi. Remote secret envanterinde `REVENUECAT_SECRET_API_KEY` ve
+  `REVENUECAT_SYNC_ENABLED` bulunmadığı için fail-closed deployment kapısı uygulandı.
+- İlgisiz security-advisor uyarıları bu dar rollout kapsamında değiştirilmedi.
+
+#### Failed
+
+- `npx supabase db push --linked`, migration'ı uyguladıktan sonra yerel Docker engine bulunamadığı
+  için Edge Runtime image kontrolünde hata koduyla sonlandı. Remote migration history ve RPC
+  varlığı migration'ın commit olduğunu doğruladı; hiçbir Edge Function değişmedi.
+- Transactional remote fixture, connector read-only transaction sınırı nedeniyle ilk test
+  `INSERT`'ünde reddedildi; fixture verisi oluşmadı. Eşdeğer privilege/definition kontrolleri
+  salt-okunur sorguyla geçti, ancak mutation senaryoları remote üzerinde tekrar çalıştırılmalıdır.
+
+#### Manual verification required
+
+- Supabase Edge Function secrets'a `REVENUECAT_SECRET_API_KEY=<RevenueCat server-side secret API key>`
+  ve `REVENUECAT_SYNC_ENABLED=true` eklenmeli; değerler repository'ye veya rapora yazılmamalı.
+- Secret'lar eklendikten sonra yalnız `sync-entitlement` deploy edilmeli ve transactional
+  `supabase/tests/entitlement_reconciliation.sql` testi yazma yetkili, rollback-capable bağlantıyla
+  yeniden çalıştırılmalı.
+
+### Rollout continuation result (2026-09-07)
+
+#### Completed
+
+- `REVENUECAT_SECRET_API_KEY` ve `REVENUECAT_SYNC_ENABLED` secret adlarının remote projede mevcut
+  olduğu, değerleri okunmadan doğrulandı.
+- Yalnız `sync-entitlement`, API bundling ile deploy edildi; function `ACTIVE`, v1,
+  `verify_jwt=false`, import map etkin ve deployment hash'i
+  `60b9ea2541b28f4759d51a5c2ba315a2a2f0036a1e4691caf64f1708080571a6`.
+- `supabase/tests/entitlement_reconciliation.sql` linked, write-capable Management API yolu ile
+  başarıyla çalıştı. Dosyanın `ROLLBACK` adımı sonrasında iki fixture user, entitlement ve webhook
+  event sayıları ayrı sorguyla sıfır doğrulandı.
+- Entitlement handler testleri yeniden çalıştırıldı: 12/12 geçti.
+- `revenuecat-webhook` deploy öncesi ve sonrası `ACTIVE`, v5 ve kaynak hash'i
+  `26b072809a50ed79c4bedbb4f75457c509adacacdbb1dc98a8604709aee8566e` olarak değişmeden kaldı.
+  Önceki kayıttaki v3'e göre version metadata secret ayarlarından sonra zaten v5 idi; bu rollout
+  webhook'u deploy etmedi ve source hash'i değişmedi.
+- Final migration dry-run remote veritabanının güncel olduğunu doğruladı.
+
+#### Skipped
+
+- Gerçek kullanıcı/RevenueCat subscriber çağrısı test verisini değiştireceği için otomatik olarak
+  tetiklenmedi; cihazdaki satın almış test hesabıyla acceptance kapsamındadır.
+- İlgisiz Supabase schema, RLS, function ve secret'ları değiştirilmedi.
+
+#### Failed
+
+- Yok.
+
+#### Manual verification required
+
+- Satın almış bir license tester hesabıyla uygulamayı cold-start ederek `sync-entitlement`
+  çağrısının gerçek RevenueCat subscriber kaydını Premium aynasına taşıdığı doğrulanmalı.
