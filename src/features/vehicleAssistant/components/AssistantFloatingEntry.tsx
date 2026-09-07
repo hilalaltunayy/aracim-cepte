@@ -157,10 +157,10 @@ const createStyles = ({ colors }: AppTheme) =>
     anchor: {
       position: 'absolute',
       right: spacing.xl,
-      // Above the Home scroll content and backdrop; the tab bar sits lower now
-      // so there is nothing left to fight over.
+      // Lift above the Home scroll content and backdrop. The tab bar sits lower
+      // now, so there is nothing left to fight over; the button's own elevation
+      // (below) carries the Android z-order and the shadow.
       zIndex: 30,
-      elevation: 14,
     },
     button: {
       width: SIZE,
