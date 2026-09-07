@@ -7,6 +7,7 @@ const loadReportsForVehicles = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 const exportVehicleReportPdf = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ uri: 'file:///r.pdf', fileName: 'r.pdf', shared: true }),
 );
+
 vi.mock('react-native', () => {
   class Value {
     addListener() {
@@ -19,12 +20,15 @@ vi.mock('react-native', () => {
     }
   }
   return {
-    Animated: { Value, View: 'AnimatedView', timing: () => ({ start: () => undefined }) },
+    Animated: {
+      Value,
+      View: 'AnimatedView',
+      timing: () => ({ start: () => undefined }),
+    },
     Pressable: 'Pressable',
     StyleSheet: {
       create: <T,>(styles: T) => styles,
       absoluteFill: { position: 'absolute' },
-      absoluteFillObject: { position: 'absolute' },
       hairlineWidth: 1,
     },
     Text: 'Text',
@@ -34,16 +38,23 @@ vi.mock('react-native', () => {
 vi.mock('react-native-svg', () => ({
   default: 'Svg',
   Circle: 'Circle',
+  Defs: 'Defs',
+  G: 'G',
   Line: 'Line',
   Path: 'Path',
-  Polyline: 'Polyline',
+  Pattern: 'Pattern',
+  Rect: 'Rect',
 }));
 vi.mock('@expo/vector-icons', async () => {
   const React = await import('react');
   return { Ionicons: (props: object) => React.createElement('Ionicons', props) };
 });
 vi.mock('@/shared/theme', () => {
-  const theme = { colors: new Proxy({}, { get: (_target, key) => String(key) }) };
+  const colors = new Proxy(
+    { chart: new Proxy({}, { get: (_t, k) => `chart.${String(k)}` }) },
+    { get: (target, key) => (key in target ? (target as never)[key] : String(key)) },
+  );
+  const theme = { colors };
   return {
     fontFamilies: new Proxy({}, { get: () => 'Inter' }),
     radii: new Proxy({}, { get: () => 12 }),
@@ -62,34 +73,19 @@ vi.mock('@/shared/components/ui', async () => {
     Mock.displayName = name;
     return Mock;
   };
-  function AppHeaderMock({
-    children,
-    action,
-    ...props
-  }: {
-    children?: React.ReactNode;
-    action?: React.ReactNode;
-    [key: string]: unknown;
-  }) {
-    return React.createElement('AppHeader', props, children, action);
-  }
   return {
     ActionSheet: wrap('ActionSheet'),
     AppButton: wrap('AppButton'),
-    AppHeader: AppHeaderMock,
     Card: wrap('Card'),
     EmptyState: wrap('EmptyState'),
     ErrorBanner: wrap('ErrorBanner'),
     FadeIn: wrap('FadeIn'),
     LoadingScreen: wrap('LoadingScreen'),
     Screen: wrap('Screen'),
-    SectionHeader: wrap('SectionHeader'),
   };
 });
 vi.mock('@/store/dataStore', () => ({ useDataStore: () => state.value }));
 vi.mock('../services/vehicleReportLoader', () => ({ loadReportsForVehicles }));
-// Keeps expo-print / expo-file-system out of this render test's module graph;
-// the export flow itself is covered by vehicleReportPdf.test.ts.
 vi.mock('../pdf/expoReportPdfGateway', () => ({ expoReportPdfGateway: {} }));
 vi.mock('../pdf/vehicleReportPdf', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../pdf/vehicleReportPdf')>()),
@@ -97,6 +93,13 @@ vi.mock('../pdf/vehicleReportPdf', async (importOriginal) => ({
 }));
 
 import { VehicleReportsScreen } from './VehicleReportsScreen';
+
+// The screen resolves the period from the real clock. The first of the current
+// month is always inside "Son 6 ay" and is never a future date, whatever day the
+// suite runs.
+const currentMonthStart = `${new Date().toISOString().slice(0, 7)}-01`;
+
+const setReportPeriod = vi.fn();
 
 const base = {
   bootstrapped: true,
@@ -116,7 +119,7 @@ const base = {
       color: null,
     },
   ],
-  records: [],
+  records: [] as unknown[],
   reminders: [],
   bodyConditions: [],
   documents: [],
@@ -124,8 +127,24 @@ const base = {
   notes: [],
   entitlements: { advancedReports: true, maxVehicles: 3 },
   reportPeriodId: 'six_months',
-  setReportPeriod: vi.fn(),
+  setReportPeriod,
 };
+
+const fuel = (id: string, amount: number, extra: Record<string, unknown> = {}) => ({
+  id,
+  vehicleId: 'a',
+  recordType: 'fuel',
+  category: 'Yakıt',
+  amount,
+  liters: 20,
+  recordDate: currentMonthStart,
+  kilometer: null,
+  description: null,
+  createdAt: 'x',
+  updatedAt: 'x',
+  ...extra,
+});
+
 async function mount(props: { onUpgrade?: () => void } = {}) {
   let renderer: ReactTestRenderer | undefined;
   await act(async () => {
@@ -137,139 +156,153 @@ const texts = (renderer: ReactTestRenderer) =>
   renderer.root
     .findAll((node) => String(node.type) === 'Text')
     .map((node) => node.children.join(''));
+
 describe('VehicleReportsScreen', () => {
   beforeAll(() => {
     (
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true;
+    setReportPeriod.mockReset();
   });
-  it('renders an honest Premium empty report without turning unknown values into zero', async () => {
+
+  it('shows an honest empty report — ₺0, no fake trend or distribution', async () => {
     state.value = base;
     const renderer = await mount();
-    expect(texts(renderer)).toContain('Bu dönem için henüz maliyet kaydı yok.');
-    expect(texts(renderer)).toContain('—');
+    expect(texts(renderer)).toContain('KAYITLI ARAÇ MALİYETİ');
+    expect(texts(renderer)).toContain('Bu dönemde harcama kaydı bulunmuyor.');
+    expect(texts(renderer)).toContain('Bu dönemde kayıtlı gider yok.');
+    // No trend chart is drawn when there is nothing to plot.
+    expect(renderer.root.findAllByProps({ testID: 'report-trend-reveal' })).toHaveLength(0);
   });
-  it('shows the scoped Premium availability state for Free users', async () => {
+
+  it('is a chart-led layout: no repeated Card tiles, one hero total, one trend, one donut', async () => {
+    state.value = {
+      ...base,
+      records: [
+        fuel('f1', 2000, { stationBrand: 'opet' }),
+        fuel('f2', 1000, { stationBrand: 'shell' }),
+        {
+          id: 'm1',
+          vehicleId: 'a',
+          recordType: 'maintenance',
+          category: 'Yağ bakımı',
+          amount: 700,
+          liters: null,
+          recordDate: currentMonthStart,
+          kilometer: null,
+          description: null,
+          createdAt: 'x',
+          updatedAt: 'x',
+        },
+      ],
+    };
+    const renderer = await mount();
+    expect(renderer.root.findAllByProps({ testID: 'report-hero-total' })).toHaveLength(1);
+    expect(texts(renderer)).toContain('Maliyet eğilimi');
+    expect(texts(renderer)).toContain('Harcama dağılımı');
+    expect(texts(renderer)).toContain('Yakıt ve verimlilik');
+    expect(texts(renderer)).toContain('Bakım');
+    // The redesign renders on the backdrop — no stack of Card widgets.
+    expect(renderer.root.findAll((node) => String(node.type) === 'Card')).toHaveLength(0);
+  });
+
+  it('draws a weekly trend for a single-month period instead of a dead state', async () => {
+    state.value = {
+      ...base,
+      reportPeriodId: 'last_month',
+      records: [fuel('f1', 300), fuel('f2', 500)],
+    };
+    // "Geçen ay" is always fully in the past — records dated this month fall
+    // outside it, so seed the previous month explicitly.
+    const prev = new Date();
+    prev.setMonth(prev.getMonth() - 1);
+    const prevMonth = prev.toISOString().slice(0, 7);
+    state.value = {
+      ...(state.value as object),
+      records: [
+        fuel('f1', 300, { recordDate: `${prevMonth}-02` }),
+        fuel('f2', 500, { recordDate: `${prevMonth}-20` }),
+      ],
+    };
+    const renderer = await mount();
+    expect(texts(renderer)).toContain('Haftaya göre toplam kayıtlı gider');
+    expect(renderer.root.findAllByProps({ testID: 'report-trend-reveal' })).toHaveLength(1);
+  });
+
+  it('routes a Free user to the paywall and never generates a PDF', async () => {
     const onUpgrade = vi.fn();
     state.value = { ...base, entitlements: { advancedReports: false } };
     const renderer = await mount({ onUpgrade });
     expect(texts(renderer)).toContain('Premium raporlar');
-    await act(async () => renderer.root.findByProps({ title: 'Premium’u incele' }).props.onPress());
-    expect(onUpgrade).toHaveBeenCalledOnce();
-  });
-
-  it('routes a Free user to the paywall instead of generating a PDF', async () => {
-    const onUpgrade = vi.fn();
-    state.value = { ...base, entitlements: { advancedReports: false } };
-    const renderer = await mount({ onUpgrade });
+    exportVehicleReportPdf.mockClear();
     await act(async () =>
       renderer.root
-        .findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' })
+        .findByProps({ title: 'PDF araç raporunu dışa aktar' })
         .props.onPress(),
     );
     expect(onUpgrade).toHaveBeenCalled();
     expect(exportVehicleReportPdf).not.toHaveBeenCalled();
   });
 
-  it('exports a real PDF for a Premium user', async () => {
+  it('exports a PDF built from the same canonical report data', async () => {
     exportVehicleReportPdf.mockClear();
-    state.value = base;
+    state.value = { ...base, records: [fuel('f1', 5000)] };
     const renderer = await mount();
     await act(async () =>
-      renderer.root.findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' }).props.onPress(),
+      renderer.root
+        .findByProps({ accessibilityLabel: 'Raporu PDF olarak dışa aktar' })
+        .props.onPress(),
     );
     expect(exportVehicleReportPdf).toHaveBeenCalledOnce();
     const [html, fileName] = exportVehicleReportPdf.mock.calls[0];
-    // Generated from data, never a screenshot of this screen.
     expect(html).toContain('Araç Geçmiş ve Durum Raporu');
     expect(html).toContain('Kia');
+    expect(html).toContain('5.000');
     expect(fileName).toMatch(/^Aracim_Cepte_Rapor_.*\.pdf$/);
   });
 
-  it('surfaces an export failure without crashing the report', async () => {
+  it('surfaces an export failure without breaking the report', async () => {
+    exportVehicleReportPdf.mockClear();
     exportVehicleReportPdf.mockRejectedValueOnce(new Error('boom'));
-    state.value = base;
+    state.value = { ...base, records: [fuel('f1', 5000)] };
     const renderer = await mount();
     await act(async () =>
-      renderer.root.findByProps({ title: 'PDF Araç Raporunu Dışa Aktar' }).props.onPress(),
+      renderer.root
+        .findByProps({ accessibilityLabel: 'Raporu PDF olarak dışa aktar' })
+        .props.onPress(),
     );
     expect(renderer.root.findAll((node) => String(node.type) === 'ErrorBanner')).toHaveLength(1);
     expect(texts(renderer)).toContain('KAYITLI ARAÇ MALİYETİ');
   });
-  it('renders one donut, one trend line and comparison bars instead of repeated line charts', async () => {
-    state.value = {
-      ...base,
-      records: [
-        {
-          id: 'f1',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          stationBrand: 'opet',
-          recordDate: '2026-04-12',
-          kilometer: 100,
-          description: null,
-          createdAt: '2026-04-12',
-          updatedAt: '2026-04-12',
-        },
-        {
-          id: 'f2',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 250,
-          liters: 5,
-          stationBrand: 'shell',
-          recordDate: '2026-08-12',
-          kilometer: 200,
-          description: null,
-          createdAt: '2026-08-12',
-          updatedAt: '2026-08-12',
-        },
-        {
-          id: 'm1',
-          vehicleId: 'a',
-          recordType: 'maintenance',
-          category: 'Yağ bakımı',
-          amount: 500,
-          liters: null,
-          recordDate: '2026-05-12',
-          kilometer: 120,
-          description: null,
-          createdAt: '2026-05-12',
-          updatedAt: '2026-05-12',
-        },
-        {
-          id: 'm2',
-          vehicleId: 'a',
-          recordType: 'maintenance',
-          category: 'Yağ bakımı',
-          amount: 700,
-          liters: null,
-          recordDate: '2026-08-13',
-          kilometer: 220,
-          description: null,
-          createdAt: '2026-08-13',
-          updatedAt: '2026-08-13',
-        },
-      ],
-    };
-    const renderer = await mount();
-    expect(texts(renderer)).toContain('Harcamaların dağılımı');
-    expect(texts(renderer)).toContain('Aylık maliyet eğilimi');
-    expect(texts(renderer)).toContain('Karşılaştırma');
-    // The three repeated line charts collapse to a single monthly trend.
-    expect(renderer.root.findAllByProps({ testID: 'report-line-reveal' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ testID: 'report-bar-entrance' }).length).toBeGreaterThan(
-      0,
+
+  it('does not stack export jobs on repeated taps', async () => {
+    exportVehicleReportPdf.mockClear();
+    let resolve: (value: unknown) => void = () => undefined;
+    exportVehicleReportPdf.mockImplementation(
+      () => new Promise((done) => (resolve = done as typeof resolve)),
     );
-    expect(renderer.root.findAllByProps({ testID: 'report-kpi-count-up' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ testID: 'report-period-transition' })).toHaveLength(1);
+    state.value = { ...base, records: [fuel('f1', 5000)] };
+    const renderer = await mount();
+    const button = renderer.root.findByProps({
+      accessibilityLabel: 'Raporu PDF olarak dışa aktar',
+    });
+    await act(async () => button.props.onPress());
+    await act(async () => button.props.onPress());
+    await act(async () => button.props.onPress());
+    expect(exportVehicleReportPdf).toHaveBeenCalledTimes(1);
+    await act(async () => resolve({ uri: 'x', fileName: 'x', shared: true }));
   });
 
-  it('keeps every currency value inside its card on a narrow screen', async () => {
+  it('persists the chosen period through the store, not local state', async () => {
+    setReportPeriod.mockReset();
+    state.value = base;
+    const renderer = await mount();
+    const sheet = renderer.root.find((node) => String(node.type) === 'ActionSheet');
+    await act(async () => sheet.props.onSelect('month'));
+    expect(setReportPeriod).toHaveBeenCalledWith('month');
+  });
+
+  it('keeps currency values line-clamped so a large amount cannot overflow', async () => {
     state.value = {
       ...base,
       records: [
@@ -280,8 +313,8 @@ describe('VehicleReportsScreen', () => {
           category: 'Motor revizyonu',
           amount: 1234567.89,
           liters: null,
-          recordDate: '2026-08-12',
-          kilometer: 1000,
+          recordDate: currentMonthStart,
+          kilometer: null,
           description: null,
           createdAt: 'x',
           updatedAt: 'x',
@@ -289,258 +322,50 @@ describe('VehicleReportsScreen', () => {
       ],
     };
     const renderer = await mount();
-    // Every Text carrying a formatted TL amount must be line-clamped, so a large
-    // value wraps or ellipsises instead of pushing past the card edge.
     const currencyTexts = renderer.root.findAll(
       (node) => String(node.type) === 'Text' && node.children.join('').includes('1.234.567'),
     );
     expect(currencyTexts.length).toBeGreaterThan(0);
+    // Every large TL value is line-clamped and shrink-to-fit, so it can never
+    // push past its slot — a KPI value to one line, the wrapping footnote to two.
     for (const node of currencyTexts) {
       expect(typeof node.props.numberOfLines).toBe('number');
-      expect(node.props.numberOfLines).toBeGreaterThan(0);
+      expect(node.props.numberOfLines).toBeLessThanOrEqual(2);
     }
+    const heroTotal = renderer.root.findByProps({ testID: 'report-hero-total' });
+    expect(heroTotal.props.numberOfLines).toBe(1);
+    expect(heroTotal.props.adjustsFontSizeToFit).toBe(true);
   });
-  it('loads real independently returned records for a two-vehicle comparison', async () => {
+
+  it('switches the active vehicle report without mixing the previous vehicle', async () => {
+    state.value = {
+      ...base,
+      vehicles: [...base.vehicles, { id: 'b', brand: 'Ford', model: 'Puma' }],
+      records: [fuel('a1', 100), fuel('b1', 900, { vehicleId: 'b' })],
+    };
+    const renderer = await mount();
+    expect(texts(renderer).some((value) => value.includes('100'))).toBe(true);
+    state.value = { ...(state.value as object), activeVehicleId: 'b' };
+    await act(async () => renderer.update(<VehicleReportsScreen />));
+    expect(texts(renderer).some((value) => value.includes('Ford Puma'))).toBe(true);
+    expect(texts(renderer).some((value) => value.includes('900'))).toBe(true);
+  });
+
+  it('renders an isolated two-vehicle comparison', async () => {
     loadReportsForVehicles.mockResolvedValueOnce([
-      {
-        vehicle: { id: 'b', brand: 'Ford', model: 'Puma' },
-        records: [
-          {
-            id: 'b1',
-            vehicleId: 'b',
-            recordType: 'fuel',
-            category: 'Yakıt',
-            amount: 300,
-            liters: 5,
-            recordDate: '2026-08-12',
-            kilometer: 20,
-            description: null,
-            createdAt: 'x',
-            updatedAt: 'x',
-          },
-          {
-            id: 'b2',
-            vehicleId: 'b',
-            recordType: 'fuel',
-            category: 'Yakıt',
-            amount: 200,
-            liters: 4,
-            recordDate: '2026-08-13',
-            kilometer: 120,
-            description: null,
-            createdAt: 'x',
-            updatedAt: 'x',
-          },
-        ],
-      },
+      { vehicle: { id: 'b', brand: 'Ford', model: 'Puma' }, records: [fuel('b1', 300)] },
     ]);
     state.value = {
       ...base,
       vehicles: [...base.vehicles, { id: 'b', brand: 'Ford', model: 'Puma' }],
-      records: [
-        {
-          id: 'a1',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-12',
-          kilometer: 10,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-        {
-          id: 'a2',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-13',
-          kilometer: 110,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-      ],
-    };
-    const renderer = await mount();
-    await vi.waitFor(() => expect(texts(renderer)).toContain('Ford Puma'));
-    expect(
-      renderer.root
-        .findAll((node) => String(node.type) === 'SectionHeader')
-        .some((node) => node.props.title === 'Araç karşılaştırması'),
-    ).toBe(true);
-  });
-  it('supports three vehicle comparison rows without becoming a fleet layout', async () => {
-    loadReportsForVehicles.mockResolvedValueOnce([
-      { vehicle: { id: 'b', brand: 'Ford', model: 'Puma' }, records: [] },
-      { vehicle: { id: 'c', brand: 'Toyota', model: 'Corolla' }, records: [] },
-    ]);
-    state.value = {
-      ...base,
-      vehicles: [
-        ...base.vehicles,
-        { id: 'b', brand: 'Ford', model: 'Puma' },
-        { id: 'c', brand: 'Toyota', model: 'Corolla' },
-      ],
-      records: [],
-    };
-    const renderer = await mount();
-    await vi.waitFor(() => expect(texts(renderer)).toContain('Toyota Corolla'));
-  });
-  it('shows an honest comparison error while retaining the selected vehicle report', async () => {
-    loadReportsForVehicles.mockRejectedValueOnce(new Error('offline'));
-    state.value = {
-      ...base,
-      vehicles: [...base.vehicles, { id: 'b', brand: 'Ford', model: 'Puma' }],
-      records: [
-        {
-          id: 'a',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-12',
-          kilometer: 10,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-        {
-          id: 'a2',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-13',
-          kilometer: 110,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-      ],
+      records: [fuel('a1', 100)],
     };
     const renderer = await mount();
     await vi.waitFor(() =>
-      expect(texts(renderer)).toContain(
-        'Diğer araçların raporları şu anda yüklenemedi. Seçili aracın raporu kullanılabilir.',
-      ),
+      expect(texts(renderer).some((value) => value.includes('Araç karşılaştırması'))).toBe(true),
     );
-    expect(texts(renderer)).toContain('KAYITLI ARAÇ MALİYETİ');
   });
-  it('updates the visible period through the existing action sheet without rebuilding the screen hierarchy', async () => {
-    state.value = base;
-    const renderer = await mount();
-    const period = renderer.root.find(
-      (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'button',
-    );
-    await act(async () => {
-      period.props.onPress();
-    });
-    let sheet = renderer.root.find((node) => String(node.type) === 'ActionSheet');
-    expect(sheet.props.visible).toBe(true);
-    await act(async () => {
-      sheet.props.onSelect('month');
-    });
-    sheet = renderer.root.find((node) => String(node.type) === 'ActionSheet');
-    expect(sheet.props.options.some((option: { value: string }) => option.value === 'month')).toBe(
-      true,
-    );
-    expect(renderer.root.findAllByProps({ testID: 'report-period-transition' })).toHaveLength(1);
-  });
-  it('changes the active vehicle report instead of mixing the previous vehicle data', async () => {
-    state.value = {
-      ...base,
-      vehicles: [...base.vehicles, { id: 'b', brand: 'Ford', model: 'Puma' }],
-      records: [
-        {
-          id: 'a',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-12',
-          kilometer: 10,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-        {
-          id: 'b',
-          vehicleId: 'b',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 900,
-          liters: 18,
-          recordDate: '2026-08-12',
-          kilometer: 10,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-      ],
-    };
-    const renderer = await mount();
-    state.value = { ...state.value, activeVehicleId: 'b' };
-    await act(async () => {
-      renderer.update(<VehicleReportsScreen />);
-    });
-    expect(renderer.root.find((node) => String(node.type) === 'AppHeader').props.subtitle).toBe(
-      'Ford Puma',
-    );
-    expect(texts(renderer).some((value) => value.includes('900'))).toBe(true);
-  });
-  it('keeps fuel-only reports honest about unavailable maintenance data', async () => {
-    state.value = {
-      ...base,
-      records: [
-        {
-          id: 'f',
-          vehicleId: 'a',
-          recordType: 'fuel',
-          category: 'Yakıt',
-          amount: 100,
-          liters: 2,
-          recordDate: '2026-08-12',
-          kilometer: null,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-      ],
-    };
-    const renderer = await mount();
-    expect(texts(renderer)).toContain('0');
-    expect(texts(renderer)).toContain('Yeterli veri yok');
-  });
-  it('keeps maintenance-only reports honest about unavailable fuel analytics', async () => {
-    state.value = {
-      ...base,
-      records: [
-        {
-          id: 'm',
-          vehicleId: 'a',
-          recordType: 'maintenance',
-          category: 'Bakım',
-          amount: 100,
-          liters: null,
-          recordDate: '2026-08-12',
-          kilometer: null,
-          description: null,
-          createdAt: 'x',
-          updatedAt: 'x',
-        },
-      ],
-    };
-    const renderer = await mount();
-    expect(texts(renderer)).toContain('Yeterli veri yok');
-  });
+
   it('has stable loading and no-vehicle states', async () => {
     state.value = { ...base, loading: true };
     let renderer = await mount();

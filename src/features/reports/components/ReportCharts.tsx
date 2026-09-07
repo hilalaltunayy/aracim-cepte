@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
+import Svg, { Circle, Defs, G, Line, Path, Pattern, Rect } from 'react-native-svg';
 import {
   fontFamilies,
   radii,
@@ -14,16 +14,19 @@ import {
 /**
  * Report chart primitives.
  *
- * Native-safety rules for this file (see commit c2374e0 — a "0deg" string on an
+ * Native-safety rules (see commit c2374e0 — a "0deg" string on an
  * react-native-svg numeric prop crashed every fresh install under the New
  * Architecture):
  *  - every numeric SVG prop is passed as a real `number`;
- *  - geometry is expressed through `Path d` / `Polyline points` strings, which
- *    react-native-svg parses itself and never hands to the Double-casting base
- *    view manager;
+ *  - geometry is `Path d` strings or `Rect`/`Circle` with numeric attributes,
+ *    which react-native-svg parses itself;
  *  - no touch handler is ever attached to an SVG element. Interaction lives on
- *    plain React Native `Pressable` overlays, so tooltips add no native risk.
+ *    plain React Native `Pressable` overlays.
  */
+
+// ---------------------------------------------------------------------------
+// Donut — spend distribution
+// ---------------------------------------------------------------------------
 
 export interface DonutSegment {
   key: string;
@@ -32,17 +35,11 @@ export interface DonutSegment {
   color: string;
 }
 
-const TAU_DEGREES = 360;
-
 function polar(cx: number, cy: number, radius: number, angleDegrees: number) {
   const radians = ((angleDegrees - 90) * Math.PI) / 180;
-  return {
-    x: cx + radius * Math.cos(radians),
-    y: cy + radius * Math.sin(radians),
-  };
+  return { x: cx + radius * Math.cos(radians), y: cy + radius * Math.sin(radians) };
 }
 
-/** Annulus sector between two angles, as a plain `d` string. */
 function ringSlicePath(
   cx: number,
   cy: number,
@@ -66,25 +63,23 @@ function ringSlicePath(
   ].join(' ');
 }
 
-/**
- * Spend distribution ring. A single non-zero segment is drawn as a stroked
- * circle because a 360° arc collapses to a zero-length path.
- */
 export function DonutChart({
   segments,
   centerLabel,
   centerValue,
+  formatValue,
 }: {
   segments: readonly DonutSegment[];
   centerLabel: string;
   centerValue: string;
+  formatValue: (value: number) => string;
 }) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useAppTheme();
-  const size = 168;
+  const size = 150;
   const center = size / 2;
-  const outerRadius = 78;
-  const innerRadius = 52;
+  const outerRadius = 72;
+  const innerRadius = 48;
   const ringWidth = outerRadius - innerRadius;
   const positive = segments.filter((segment) => segment.value > 0);
   const total = positive.reduce((sum, segment) => sum + segment.value, 0);
@@ -92,7 +87,7 @@ export function DonutChart({
   let cursor = 0;
   const slices = total
     ? positive.map((segment) => {
-        const sweep = (segment.value / total) * TAU_DEGREES;
+        const sweep = (segment.value / total) * 360;
         const start = cursor;
         cursor += sweep;
         return { ...segment, start, end: cursor, share: segment.value / total };
@@ -108,7 +103,7 @@ export function DonutChart({
             cy={center}
             r={(outerRadius + innerRadius) / 2}
             fill="none"
-            stroke={colors.neutralSurface}
+            stroke={colors.chart.track}
             strokeWidth={ringWidth}
           />
           {slices.length === 1 ? (
@@ -130,7 +125,7 @@ export function DonutChart({
                   outerRadius,
                   innerRadius,
                   slice.start,
-                  slice.end - 0.6,
+                  slice.end - 1.2,
                 )}
                 fill={slice.color}
               />
@@ -147,65 +142,96 @@ export function DonutChart({
         </View>
       </View>
       <View style={styles.donutLegend}>
-        {slices.map((slice) => (
-          <View key={slice.key} style={styles.legendRow}>
-            <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-            <Text numberOfLines={1} style={styles.legendLabel}>
-              {slice.label}
-            </Text>
-            <Text numberOfLines={1} style={styles.legendShare}>
-              %{Math.round(slice.share * 100)}
-            </Text>
-          </View>
-        ))}
+        {segments.map((segment) => {
+          const share = total > 0 ? segment.value / total : 0;
+          return (
+            <View key={segment.key} style={styles.legendRow}>
+              <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
+              <View style={styles.legendText}>
+                <Text numberOfLines={1} style={styles.legendLabel}>
+                  {segment.label}
+                </Text>
+                <Text numberOfLines={1} style={styles.legendValue}>
+                  {formatValue(segment.value)}
+                </Text>
+              </View>
+              <Text style={styles.legendShare}>%{Math.round(share * 100)}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
 }
 
-export interface TrendPoint {
+// ---------------------------------------------------------------------------
+// Trend — rounded vertical bars
+// ---------------------------------------------------------------------------
+
+export interface TrendColumn {
   key: string;
   label: string;
   total: number;
+  fuel: number;
+  maintenance: number;
+  other: number;
+  isPartial: boolean;
 }
 
-/**
- * Monthly trend line. Touch targets are plain `Pressable` columns laid over the
- * SVG, so selecting a point never crosses the native SVG boundary.
- */
-export function TrendChart({
+const HATCH_ID = 'reportTrendHatch';
+
+/** The category that drove a bucket, so each bar's colour carries meaning. */
+function dominantTone(column: TrendColumn, chart: AppTheme['colors']['chart']): string {
+  const entries: [number, string][] = [
+    [column.fuel, chart.fuel],
+    [column.maintenance, chart.maintenance],
+    [column.other, chart.other],
+  ];
+  entries.sort((a, b) => b[0] - a[0]);
+  return entries[0][0] > 0 ? entries[0][1] : chart.fuel;
+}
+
+export function TrendColumnChart({
   data,
   formatValue,
 }: {
-  data: readonly TrendPoint[];
+  data: readonly TrendColumn[];
   formatValue: (value: number) => string;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
-  // Selection is held by point key, not index: when the period changes the old
-  // key simply stops matching, so a stale highlight clears itself without an
-  // effect that would re-render the chart a second time.
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const max = Math.max(...data.map((item) => item.total), 0);
-  const width = 300;
-  const height = 114;
-  const pad = 10;
-  const pointFor = (item: TrendPoint, index: number) => ({
-    x: pad + (index * (width - pad * 2)) / Math.max(data.length - 1, 1),
-    y: height - pad - (max ? (item.total / max) * (height - pad * 2) : 0),
-  });
-  const points = data
-    .map((item, index) => {
-      const point = pointFor(item, index);
-      return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-    })
-    .join(' ');
-  const revealKey = data.map((item) => `${item.key}:${item.total}`).join('|');
   const [reveal] = useState(() => new Animated.Value(0));
+
+  const revealKey = data.map((item) => `${item.key}:${item.total}`).join('|');
   useEffect(() => {
     reveal.setValue(0);
     Animated.timing(reveal, { toValue: 1, duration: 460, useNativeDriver: false }).start();
   }, [reveal, revealKey]);
+
+  const width = 320;
+  const height = 150;
+  const floor = height - 4;
+  const ceiling = 16;
+  const max = Math.max(...data.map((item) => item.total), 0);
+  const slot = width / Math.max(data.length, 1);
+  const barWidth = Math.min(slot * 0.52, 26);
+  const minBar = barWidth;
+
+  const bars = data.map((column, index) => {
+    const centerX = slot * index + slot / 2;
+    const ratio = max > 0 ? column.total / max : 0;
+    const barHeight = column.total > 0 ? Math.max(minBar, ratio * (floor - ceiling)) : minBar * 0.7;
+    return {
+      ...column,
+      x: centerX - barWidth / 2,
+      y: floor - barHeight,
+      barHeight,
+      isZero: column.total <= 0,
+      tone: dominantTone(column, colors.chart),
+    };
+  });
+
   const activeIndex = activeKey === null ? -1 : data.findIndex((item) => item.key === activeKey);
   const active = activeIndex >= 0 ? data[activeIndex] : null;
 
@@ -216,75 +242,75 @@ export function TrendChart({
           <View style={styles.tooltip}>
             <Text numberOfLines={1} style={styles.tooltipLabel}>
               {active.label}
+              {active.isPartial ? ' · sürüyor' : ''}
             </Text>
             <Text numberOfLines={1} style={styles.tooltipValue}>
               {formatValue(active.total)}
             </Text>
           </View>
-        ) : data.length ? (
+        ) : (
           <Text numberOfLines={1} style={styles.tooltipHint}>
-            Bir aya dokunarak tutarı görebilirsiniz.
+            Bir sütuna dokunarak tutarı görebilirsiniz.
           </Text>
-        ) : null}
+        )}
       </View>
       <View style={styles.plot}>
         <Animated.View
-          testID="report-line-reveal"
+          testID="report-trend-reveal"
           style={{
             overflow: 'hidden',
             width: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
           }}
         >
           <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} accessible={false}>
+            <Defs>
+              <Pattern
+                id={HATCH_ID}
+                patternUnits="userSpaceOnUse"
+                width={7}
+                height={7}
+                x={0}
+                y={0}
+              >
+                <Line x1={0} y1={7} x2={7} y2={0} stroke={colors.chart.hatch} strokeWidth={1.6} />
+              </Pattern>
+            </Defs>
             <Line
-              x1={pad}
-              x2={width - pad}
-              y1={height - pad}
-              y2={height - pad}
-              stroke={colors.chartGrid}
+              x1={0}
+              x2={width}
+              y1={floor}
+              y2={floor}
+              stroke={colors.chart.grid}
               strokeWidth={1}
             />
-            <Line
-              x1={pad}
-              x2={width - pad}
-              y1={height / 2}
-              y2={height / 2}
-              stroke={colors.chartGrid}
-              strokeWidth={1}
-              strokeDasharray="3 5"
-            />
-            {max ? (
-              <Path
-                d={`M ${points.split(' ')[0]} L ${points} L ${width - pad},${height - pad} Z`}
-                fill={colors.paleAqua}
-              />
-            ) : null}
-            <Polyline
-              points={points}
-              fill="none"
-              stroke={colors.primary}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {active
-              ? (() => {
-                  const point = pointFor(active, activeIndex);
-                  return (
-                    <Circle
-                      cx={point.x}
-                      cy={point.y}
-                      r={5}
-                      fill={colors.primary}
-                      stroke={colors.cardBackground}
-                      strokeWidth={2}
-                    />
-                  );
-                })()
-              : null}
+            {bars.map((bar) => (
+              <G key={bar.key}>
+                <Rect
+                  x={bar.x}
+                  y={bar.y}
+                  width={barWidth}
+                  height={bar.barHeight}
+                  rx={barWidth / 2}
+                  fill={bar.isZero ? colors.chart.track : bar.tone}
+                  opacity={bar.isPartial ? 0.3 : bar.isZero ? 0.55 : 1}
+                />
+                {bar.isPartial ? (
+                  <Rect
+                    x={bar.x}
+                    y={bar.y}
+                    width={barWidth}
+                    height={bar.barHeight}
+                    rx={barWidth / 2}
+                    fill={`url(#${HATCH_ID})`}
+                  />
+                ) : null}
+                {bar.key === activeKey && !bar.isZero ? (
+                  <Circle cx={bar.x + barWidth / 2} cy={bar.y - 6} r={3} fill={bar.tone} />
+                ) : null}
+              </G>
+            ))}
           </Svg>
         </Animated.View>
-        {/* Plain-View hit areas: no gesture ever reaches an SVG node. */}
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
           <View style={styles.hitRow}>
             {data.map((item) => (
@@ -302,11 +328,11 @@ export function TrendChart({
         </View>
       </View>
       <View style={styles.chartLabels}>
-        {data.map((item, index) => (
+        {data.map((item) => (
           <Text
             key={item.key}
             numberOfLines={1}
-            style={[styles.chartLabel, index === activeIndex && styles.chartLabelActive]}
+            style={[styles.chartLabel, item.key === activeKey && styles.chartLabelActive]}
           >
             {item.label}
           </Text>
@@ -316,27 +342,67 @@ export function TrendChart({
   );
 }
 
-export interface BarChartItem {
+// ---------------------------------------------------------------------------
+// Mini bars — a compact strip for the hero and fuel section
+// ---------------------------------------------------------------------------
+
+export function MiniBars({ values, color }: { values: readonly number[]; color: string }) {
+  const { colors } = useAppTheme();
+  const max = Math.max(...values, 0);
+  const width = 132;
+  const height = 34;
+  const slot = width / Math.max(values.length, 1);
+  const barWidth = Math.min(slot * 0.58, 10);
+  return (
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      accessible={false}
+      accessibilityLabel="Dönem içindeki kısa eğilim"
+    >
+      {values.map((value, index) => {
+        const ratio = max > 0 ? value / max : 0;
+        const barHeight = Math.max(3, ratio * height);
+        const x = slot * index + (slot - barWidth) / 2;
+        return (
+          <Rect
+            key={index}
+            x={x}
+            y={height - barHeight}
+            width={barWidth}
+            height={barHeight}
+            rx={barWidth / 2}
+            fill={value > 0 ? color : colors.chart.track}
+          />
+        );
+      })}
+    </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Category bars — horizontal rounded bars
+// ---------------------------------------------------------------------------
+
+export interface CategoryBarItem {
   key: string;
   label: string;
   value: number;
+  color?: string;
   caption?: string;
 }
 
-/** Horizontal comparison bars. Entirely plain React Native views. */
-export function BarChart({
+export function CategoryBars({
   items,
   formatValue,
-  color,
 }: {
-  items: readonly BarChartItem[];
+  items: readonly CategoryBarItem[];
   formatValue: (value: number) => string;
-  color?: string;
 }) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(createStyles);
   const max = Math.max(...items.map((item) => item.value), 0);
-  const barColor = color ?? colors.primary;
   return (
     <View style={styles.barList}>
       {items.map((item) => (
@@ -349,8 +415,11 @@ export function BarChart({
               {formatValue(item.value)}
             </Text>
           </View>
-          <View style={styles.track}>
-            <GrowingBar percent={max ? (item.value / max) * 100 : 0} color={barColor} />
+          <View style={[styles.track, { backgroundColor: colors.chart.track }]}>
+            <GrowingBar
+              percent={max ? (item.value / max) * 100 : 0}
+              color={item.color ?? colors.chart.fuel}
+            />
           </View>
           {item.caption ? (
             <Text numberOfLines={2} style={styles.barCaption}>
@@ -363,32 +432,63 @@ export function BarChart({
   );
 }
 
-export function GrowingBar({ percent, color }: { percent: number; color: string }) {
+function GrowingBar({ percent, color }: { percent: number; color: string }) {
   const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
     progress.setValue(0);
-    Animated.timing(progress, { toValue: 1, duration: 300, useNativeDriver: false }).start();
+    Animated.timing(progress, { toValue: 1, duration: 320, useNativeDriver: false }).start();
   }, [percent, progress]);
   return (
     <Animated.View
-      testID="report-bar-entrance"
+      testID="report-bar-grow"
       style={{
         height: '100%',
         borderRadius: radii.pill,
         backgroundColor: color,
         width: progress.interpolate({
           inputRange: [0, 1],
-          outputRange: ['0%', `${Math.max(0, Math.min(percent, 100))}%`],
+          outputRange: ['0%', `${Math.max(2, Math.min(percent, 100))}%`],
         }),
       }}
     />
   );
 }
 
+// ---------------------------------------------------------------------------
+// KPI row — typographic, hairline-separated (no boxes)
+// ---------------------------------------------------------------------------
+
+export function KpiRow({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.kpiRow}>
+      <Text numberOfLines={2} style={styles.kpiLabel}>
+        {label}
+      </Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        style={[styles.kpiValue, emphasis && styles.kpiValueEmphasis]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const createStyles = ({ colors }: AppTheme) =>
   StyleSheet.create({
-    donutRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    donutGraphic: { width: 168, height: 168, alignItems: 'center', justifyContent: 'center' },
+    donutRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+    donutGraphic: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center' },
     donutCenter: {
       position: 'absolute',
       top: 0,
@@ -397,24 +497,22 @@ const createStyles = ({ colors }: AppTheme) =>
       bottom: 0,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 34,
+      paddingHorizontal: 30,
     },
     donutCenterValue: {
       color: colors.textPrimary,
-      fontFamily: fontFamilies.bold,
-      fontSize: 17,
-      lineHeight: 22,
+      fontFamily: fontFamilies.serifSemibold,
+      fontSize: 16,
+      lineHeight: 21,
       textAlign: 'center',
     },
-    donutCenterLabel: {
-      color: colors.textSecondary,
-      ...typography.caption,
-      textAlign: 'center',
-    },
-    donutLegend: { flex: 1, minWidth: 0, gap: spacing.sm },
+    donutCenterLabel: { color: colors.textSecondary, ...typography.caption, textAlign: 'center' },
+    donutLegend: { flex: 1, minWidth: 0, gap: spacing.md },
     legendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    legendDot: { width: 10, height: 10, borderRadius: 5 },
-    legendLabel: { flex: 1, minWidth: 0, color: colors.textPrimary, ...typography.caption },
+    legendDot: { width: 10, height: 10, borderRadius: 3 },
+    legendText: { flex: 1, minWidth: 0 },
+    legendLabel: { color: colors.textPrimary, ...typography.bodyMedium },
+    legendValue: { color: colors.textSecondary, ...typography.caption },
     legendShare: {
       color: colors.textPrimary,
       fontFamily: fontFamilies.semibold,
@@ -422,11 +520,11 @@ const createStyles = ({ colors }: AppTheme) =>
       flexShrink: 0,
     },
 
-    chartWrap: { gap: spacing.sm },
+    chartWrap: { gap: spacing.xs },
     plot: { position: 'relative' },
     hitRow: { flexDirection: 'row', flex: 1 },
     hitColumn: { flex: 1 },
-    tooltipSlot: { minHeight: 34, justifyContent: 'center' },
+    tooltipSlot: { minHeight: 32, justifyContent: 'center' },
     tooltip: {
       alignSelf: 'flex-start',
       flexDirection: 'row',
@@ -435,7 +533,7 @@ const createStyles = ({ colors }: AppTheme) =>
       paddingHorizontal: spacing.sm,
       paddingVertical: 4,
       borderRadius: radii.md,
-      backgroundColor: colors.paleAqua,
+      backgroundColor: colors.elevatedSurface,
       maxWidth: '100%',
     },
     tooltipLabel: {
@@ -451,7 +549,7 @@ const createStyles = ({ colors }: AppTheme) =>
       flexShrink: 1,
     },
     tooltipHint: { color: colors.textSecondary, ...typography.caption },
-    chartLabels: { flexDirection: 'row' },
+    chartLabels: { flexDirection: 'row', marginTop: spacing.xs },
     chartLabel: {
       flex: 1,
       minWidth: 0,
@@ -460,7 +558,7 @@ const createStyles = ({ colors }: AppTheme) =>
       ...typography.caption,
       textTransform: 'capitalize',
     },
-    chartLabelActive: { color: colors.primary, fontFamily: fontFamilies.semibold },
+    chartLabelActive: { color: colors.textPrimary, fontFamily: fontFamilies.semibold },
 
     barList: { gap: spacing.md },
     barRow: { gap: 6 },
@@ -472,17 +570,28 @@ const createStyles = ({ colors }: AppTheme) =>
       ...typography.caption,
       textTransform: 'capitalize',
     },
-    barValue: {
-      color: colors.textPrimary,
-      ...typography.label,
-      flexShrink: 0,
-      maxWidth: '52%',
-    },
+    barValue: { color: colors.textPrimary, ...typography.label, flexShrink: 0, maxWidth: '52%' },
     barCaption: { color: colors.textSecondary, ...typography.caption },
-    track: {
-      height: 7,
-      borderRadius: radii.pill,
-      backgroundColor: colors.neutralSurface,
-      overflow: 'hidden',
+    track: { height: 8, borderRadius: radii.pill, overflow: 'hidden' },
+
+    kpiRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
+    kpiLabel: { flex: 1, minWidth: 0, color: colors.textSecondary, ...typography.body },
+    kpiValue: {
+      color: colors.textPrimary,
+      fontFamily: fontFamilies.semibold,
+      fontSize: 16,
+      lineHeight: 21,
+      flexShrink: 0,
+      maxWidth: '58%',
+      textAlign: 'right',
+    },
+    kpiValueEmphasis: { fontFamily: fontFamilies.serifSemibold, fontSize: 18 },
   });
