@@ -4,6 +4,7 @@ import type { AttachmentListItem, PendingAttachment } from '@/features/attachmen
 import { isPendingAttachment } from '@/features/attachments/domain/types';
 import { AppButton, AppInput, ErrorBanner } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import { useSingleFlight } from '@/shared/hooks/useSingleFlight';
 import {
   commitOcrUsage,
   releaseOcrUsage,
@@ -129,6 +130,9 @@ export function MaintenanceReceiptOcrSection({
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
   const [lineItems, setLineItems] = useState<MaintenanceReceiptLineItem[]>([]);
   const localLineItemSequence = useRef(0);
+  // Reserve-then-scan must not run twice: a second tap before the first render
+  // would consume a second monthly scan.
+  const runOnce = useSingleFlight();
   const [usage, setUsage] = useState<OcrUsage | null>(null);
   const createBlankLineItem = (): MaintenanceReceiptLineItem => ({
     id: `manual-line-${++localLineItemSequence.current}`,
@@ -350,7 +354,7 @@ export function MaintenanceReceiptOcrSection({
           variant="secondary"
           loading={analyzing}
           disabled={disabled || analyzing}
-          onPress={() => void start()}
+          onPress={() => void runOnce(start)}
         />
       )}
     </View>

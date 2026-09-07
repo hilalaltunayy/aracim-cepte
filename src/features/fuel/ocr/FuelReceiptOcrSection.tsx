@@ -9,6 +9,7 @@ import {
 } from '@/features/attachments/domain/types';
 import { AppButton, AppInput, ErrorBanner, SelectField } from '@/shared/components/ui';
 import { spacing, typography, useThemedStyles, type AppTheme } from '@/shared/theme';
+import { useSingleFlight } from '@/shared/hooks/useSingleFlight';
 import { FUEL_STATIONS } from '../config/fuelStations';
 import {
   commitOcrUsage,
@@ -142,6 +143,9 @@ export function FuelReceiptOcrSection({
   const [warning, setWarning] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
   const [usage, setUsage] = useState<OcrUsage | null>(null);
+  // Reserve-then-scan must not run twice: a second tap before the first render
+  // would consume a second monthly scan.
+  const runOnce = useSingleFlight();
 
   const start = async () => {
     const attachment = attachments.find(
@@ -315,7 +319,7 @@ export function FuelReceiptOcrSection({
           variant="secondary"
           loading={busy}
           disabled={disabled || busy}
-          onPress={() => void start()}
+          onPress={() => void runOnce(start)}
         />
       )}
     </View>

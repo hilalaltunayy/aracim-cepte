@@ -12,6 +12,7 @@ import type { DocumentFormValues } from '../../domain/documentValidation';
 import type { DocumentOcrAnalysisResult, DocumentOcrFormPatch } from '../domain/documentOcrTypes';
 import { analyzeDocumentAttachment, getDocumentOcrMessage } from '../services/documentOcrService';
 import { commitOcrUsage, releaseOcrUsage, reserveOcrUsage, type OcrUsage } from '@/features/entitlements/services/ocrUsageQuota';
+import { useSingleFlight } from '@/shared/hooks/useSingleFlight';
 import {
   DocumentOcrReviewPanel,
   prepareReviewSuggestions,
@@ -40,6 +41,7 @@ export function DocumentOcrSection({
 }) {
   const styles = useThemedStyles(createStyles);
   const requestId = useRef(0);
+  const runOnce = useSingleFlight();
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ReviewableDocumentOcrSuggestion[]>([]);
@@ -60,7 +62,19 @@ export function DocumentOcrSection({
         (item.mimeType === 'image/jpeg' || item.mimeType === 'image/png'),
     );
     if (!attachment) {
-      setError('Belge tarama için JPG veya PNG biçiminde bir görüntü ekleyin.');
+      // Recognition runs on the local file, so an already-uploaded attachment
+      // cannot be scanned. Saying so is the difference between "add an image"
+      // (wrong, one is attached) and an instruction the user can act on.
+      const hasStoredImage = attachments.some(
+        (item) =>
+          !isPendingAttachment(item) &&
+          (item.mimeType === 'image/jpeg' || item.mimeType === 'image/png'),
+      );
+      setError(
+        hasStoredImage
+          ? 'Kaydedilmiş bir görüntü cihazda taranamaz. Taramak için görüntüyü yeniden ekleyin.'
+          : 'Belge tarama için JPG veya PNG biçiminde bir görüntü ekleyin.',
+      );
       return;
     }
     const currentRequestId = ++requestId.current;
@@ -132,7 +146,7 @@ export function DocumentOcrSection({
           variant="secondary"
           loading={analyzing}
           disabled={disabled || analyzing}
-          onPress={() => void start()}
+          onPress={() => void runOnce(start)}
         />
       )}
     </View>
