@@ -538,9 +538,7 @@ export class SupabaseAppRepository implements AppRepository {
       if (result.error) throw result.error;
       previous = mapReminder(required(result.data, 'Hatırlatıcı bulunamadı.'));
     }
-    const payload = {
-      vehicle_id: vehicleId,
-      owner_id: await ownerId(),
+    const fields = {
       title: draft.title.trim(),
       reminder_type: draft.reminderType,
       due_date: draft.dueDate,
@@ -553,9 +551,14 @@ export class SupabaseAppRepository implements AppRepository {
       completed: previous?.completed ?? false,
       completed_at: previous?.completedAt ?? null,
     };
+    // An update never carries `vehicle_id`, and is additionally filtered by it:
+    // editing a reminder can neither move it to another vehicle nor touch a row
+    // the caller did not mean. Insert is the only path that sets the vehicle.
     const query = id
-      ? client.from('reminders').update(payload).eq('id', id)
-      : client.from('reminders').insert(payload);
+      ? client.from('reminders').update(fields).eq('id', id).eq('vehicle_id', vehicleId)
+      : client
+          .from('reminders')
+          .insert({ ...fields, vehicle_id: vehicleId, owner_id: await ownerId() });
     const { data, error } = await query.select('*').single();
     if (error) throw error;
     const saved = mapReminder(required(data, 'Hatırlatıcı kaydedilemedi.'));
@@ -706,15 +709,17 @@ export class SupabaseAppRepository implements AppRepository {
   }
 
   async saveNote(vehicleId: string, draft: NoteDraft, id?: string) {
-    const payload = {
-      vehicle_id: vehicleId,
-      owner_id: await ownerId(),
-      title: draft.title.trim(),
-      content: draft.content.trim(),
-    };
+    const fields = { title: draft.title.trim(), content: draft.content.trim() };
+    // Same rule as reminders: an edit keeps the note on its original vehicle.
     const query = id
-      ? getSupabaseClient().from('vehicle_notes').update(payload).eq('id', id)
-      : getSupabaseClient().from('vehicle_notes').insert(payload);
+      ? getSupabaseClient()
+          .from('vehicle_notes')
+          .update(fields)
+          .eq('id', id)
+          .eq('vehicle_id', vehicleId)
+      : getSupabaseClient()
+          .from('vehicle_notes')
+          .insert({ ...fields, vehicle_id: vehicleId, owner_id: await ownerId() });
     const { data, error } = await query.select('*').single();
     if (error) throw error;
     return mapNote(required(data, 'Not kaydedilemedi.'));

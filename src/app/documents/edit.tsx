@@ -25,6 +25,7 @@ import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
@@ -50,6 +51,12 @@ export default function DocumentEditScreen() {
   const { documents, activeVehicleId, saveDocument, deleteDocument, loading, error, bootstrapped } =
     useDataStore();
   const existing = useMemo(() => documents.find((document) => document.id === id), [documents, id]);
+  // Fixed for this form's lifetime: an existing record keeps its own vehicle, a
+  // new one belongs to the vehicle that was active when the form opened.
+  const [targetVehicleId] = useState(() =>
+    resolveVehicleWriteTarget(existing?.vehicleId, activeVehicleId),
+  );
+
   const [type, setType] = useState<DocumentType>(existing?.documentType ?? 'registration');
   const [values, setValues] = useState<DocumentFormValues>({
     title: existing?.title ?? getDocumentTypeDefinition('registration').label,
@@ -133,8 +140,7 @@ export default function DocumentEditScreen() {
         normalizeDocumentValues(type, values),
         existing,
       );
-      const success = await saveDocument(
-        {
+      const success = await saveDocument(targetVehicleId, {
           documentType: type,
           ...normalized,
           attachmentPath: existing?.attachmentPath ?? null,

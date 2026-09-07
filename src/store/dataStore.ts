@@ -40,6 +40,7 @@ import {
 import { loadEntitlementMirrorStatus } from '@/features/entitlements/services/entitlementService';
 import { reconcileEntitlement } from '@/features/entitlements/services/entitlementReconciliation';
 import { canApplyVehicleData } from '@/features/vehicles/domain/multiVehicle';
+import { getVehicleWriteTargetError } from '@/features/vehicles/domain/vehicleWriteTarget';
 import {
   DEFAULT_REPORT_PERIOD_ID,
   isReportPeriodId,
@@ -96,28 +97,61 @@ interface DataState {
     options?: { allowMileageDecrease?: boolean },
   ) => Promise<boolean>;
   deleteVehicle: (id: string) => Promise<boolean>;
-  saveVehiclePhoto: (attachment: PendingAttachment, replacesPhotoId?: string) => Promise<boolean>;
+  /**
+   * Vehicle-scoped writes take the target vehicle explicitly.
+   *
+   * The caller captured it when the form opened (or read it off the record
+   * being edited), so switching the active vehicle mid-form cannot retarget
+   * the write. Passing a vehicle this account no longer owns fails loudly
+   * rather than falling back to whatever is active.
+   */
+  saveVehiclePhoto: (
+    targetVehicleId: string | null,
+    attachment: PendingAttachment,
+    replacesPhotoId?: string,
+  ) => Promise<boolean>;
   setVehiclePhotoPrimary: (id: string) => Promise<boolean>;
   deleteVehiclePhoto: (id: string) => Promise<boolean>;
-  saveRecord: (draft: RecordDraft, id?: string, requestId?: string) => Promise<boolean>;
+  saveRecord: (
+    targetVehicleId: string | null,
+    draft: RecordDraft,
+    id?: string,
+    requestId?: string,
+  ) => Promise<boolean>;
   deleteRecord: (id: string) => Promise<boolean>;
   saveMaintenanceTemplate: (draft: MaintenanceTemplateDraft, id?: string) => Promise<boolean>;
   deleteMaintenanceTemplate: (id: string) => Promise<boolean>;
-  saveReminder: (draft: ReminderDraft, id?: string) => Promise<boolean>;
+  saveReminder: (
+    targetVehicleId: string | null,
+    draft: ReminderDraft,
+    id?: string,
+  ) => Promise<boolean>;
   toggleReminder: (reminder: Reminder) => Promise<boolean>;
   deleteReminder: (id: string) => Promise<boolean>;
   saveBodyCondition: (
+    targetVehicleId: string | null,
     partKey: string,
     conditions: BodyPartCondition['conditions'],
     note: string | null,
   ) => Promise<boolean>;
-  saveExpertise: (draft: ExpertiseDraft, id?: string) => Promise<boolean>;
+  saveExpertise: (
+    targetVehicleId: string | null,
+    draft: ExpertiseDraft,
+    id?: string,
+  ) => Promise<boolean>;
   deleteExpertise: (id: string) => Promise<boolean>;
-  saveNote: (draft: NoteDraft, id?: string) => Promise<boolean>;
+  saveNote: (targetVehicleId: string | null, draft: NoteDraft, id?: string) => Promise<boolean>;
   deleteNote: (id: string) => Promise<boolean>;
-  saveDocument: (draft: DocumentDraft, id?: string) => Promise<boolean>;
+  saveDocument: (
+    targetVehicleId: string | null,
+    draft: DocumentDraft,
+    id?: string,
+  ) => Promise<boolean>;
   deleteDocument: (id: string) => Promise<boolean>;
-  clearSection: (section: 'records' | 'reminders' | 'body' | 'documents') => Promise<boolean>;
+  clearSection: (
+    targetVehicleId: string | null,
+    section: 'records' | 'reminders' | 'body' | 'documents',
+  ) => Promise<boolean>;
   clear: () => void;
   clearError: () => void;
   setHydrated: () => void;
@@ -214,8 +248,21 @@ export const useDataStore = create<DataState>()(
           return false;
         }
       };
-      const activeVehicle = () =>
-        get().vehicles.find((vehicle) => vehicle.id === get().activeVehicleId) ?? null;
+      /**
+       * Validates a caller-supplied write target and reports why it is unusable.
+       *
+       * Returns the id only when this account still owns it, so a form left
+       * open across a vehicle switch, a vehicle deletion or a sign-out fails
+       * with a clear message instead of silently writing somewhere else.
+       */
+      const resolveWriteTarget = (targetVehicleId: string | null): string | null => {
+        const failure = getVehicleWriteTargetError(targetVehicleId, get().vehicles);
+        if (failure) {
+          set({ error: failure });
+          return null;
+        }
+        return targetVehicleId;
+      };
 
       return {
         vehicles: [],
@@ -342,8 +389,8 @@ export const useDataStore = create<DataState>()(
             await appRepository.deleteVehicle(id);
           }),
 
-        saveVehiclePhoto: async (attachment, replacesPhotoId) => {
-          const vehicleId = get().activeVehicleId;
+        saveVehiclePhoto: async (targetVehicleId, attachment, replacesPhotoId) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
           if (!vehicleId || !canStartMutation(get().loading)) return false;
           if (
             !replacesPhotoId &&
@@ -398,8 +445,10 @@ export const useDataStore = create<DataState>()(
           }
         },
 
-        saveRecord: (draft, id, requestId) => {
-          const vehicle = activeVehicle();
+        saveRecord: (targetVehicleId, draft, id, requestId) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          const vehicle = get().vehicles.find((item) => item.id === vehicleId) ?? null;
           const mileageEvaluation = evaluateMileageTimeline({
             currentMileage: vehicle?.currentKm ?? 0,
             targetRecordId: id,
@@ -417,8 +466,6 @@ export const useDataStore = create<DataState>()(
             return Promise.resolve(false);
           }
           return mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
             await appRepository.saveRecord(vehicleId, draft, id, requestId);
           });
         },
@@ -435,10 +482,10 @@ export const useDataStore = create<DataState>()(
             await appRepository.deleteMaintenanceTemplate(id);
           }),
 
-        saveReminder: (draft, id) =>
-          mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
+        saveReminder: (targetVehicleId, draft, id) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          return mutate(async () => {
             const saved = await appRepository.saveReminder(vehicleId, draft, id);
             const notificationFailed =
               Boolean(saved.dueDate) &&
@@ -451,7 +498,8 @@ export const useDataStore = create<DataState>()(
                   : 'Hatırlatıcı kaydedildi ancak cihaz bildirimi kurulamadı. Hatırlatıcılar ekranında yeniden denenecek.'
                 : null,
             });
-          }),
+          });
+        },
 
         toggleReminder: (reminder) =>
           mutate(async () => {
@@ -460,46 +508,52 @@ export const useDataStore = create<DataState>()(
 
         deleteReminder: (id) => mutate(() => appRepository.deleteReminder(id)),
 
-        saveBodyCondition: (partKey, conditions, note) =>
-          mutate(async () => {
-            const vehicle = activeVehicle();
-            if (!vehicle) throw new Error('Aktif araç yok.');
+        saveBodyCondition: (targetVehicleId, partKey, conditions, note) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          const vehicle = get().vehicles.find((item) => item.id === vehicleId) ?? null;
+          if (!vehicle) return Promise.resolve(false);
+          return mutate(async () => {
             await appRepository.saveBodyCondition(vehicle, partKey, conditions, note);
-          }),
+          });
+        },
 
-        saveExpertise: (draft, id) =>
-          mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
+        saveExpertise: (targetVehicleId, draft, id) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          return mutate(async () => {
             await appRepository.saveExpertise(vehicleId, draft, id);
-          }),
+          });
+        },
 
         deleteExpertise: (id) => mutate(() => appRepository.deleteExpertise(id)),
 
-        saveNote: (draft, id) =>
-          mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
+        saveNote: (targetVehicleId, draft, id) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          return mutate(async () => {
             await appRepository.saveNote(vehicleId, draft, id);
-          }),
+          });
+        },
 
         deleteNote: (id) => mutate(() => appRepository.deleteNote(id)),
 
-        saveDocument: (draft, id) =>
-          mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
+        saveDocument: (targetVehicleId, draft, id) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          return mutate(async () => {
             await appRepository.saveDocument(vehicleId, draft, id);
-          }),
+          });
+        },
 
         deleteDocument: (id) => mutate(() => appRepository.deleteDocument(id)),
 
-        clearSection: (section) =>
-          mutate(async () => {
-            const vehicleId = get().activeVehicleId;
-            if (!vehicleId) throw new Error('Aktif araç yok.');
+        clearSection: (targetVehicleId, section) => {
+          const vehicleId = resolveWriteTarget(targetVehicleId);
+          if (!vehicleId) return Promise.resolve(false);
+          return mutate(async () => {
             await appRepository.clearVehicleSection(vehicleId, section);
-          }),
+          });
+        },
 
         clear: () =>
           // Sign-out must drop the previous account's entitlement entirely, or

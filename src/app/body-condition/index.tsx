@@ -122,11 +122,13 @@ export default function BodyConditionScreen() {
           title="Parça durumunu kaydet"
           loading={loading}
           onPress={() =>
-            void saveBodyCondition(selectedPart, conditions, note || null).then((saved) => {
-              if (!saved) return;
-              setConditionOverride(null);
-              setNoteOverride(null);
-            })
+            void saveBodyCondition(vehicle.id, selectedPart, conditions, note || null).then(
+              (saved) => {
+                if (!saved) return;
+                setConditionOverride(null);
+                setNoteOverride(null);
+              },
+            )
           }
         />
       </Card>

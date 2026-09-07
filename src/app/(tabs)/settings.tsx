@@ -213,10 +213,16 @@ export default function SettingsScreen() {
         }
       },
     );
-  const clearData = (section: 'records' | 'reminders' | 'body' | 'documents', title: string) =>
+  const clearData = (section: 'records' | 'reminders' | 'body' | 'documents', title: string) => {
+    // Captured before the confirmation dialog opens: a vehicle switch while the
+    // dialog is up must not redirect a destructive clear at another vehicle.
+    const targetVehicleId = vehicle?.id ?? null;
     confirmAction(title, 'Bu işlem geri alınamaz.', async () => {
-      if (await clearSection(section)) Alert.alert('Tamamlandı', 'Seçilen veriler silindi.');
+      if (await clearSection(targetVehicleId, section)) {
+        Alert.alert('Tamamlandı', 'Seçilen veriler silindi.');
+      }
     });
+  };
   return (
     <Screen backdrop={<AutomotiveBackdrop />}>
       <AppHeader title="Ayarlar" subtitle="Hesap, bildirimler ve veriler" />

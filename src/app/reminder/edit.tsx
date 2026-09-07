@@ -21,6 +21,7 @@ import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import {
   DEFAULT_NOTIFICATION_LEAD_DAYS,
@@ -38,20 +39,26 @@ import {
 } from '@/features/reminders/reminderTitle';
 
 /**
- * Entitlement gate.
+ * Entitlement and write-target gate.
  *
- * The form below seeds `time` from the Premium custom-time gate in a `useState`
- * initialiser, which only runs once. Mounting it while entitlement is still
- * `unknown` would freeze a Premium user into the Free 09:00 value even after
- * the real answer arrives, so the form is not mounted until the plan resolves.
+ * Two things must be settled before the form mounts. The form seeds `time` from
+ * the Premium custom-time gate in a `useState` initialiser that runs once, so an
+ * `unknown` plan would freeze a Premium user into the Free 09:00 value. And the
+ * form captures its target vehicle the same way, so it must not mount before
+ * one exists — otherwise the capture would be null and the write would fall
+ * back to whatever is active at submit time.
  */
 export default function ReminderEditScreen() {
   const entitlementStatus = useDataStore((state) => state.entitlementStatus);
-  if (entitlementStatus === 'unknown') return <LoadingScreen />;
-  return <ReminderEditForm />;
+  const activeVehicleId = useDataStore((state) => state.activeVehicleId);
+  const bootstrapped = useDataStore((state) => state.bootstrapped);
+  if (entitlementStatus === 'unknown' || (!activeVehicleId && !bootstrapped)) {
+    return <LoadingScreen />;
+  }
+  return <ReminderEditForm activeVehicleId={activeVehicleId} />;
 }
 
-function ReminderEditForm() {
+function ReminderEditForm({ activeVehicleId }: { activeVehicleId: string | null }) {
   const params = useLocalSearchParams<{
     id?: string | string[];
     dueDate?: string | string[];
@@ -63,7 +70,6 @@ function ReminderEditForm() {
   const {
     reminders,
     vehicles,
-    activeVehicleId,
     saveReminder,
     deleteReminder,
     loading,
@@ -75,6 +81,12 @@ function ReminderEditForm() {
   const existing = useMemo(
     () => reminders.find((reminder) => reminder.id === reminderId),
     [reminders, reminderId],
+  );
+  // Fixed for this form's lifetime: an existing reminder keeps its own vehicle,
+  // a new one belongs to the vehicle that was active when the form opened.
+  // Switching vehicles from Home or the Vehicle tab cannot change it.
+  const [targetVehicleId] = useState(() =>
+    resolveVehicleWriteTarget(existing?.vehicleId, activeVehicleId),
   );
   const [type, setType] = useState<ReminderType>(existing?.reminderType ?? 'periodic_maintenance');
   const [title, setTitle] = useState(
@@ -143,6 +155,7 @@ function ReminderEditForm() {
     setSubmitted(true);
     if (!valid) return;
     const success = await saveReminder(
+      targetVehicleId,
       {
         title,
         reminderType: type,

@@ -26,6 +26,7 @@ import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId } from '@/shared/utils/routeParams';
@@ -50,6 +51,11 @@ export default function ExpertiseEditScreen() {
   const existing = useMemo(
     () => expertiseReports.find((report) => report.id === id),
     [expertiseReports, id],
+  );
+  // Fixed for this form's lifetime: an existing report keeps its own vehicle, a
+  // new one belongs to the vehicle that was active when the form opened.
+  const [targetVehicleId] = useState(() =>
+    resolveVehicleWriteTarget(existing?.vehicleId, activeVehicleId),
   );
   const [date, setDate] = useState<string | null>(existing?.reportDate ?? null);
   const [company, setCompany] = useState(existing?.companyName ?? '');
@@ -105,8 +111,7 @@ export default function ExpertiseEditScreen() {
         uploadedPaths.push(uploaded.path);
         attachmentPaths.push(uploaded.path);
       }
-      const success = await saveExpertise(
-        {
+      const success = await saveExpertise(targetVehicleId, {
           reportDate: date,
           companyName: company || null,
           reportNumber: number || null,

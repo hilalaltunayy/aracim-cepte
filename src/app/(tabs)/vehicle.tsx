@@ -201,7 +201,9 @@ export default function VehicleScreen() {
         photos={vehiclePhotos}
         entitlements={entitlements}
         busy={loading}
-        onSave={saveVehiclePhoto}
+        onSave={(attachment, replacesPhotoId) =>
+          saveVehiclePhoto(vehicle.id, attachment, replacesPhotoId)
+        }
         onSetPrimary={setVehiclePhotoPrimary}
         onDelete={deleteVehiclePhoto}
       />

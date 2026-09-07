@@ -16,12 +16,20 @@ import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 
 export default function NoteEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { notes, saveNote, deleteNote, loading, error, bootstrapped } = useDataStore();
+  const { notes, activeVehicleId, saveNote, deleteNote, loading, error, bootstrapped } =
+    useDataStore();
   const existing = useMemo(() => notes.find((note) => note.id === id), [notes, id]);
+  // Fixed for this form's lifetime: an existing record keeps its own vehicle, a
+  // new one belongs to the vehicle that was active when the form opened.
+  const [targetVehicleId] = useState(() =>
+    resolveVehicleWriteTarget(existing?.vehicleId, activeVehicleId),
+  );
+
   const [title, setTitle] = useState(existing?.title ?? '');
   const [content, setContent] = useState(existing?.content ?? '');
   const [submitted, setSubmitted] = useState(false);
@@ -34,7 +42,7 @@ export default function NoteEditScreen() {
   const submit = async () => {
     setSubmitted(true);
     if (!title.trim() || !content.trim()) return;
-    if (await saveNote({ title, content }, existing?.id)) {
+    if (await saveNote(targetVehicleId, { title, content }, existing?.id)) {
       leaveWithoutPrompt(() => {
         Alert.alert('Kaydedildi', 'Araç notunuz kaydedildi.');
         goBackOr('/notes');

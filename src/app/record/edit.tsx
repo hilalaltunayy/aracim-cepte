@@ -29,6 +29,7 @@ import { spacing, useAppTheme } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
 import { firstRouteParam, safeEntityId, safeRecordType } from '@/shared/utils/routeParams';
@@ -86,6 +87,11 @@ export default function RecordEditScreen() {
   const existing = useMemo(
     () => records.find((record) => record.id === routeId),
     [records, routeId],
+  );
+  // Fixed for this form's lifetime: an existing record keeps its own vehicle, a
+  // new one belongs to the vehicle that was active when the form opened.
+  const [targetVehicleId] = useState(() =>
+    resolveVehicleWriteTarget(existing?.vehicleId, activeVehicleId),
   );
   const [type, setType] = useState<RecordType>(existing?.recordType ?? routeType);
   const categories =
@@ -235,8 +241,7 @@ export default function RecordEditScreen() {
           attachmentPaths.push(uploaded.path);
         }
       }
-      const success = await saveRecord(
-        {
+      const success = await saveRecord(targetVehicleId, {
           recordType: type,
           category: maintenanceTitle,
           amount: parsedAmount,

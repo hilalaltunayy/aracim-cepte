@@ -486,6 +486,7 @@ describe('TASK-011 critical route component mounts', () => {
 
     await act(async () => confirmChoiceMock.mock.calls[0][3]());
     expect(dataState.saveRecord).toHaveBeenCalledWith(
+      vehicleId,
       expect.objectContaining({ kilometer: 170_000, recordDate: '2026-05-01' }),
       undefined,
       expect.any(String),
@@ -533,6 +534,7 @@ describe('TASK-011 critical route component mounts', () => {
       pending,
     );
     expect(dataState.saveRecord).toHaveBeenCalledWith(
+      vehicleId,
       expect.objectContaining({
         amount: 5000,
         serviceType: 'authorized_service',
@@ -571,6 +573,7 @@ describe('TASK-011 critical route component mounts', () => {
       pending,
     );
     expect(dataState.saveDocument).toHaveBeenCalledWith(
+      vehicleId,
       expect.objectContaining({
         documentType: 'registration',
         eventDate: null,
@@ -607,6 +610,7 @@ describe('TASK-011 critical route component mounts', () => {
     await act(async () => renderer.root.findByProps({ title: 'Raporu kaydet' }).props.onPress());
     expect(uploadParentAttachmentMock).toHaveBeenCalledTimes(2);
     expect(dataState.saveExpertise).toHaveBeenCalledWith(
+      vehicleId,
       expect.objectContaining({
         attachmentPaths: [
           'owner/vehicle/expertise/report/88888888-8888-4888-8888-888888888881.jpg',
