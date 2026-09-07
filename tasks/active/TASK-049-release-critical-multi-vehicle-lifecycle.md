@@ -100,7 +100,8 @@ assistant-memory lifecycle gaps without changing the established multi-vehicle a
    Android production JS bundle export passed. Full Vitest passed 150/154 files and 913/917 tests;
    four unrelated suites/tests remain red as recorded below.
 4. **Completed:** review scoped/full diffs and security/privacy boundaries.
-5. **Pending:** commit explicit scoped files, verify history, push current branch.
+5. **Completed:** committed the scoped application changes as `f294a70`, verified `2da886a` in
+   history, and pushed `claude/final-qa-fixes` to the existing GitHub origin.
 6. **Completed:** linked Supabase production project, 31/31 migration history, required secret
    names, and function metadata/source were verified read-only; no function source changed and no
    deployment was performed.
@@ -156,6 +157,8 @@ Functions, billing products, unrelated application code, TASK-046, or pre-existi
   migrations match and both RevenueCat secret names exist (values were not read or printed).
 - `vehicle-ai-assistant` ACTIVE v14 and `reconcile-attachments` ACTIVE v10 core deployed files are
   byte-identical to local. `sync-entitlement` ACTIVE v1 and `revenuecat-webhook` ACTIVE v5.
+- Scoped application commit `f294a70` pushed successfully; unrelated TASK-046 and untracked files
+  remained unstaged and unmodified by this task.
 
 ### Skipped
 
