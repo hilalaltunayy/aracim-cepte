@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mirror, reconcile, repository } = vi.hoisted(() => ({
   mirror: { status: 'unknown' as 'unknown' | 'unavailable' | 'free' | 'premium', calls: 0 },
   reconcile: { calls: 0, outcome: 'applied' as const },
-  repository: { vehicles: [] as { id: string }[], saveVehicle: vi.fn() },
+  repository: {
+    vehicles: [] as { id: string; brand?: string; model?: string }[],
+    saveVehicle: vi.fn(),
+  },
 }));
 
 vi.mock('@/features/entitlements/services/entitlementService', () => ({
@@ -197,6 +200,51 @@ describe('data store entitlement lifecycle', () => {
     await state().bootstrap();
     expect(state().entitlementStatus).toBe('free');
     expect(state().entitlements.maxVehicles).toBe(1);
+  });
+
+  it('does not bounce a store-only Premium create with a false server limit', async () => {
+    // One vehicle already, RevenueCat active, webhook mirror still Free: the
+    // server create gate would reject at the Free limit, so the client must hold
+    // verifying and reconcile, not surface a hard "limit reached".
+    repository.vehicles = [{ id: 'v1', brand: 'Kia', model: 'Ceed' }];
+    mirror.status = 'free';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+    expect(state().entitlementServerConfirmed).toBe(false);
+
+    const saved = await state().saveVehicle({ brand: 'VW', model: 'T-Roc' } as never);
+    expect(saved).toBe(false);
+    expect(repository.saveVehicle).not.toHaveBeenCalled();
+    expect(state().error).toContain('doğrulanıyor');
+    expect(state().error).not.toContain('limitinize ulaştınız');
+    expect(state().error).not.toContain('en fazla 1');
+    expect(reconcile.calls).toBeGreaterThan(0);
+  });
+
+  it('opens the second vehicle once the mirror confirms Premium', async () => {
+    repository.vehicles = [{ id: 'v1', brand: 'Kia', model: 'Ceed' }];
+    repository.saveVehicle.mockResolvedValue({ id: 'v2' });
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementServerConfirmed).toBe(true);
+
+    const saved = await state().saveVehicle({ brand: 'VW', model: 'T-Roc' } as never);
+    expect(saved).toBe(true);
+    expect(repository.saveVehicle).toHaveBeenCalled();
+  });
+
+  it('keeps the Free limit definitive once the store itself reports Free', async () => {
+    repository.vehicles = [{ id: 'v1', brand: 'Kia', model: 'Ceed' }];
+    mirror.status = 'free';
+    await state().bootstrap();
+    state().applyBillingStatus('free');
+    expect(state().entitlementStatus).toBe('free');
+
+    const saved = await state().saveVehicle({ brand: 'VW', model: 'T-Roc' } as never);
+    expect(saved).toBe(false);
+    expect(state().error).toContain('en fazla 1');
   });
 
   it('treats an unreadable mirror as unresolved while the store is still answering', async () => {

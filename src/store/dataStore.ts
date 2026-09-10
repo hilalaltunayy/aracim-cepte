@@ -65,6 +65,12 @@ interface DataState {
   entitlementStatus: EntitlementStatus;
   /** The store says Premium but the trusted mirror has not caught up yet. */
   entitlementAwaitingSync: boolean;
+  /**
+   * The trusted `user_entitlements` mirror confirms the plan, so server-enforced
+   * operations (vehicle create, custom reminder time, quotas) will accept it.
+   * Premium that is only known from the store is not yet server-authoritative.
+   */
+  entitlementServerConfirmed: boolean;
   /** Raw trusted-mirror answer, kept so the two sources stay separable. */
   entitlementMirror: EntitlementMirrorStatus;
   /** Raw RevenueCat answer, pushed in by the single app-level billing bridge. */
@@ -192,6 +198,7 @@ export const useDataStore = create<DataState>()(
           entitlements: snapshot.entitlements,
           entitlementStatus: snapshot.status,
           entitlementAwaitingSync: snapshot.awaitingServerSync,
+          entitlementServerConfirmed: snapshot.serverConfirmed,
         });
       };
       const handleError = (error: unknown) => {
@@ -283,6 +290,7 @@ export const useDataStore = create<DataState>()(
         entitlements: FREE_ENTITLEMENTS,
         entitlementStatus: 'unknown',
         entitlementAwaitingSync: false,
+        entitlementServerConfirmed: false,
         entitlementMirror: 'unknown',
         billingStatus: 'unknown',
         ...emptyVehicleData,
@@ -378,8 +386,13 @@ export const useDataStore = create<DataState>()(
             get().vehicles.length,
             get().entitlementStatus,
             get().entitlements,
+            get().entitlementServerConfirmed,
           );
           if (!id && creationGate.status === 'verifying') {
+            // Store-only Premium: pull the trusted mirror so the next attempt is
+            // decided by the server-authoritative plan, not a client guess the
+            // server would reject with a false "limit reached".
+            if (creationGate.reason === 'server_confirmation') void get().syncEntitlements();
             set({
               error: 'Araç ekleme hakkınız doğrulanıyor. Lütfen kısa süre sonra tekrar deneyin.',
             });
@@ -602,6 +615,7 @@ export const useDataStore = create<DataState>()(
             entitlements: FREE_ENTITLEMENTS,
             entitlementStatus: 'unknown',
             entitlementAwaitingSync: false,
+            entitlementServerConfirmed: false,
             entitlementMirror: 'unknown',
             billingStatus: 'unknown',
             ...emptyVehicleData,

@@ -14,7 +14,7 @@ export interface VehicleCapacity {
 }
 
 export type VehicleCreationGate =
-  | { status: 'verifying'; capacity: VehicleCapacity }
+  | { status: 'verifying'; reason: 'resolving' | 'server_confirmation'; capacity: VehicleCapacity }
   | { status: 'allowed'; capacity: VehicleCapacity }
   | { status: 'limit_reached'; capacity: VehicleCapacity };
 
@@ -27,14 +27,35 @@ export function getVehicleCapacity(
   return { current, maximum, canAdd: canCreateVehicle(current, { maxVehicles: maximum }) };
 }
 
-/** Unknown is fail-closed for writes but is never presented as a definitive Free limit. */
+/**
+ * Unknown is fail-closed for writes but is never presented as a definitive Free
+ * limit.
+ *
+ * `serverConfirmed` is the trusted-mirror answer: when Premium is known only from
+ * the store (RevenueCat active, `user_entitlements` mirror not caught up yet), the
+ * server `create_vehicle_with_limit` gate still enforces the Free limit. Rather
+ * than open a form the server will reject with a false "limit reached", hold a
+ * short verifying state — reconciliation is already in flight — until the mirror
+ * either confirms Premium (capacity opens to 3) or the store itself drops to Free
+ * (the honest Free limit shows). Existing vehicles are unaffected either way.
+ */
 export function getVehicleCreationGate(
   vehicleCount: number,
   entitlementStatus: EntitlementStatus,
   entitlements: Pick<PlanEntitlements, 'maxVehicles'> | null | undefined,
+  serverConfirmed = true,
 ): VehicleCreationGate {
   const capacity = getVehicleCapacity(vehicleCount, entitlements);
-  if (entitlementStatus === 'unknown') return { status: 'verifying', capacity };
+  if (entitlementStatus === 'unknown') {
+    return { status: 'verifying', reason: 'resolving', capacity };
+  }
+  if (
+    entitlementStatus === 'premium' &&
+    !serverConfirmed &&
+    !canCreateVehicle(capacity.current, FREE_ENTITLEMENTS)
+  ) {
+    return { status: 'verifying', reason: 'server_confirmation', capacity };
+  }
   return capacity.canAdd ? { status: 'allowed', capacity } : { status: 'limit_reached', capacity };
 }
 

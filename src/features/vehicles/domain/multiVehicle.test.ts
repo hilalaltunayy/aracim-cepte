@@ -32,6 +32,7 @@ describe('multi-vehicle domain rules', () => {
   it('keeps unknown entitlement out of the definitive Free-limit state', () => {
     expect(getVehicleCreationGate(1, 'unknown', undefined)).toMatchObject({
       status: 'verifying',
+      reason: 'resolving',
     });
     expect(getVehicleCreationGate(1, 'free', undefined)).toMatchObject({
       status: 'limit_reached',
@@ -40,6 +41,39 @@ describe('multi-vehicle domain rules', () => {
     expect(getVehicleCreationGate(2, 'premium', PLAN_ENTITLEMENTS.premium)).toMatchObject({
       status: 'allowed',
       capacity: { maximum: 3 },
+    });
+  });
+
+  it('does not show a Free limit for store-only Premium the server has not confirmed', () => {
+    // RevenueCat says Premium, the trusted mirror has not caught up: the server
+    // create gate would still reject at the Free limit, so hold verifying rather
+    // than open a form the server bounces with a false "limit reached".
+    expect(getVehicleCreationGate(1, 'premium', PLAN_ENTITLEMENTS.premium, false)).toMatchObject({
+      status: 'verifying',
+      reason: 'server_confirmation',
+    });
+    // First vehicle is still within the Free limit, so it stays allowed.
+    expect(getVehicleCreationGate(0, 'premium', PLAN_ENTITLEMENTS.premium, false)).toMatchObject({
+      status: 'allowed',
+    });
+    // Once the mirror confirms Premium, the full capacity opens.
+    expect(getVehicleCreationGate(1, 'premium', PLAN_ENTITLEMENTS.premium, true)).toMatchObject({
+      status: 'allowed',
+      capacity: { maximum: 3 },
+    });
+    expect(getVehicleCreationGate(2, 'premium', PLAN_ENTITLEMENTS.premium, true)).toMatchObject({
+      status: 'allowed',
+    });
+    // Server-confirmed Premium at 3 vehicles is a real limit.
+    expect(getVehicleCreationGate(3, 'premium', PLAN_ENTITLEMENTS.premium, true)).toMatchObject({
+      status: 'limit_reached',
+    });
+  });
+
+  it('still asserts the Free limit definitively once the store itself says Free', () => {
+    expect(getVehicleCreationGate(1, 'free', undefined, false)).toMatchObject({
+      status: 'limit_reached',
+      capacity: { maximum: 1 },
     });
   });
 

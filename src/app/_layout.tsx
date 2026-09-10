@@ -116,6 +116,8 @@ function RootNavigator() {
   const applyBillingStatus = useDataStore((state) => state.applyBillingStatus);
   const syncEntitlements = useDataStore((state) => state.syncEntitlements);
   const entitlementAwaitingSync = useDataStore((state) => state.entitlementAwaitingSync);
+  const entitlementStatus = useDataStore((state) => state.entitlementStatus);
+  const entitlementServerConfirmed = useDataStore((state) => state.entitlementServerConfirmed);
   const segments = useSegments();
   const [pendingNotificationTap, setPendingNotificationTap] =
     useState<ReminderNotificationTap | null>(null);
@@ -147,11 +149,21 @@ function RootNavigator() {
   }, [applyBillingStatus, billingStatus]);
 
   // Store says Premium, trusted mirror does not yet: close the gap once, here,
-  // instead of retrying from each Premium screen.
+  // instead of retrying from each Premium screen. Covers both a positively-Free
+  // mirror (a real sync gap) and a store-only Premium the mirror has not
+  // confirmed, so server-enforced gates stop disagreeing with the UI.
   useEffect(() => {
-    if (!session?.user.id || !entitlementAwaitingSync) return;
+    if (!session?.user.id) return;
+    if (!entitlementAwaitingSync && !(entitlementStatus === 'premium' && !entitlementServerConfirmed))
+      return;
     void syncEntitlements();
-  }, [entitlementAwaitingSync, session?.user.id, syncEntitlements]);
+  }, [
+    entitlementAwaitingSync,
+    entitlementStatus,
+    entitlementServerConfirmed,
+    session?.user.id,
+    syncEntitlements,
+  ]);
 
   useEffect(() => {
     if (

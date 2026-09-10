@@ -40,8 +40,16 @@ import {
 
 export default function VehicleEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { vehicles, saveVehicle, loading, error, bootstrapped, entitlements, entitlementStatus } =
-    useDataStore();
+  const {
+    vehicles,
+    saveVehicle,
+    loading,
+    error,
+    bootstrapped,
+    entitlements,
+    entitlementStatus,
+    entitlementServerConfirmed,
+  } = useDataStore();
   const existing = useMemo(() => vehicles.find((vehicle) => vehicle.id === id), [vehicles, id]);
   const [brand, setBrand] = useState(existing?.brand ?? '');
   const [model, setModel] = useState(existing?.model ?? '');
@@ -74,7 +82,12 @@ export default function VehicleEditScreen() {
   });
   const leaveWithoutPrompt = useUnsavedChangesGuard(isDirty);
   const routeState = resolveEntityRoute(id, vehicles, bootstrapped);
-  const creationGate = getVehicleCreationGate(vehicles.length, entitlementStatus, entitlements);
+  const creationGate = getVehicleCreationGate(
+    vehicles.length,
+    entitlementStatus,
+    entitlements,
+    entitlementServerConfirmed,
+  );
   const parsedKm = parseDecimal(km);
   const parsedYear = year ? parseDecimal(year) : null;
   const validYear =
@@ -128,7 +141,24 @@ export default function VehicleEditScreen() {
       </Screen>
     );
   }
-  if (routeState === 'create' && creationGate.status === 'verifying') return <LoadingScreen />;
+  if (
+    routeState === 'create' &&
+    creationGate.status === 'verifying' &&
+    creationGate.reason === 'resolving'
+  )
+    return <LoadingScreen />;
+  if (
+    routeState === 'create' &&
+    creationGate.status === 'verifying' &&
+    creationGate.reason === 'server_confirmation'
+  ) {
+    return (
+      <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
+        <ErrorBanner message="Premium araç ekleme hakkınız doğrulanıyor. Bu birkaç saniye sürer; sayfayı kapatıp kısa süre sonra tekrar açın." />
+        <AppButton title="Araç ekranına dön" onPress={() => router.replace('/(tabs)/vehicle')} />
+      </Screen>
+    );
+  }
   if (routeState === 'create' && creationGate.status === 'limit_reached') {
     return (
       <Screen style={styles.form} backdrop={<AutomotiveBackdrop />}>
