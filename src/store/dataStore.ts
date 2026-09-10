@@ -45,6 +45,7 @@ import {
   getVehicleDisplayName,
 } from '@/features/vehicles/domain/multiVehicle';
 import { getVehicleWriteTargetError } from '@/features/vehicles/domain/vehicleWriteTarget';
+import { reminderWriteNeedsCustomTimeEntitlement } from '@/features/reminders/reminderSchedulePreferences';
 import { useAssistantSessionStore } from '@/features/vehicleAssistant/state/assistantSessionStore';
 import {
   DEFAULT_REPORT_PERIOD_ID,
@@ -521,7 +522,21 @@ export const useDataStore = create<DataState>()(
           const vehicleId = resolveWriteTarget(targetVehicleId);
           if (!vehicleId) return Promise.resolve(false);
           const vehicle = get().vehicles.find((item) => item.id === vehicleId);
+          const existingReminder = id
+            ? get().reminders.find((reminder) => reminder.id === id)
+            : null;
           return mutate(async () => {
+            // Store-only Premium choosing a new custom time: confirm the trusted
+            // mirror first so `enforce_reminder_due_time_entitlement` accepts it
+            // on this attempt, instead of the user waiting out the webhook and
+            // tapping Save again. A genuinely Free/expired plan still fails here.
+            if (
+              get().entitlementStatus === 'premium' &&
+              !get().entitlementServerConfirmed &&
+              reminderWriteNeedsCustomTimeEntitlement(draft.dueTime, existingReminder?.dueTime)
+            ) {
+              await get().syncEntitlements();
+            }
             const saved = await appRepository.saveReminder(
               vehicleId,
               draft,

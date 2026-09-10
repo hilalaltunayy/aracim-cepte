@@ -7,6 +7,7 @@ import {
   getReminderYearRange,
   isWithinReminderDateRange,
   REMINDER_MAX_YEAR,
+  reminderWriteNeedsCustomTimeEntitlement,
   resolveReminderTimeForForm,
 } from './reminderSchedulePreferences';
 
@@ -43,5 +44,15 @@ describe('reminder scheduling preferences', () => {
     expect(resolveReminderTimeForForm(null, false)).toBe(DEFAULT_REMINDER_TIME);
     expect(resolveReminderTimeForForm('18:00', false)).toBe('18:00');
     expect(resolveReminderTimeForForm('14:30', true)).toBe('14:30');
+  });
+
+  it('only flags a new non-09:00 custom time as needing a Premium authorization check', () => {
+    // Matches what `enforce_reminder_due_time_entitlement` actually rejects.
+    expect(reminderWriteNeedsCustomTimeEntitlement('22:30', undefined)).toBe(true);
+    expect(reminderWriteNeedsCustomTimeEntitlement('22:30', '09:00')).toBe(true);
+    // No time, the Free default, or an unchanged time all pass for Free too.
+    expect(reminderWriteNeedsCustomTimeEntitlement(null, undefined)).toBe(false);
+    expect(reminderWriteNeedsCustomTimeEntitlement('09:00', undefined)).toBe(false);
+    expect(reminderWriteNeedsCustomTimeEntitlement('22:30', '22:30')).toBe(false);
   });
 });

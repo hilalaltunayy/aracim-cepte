@@ -7,6 +7,7 @@ const { mirror, reconcile, repository } = vi.hoisted(() => ({
   repository: {
     vehicles: [] as { id: string; brand?: string; model?: string }[],
     saveVehicle: vi.fn(),
+    saveReminder: vi.fn(),
   },
 }));
 
@@ -28,6 +29,7 @@ vi.mock('@/data/repositories/SupabaseAppRepository', () => ({
     loadVehicleData: vi.fn(async () => ({})),
     reconcileVehicleData: vi.fn(async () => ({})),
     saveVehicle: repository.saveVehicle,
+    saveReminder: repository.saveReminder,
   },
 }));
 vi.mock('@/data/storage/safeStorage', () => ({
@@ -55,6 +57,15 @@ describe('data store entitlement lifecycle', () => {
     reconcile.calls = 0;
     repository.vehicles = [];
     repository.saveVehicle.mockReset();
+    repository.saveReminder.mockReset();
+    repository.saveReminder.mockResolvedValue({
+      id: 'r1',
+      vehicleId: 'v1',
+      dueDate: '2099-09-18',
+      dueTime: '22:30',
+      notificationStatus: 'scheduled',
+      notificationErrorCode: null,
+    });
     state().clear();
   });
 
@@ -245,6 +256,51 @@ describe('data store entitlement lifecycle', () => {
     const saved = await state().saveVehicle({ brand: 'VW', model: 'T-Roc' } as never);
     expect(saved).toBe(false);
     expect(state().error).toContain('en fazla 1');
+  });
+
+  it('confirms the mirror before a store-only Premium custom reminder time is written', async () => {
+    repository.vehicles = [{ id: 'v1', brand: 'Kia', model: 'Ceed' }];
+    mirror.status = 'free';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementServerConfirmed).toBe(false);
+
+    // The webhook lands between the reconcile call and the write.
+    repository.saveReminder.mockImplementation(async () => {
+      expect(reconcile.calls).toBeGreaterThan(0);
+      return {
+        id: 'r1',
+        vehicleId: 'v1',
+        dueDate: '2099-09-18',
+        dueTime: '22:30',
+        notificationStatus: 'scheduled',
+        notificationErrorCode: null,
+      };
+    });
+    mirror.status = 'premium';
+
+    const saved = await state().saveReminder(
+      'v1',
+      { title: 'Bakım', reminderType: 'periodic_maintenance', dueDate: '2099-09-18', dueTime: '22:30', dueKilometer: null, notificationLeadDays: 1 } as never,
+      undefined,
+    );
+    expect(saved).toBe(true);
+    expect(repository.saveReminder).toHaveBeenCalled();
+  });
+
+  it('does not spend a reconcile round-trip for a 09:00 or server-confirmed reminder', async () => {
+    repository.vehicles = [{ id: 'v1', brand: 'Kia', model: 'Ceed' }];
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementServerConfirmed).toBe(true);
+
+    await state().saveReminder(
+      'v1',
+      { title: 'Bakım', reminderType: 'periodic_maintenance', dueDate: '2099-09-18', dueTime: '22:30', dueKilometer: null, notificationLeadDays: 1 } as never,
+      undefined,
+    );
+    expect(reconcile.calls).toBe(0);
   });
 
   it('treats an unreadable mirror as unresolved while the store is still answering', async () => {
