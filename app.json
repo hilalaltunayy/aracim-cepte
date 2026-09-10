@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.hilalaltunay.aracimcepte",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
       ],
