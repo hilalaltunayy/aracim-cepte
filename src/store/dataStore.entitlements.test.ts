@@ -147,6 +147,58 @@ describe('data store entitlement lifecycle', () => {
     expect(state().entitlements.customReminderTime).toBe(true);
   });
 
+  it('keeps Premium stable across repeated re-entry and never consumes the entitlement', async () => {
+    // The device bug report: leave and re-enter the app several times.
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+
+    for (let reentry = 0; reentry < 5; reentry += 1) {
+      await state().bootstrap();
+      expect(state().entitlementStatus).toBe('premium');
+      expect(state().entitlementAwaitingSync).toBe(false);
+    }
+    // Re-entry re-reads the trusted mirror but never triggers a self-grant or
+    // a reconciliation round-trip while the two sources already agree.
+    await state().syncEntitlements();
+    expect(reconcile.calls).toBe(0);
+    expect(state().entitlementStatus).toBe('premium');
+  });
+
+  it('does not let a second account on the same process inherit the first account Premium', async () => {
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+
+    // Sign out, then the next account signs in on the same warm process.
+    state().clear();
+    expect(state().entitlementStatus).toBe('unknown');
+
+    mirror.status = 'free';
+    await state().bootstrap();
+    expect(state().entitlementStatus).not.toBe('premium');
+    state().applyBillingStatus('free');
+    expect(state().entitlementStatus).toBe('free');
+    expect(state().entitlements.planId).toBe('free');
+  });
+
+  it('downgrades to Free once a real sandbox expiry lands in both sources', async () => {
+    mirror.status = 'premium';
+    await state().bootstrap();
+    state().applyBillingStatus('premium');
+    expect(state().entitlementStatus).toBe('premium');
+
+    // Google Play license-test subscription expires: RevenueCat reports it
+    // inactive and the webhook mirror flips to the expired/free plan.
+    state().applyBillingStatus('free');
+    mirror.status = 'free';
+    await state().bootstrap();
+    expect(state().entitlementStatus).toBe('free');
+    expect(state().entitlements.maxVehicles).toBe(1);
+  });
+
   it('treats an unreadable mirror as unresolved while the store is still answering', async () => {
     mirror.status = 'unavailable';
     await state().bootstrap();
