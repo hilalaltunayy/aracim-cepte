@@ -24,6 +24,7 @@ import {
 import { AutomotiveBackdrop } from '@/shared/components/AutomotiveBackdrop';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
+import { useClearDataErrorOnNavigation } from '@/shared/hooks/useClearDataErrorOnNavigation';
 import {
   fontFamilies,
   radii,
@@ -151,6 +152,7 @@ function ThemeOptionRow({
 }
 
 export default function SettingsScreen() {
+  useClearDataErrorOnNavigation();
   const styles = useThemedStyles(createStyles);
   const { session, signOut, deleteAccount, busy, error: authError } = useAuthStore();
   const {

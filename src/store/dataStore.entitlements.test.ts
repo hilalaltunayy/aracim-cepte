@@ -303,6 +303,16 @@ describe('data store entitlement lifecycle', () => {
     expect(reconcile.calls).toBe(0);
   });
 
+  it('clears a stale operational error on sign-out and via clearError', () => {
+    useDataStore.setState({ error: 'Bir şeyler ters gitti' });
+    state().clearError();
+    expect(state().error).toBeNull();
+
+    useDataStore.setState({ error: 'Kaydedilemedi' });
+    state().clear();
+    expect(state().error).toBeNull();
+  });
+
   it('treats an unreadable mirror as unresolved while the store is still answering', async () => {
     mirror.status = 'unavailable';
     await state().bootstrap();

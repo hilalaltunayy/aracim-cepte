@@ -23,6 +23,7 @@ import {
   resolveEntityRoute,
 } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { useClearDataErrorOnNavigation } from '@/shared/hooks/useClearDataErrorOnNavigation';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { getVehicleBodyTypeOptions } from '@/features/vehicles/config/bodyTypes';
 import {
@@ -39,6 +40,7 @@ import {
 } from '@/features/vehicles/domain/multiVehicle';
 
 export default function VehicleEditScreen() {
+  useClearDataErrorOnNavigation();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const {
     vehicles,

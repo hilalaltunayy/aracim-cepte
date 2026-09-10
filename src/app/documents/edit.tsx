@@ -25,6 +25,7 @@ import { spacing } from '@/shared/theme';
 import { goBackOr } from '@/shared/utils/navigation';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { useClearDataErrorOnNavigation } from '@/shared/hooks/useClearDataErrorOnNavigation';
 import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
@@ -45,6 +46,7 @@ import {
 import type { DocumentOcrFormPatch } from '@/features/documents/ocr/domain/documentOcrTypes';
 
 export default function DocumentEditScreen() {
+  useClearDataErrorOnNavigation();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = safeEntityId(params.id);
   const invalidRouteId = Boolean(firstRouteParam(params.id) && !id);

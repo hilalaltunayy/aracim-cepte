@@ -625,6 +625,7 @@ export const useDataStore = create<DataState>()(
             activeVehicleId: null,
             bootstrapped: false,
             bootstrapError: null,
+            error: null,
             lastReminderNotice: null,
             lastBootstrapDurationMs: null,
             entitlements: FREE_ENTITLEMENTS,

@@ -28,6 +28,9 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { push: vi.fn(), replace: vi.fn() },
+  useFocusEffect: (callback: () => undefined | (() => void)) => {
+    callback();
+  },
 }));
 vi.mock('expo-notifications', () => ({
   getPermissionsAsync: vi.fn(async () => ({ status: notificationState.status })),
@@ -101,7 +104,8 @@ vi.mock('@/store/authStore', () => ({
 }));
 
 vi.mock('@/store/dataStore', () => {
-  const useDataStore = () => dataState;
+  const useDataStore = (selector?: (state: typeof dataState) => unknown) =>
+    typeof selector === 'function' ? selector(dataState) : dataState;
   return { useDataStore };
 });
 
@@ -134,6 +138,7 @@ describe('notification system settings row', () => {
       clearSection: vi.fn(async () => true),
       deleteVehicle: vi.fn(async () => true),
       clear: vi.fn(),
+      clearError: vi.fn(),
       loading: false,
       refresh: vi.fn(async () => undefined),
       error: null,

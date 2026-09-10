@@ -29,6 +29,7 @@ import { spacing, useAppTheme } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { evaluateMileageTimeline } from '@/shared/utils/mileageTimeline';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { useClearDataErrorOnNavigation } from '@/shared/hooks/useClearDataErrorOnNavigation';
 import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import { createRequestId } from '@/shared/utils/requestId';
@@ -66,6 +67,7 @@ import {
 import { getFriendlyError } from '@/shared/utils/errors';
 
 export default function RecordEditScreen() {
+  useClearDataErrorOnNavigation();
   const { colors } = useAppTheme();
   const params = useLocalSearchParams<{ id?: string | string[]; type?: string | string[] }>();
   const routeId = safeEntityId(params.id);

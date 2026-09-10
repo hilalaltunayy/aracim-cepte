@@ -21,6 +21,7 @@ import { useDataStore } from '@/store/dataStore';
 import { spacing } from '@/shared/theme';
 import { resolveEntityRoute } from '@/shared/utils/repositoryRules';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { useClearDataErrorOnNavigation } from '@/shared/hooks/useClearDataErrorOnNavigation';
 import { resolveVehicleWriteTarget } from '@/features/vehicles/domain/vehicleWriteTarget';
 import { haveFormValuesChanged } from '@/shared/utils/unsavedChanges';
 import {
@@ -52,6 +53,7 @@ export default function ReminderEditScreen() {
   const entitlementStatus = useDataStore((state) => state.entitlementStatus);
   const activeVehicleId = useDataStore((state) => state.activeVehicleId);
   const bootstrapped = useDataStore((state) => state.bootstrapped);
+  useClearDataErrorOnNavigation();
   if (entitlementStatus === 'unknown' || (!activeVehicleId && !bootstrapped)) {
     return <LoadingScreen />;
   }
