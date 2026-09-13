@@ -1,5 +1,11 @@
 const PREMIUM_ENTITLEMENT_ID = 'premium';
 
+/**
+ * Absorbs the delay between a billing period ending and the renewal that extends it.
+ * Must stay in step with `private.revenuecat_renewal_grace()` in the database.
+ */
+export const RENEWAL_GRACE_MS = 60 * 60 * 1000;
+
 export type SubscriberStatus = 'active' | 'cancelled' | 'billing_issue' | 'expired' | 'free';
 
 export interface SubscriberSnapshot {
@@ -59,15 +65,25 @@ export function readSubscriberSnapshot(payload: unknown, now: Date): SubscriberS
   }
   const productId = text(entitlement.product_identifier);
   const expiresAt = isoDate(entitlement.expires_date);
-  const active = expiresAt === null || new Date(expiresAt).getTime() > now.getTime();
-  if (!active) {
-    return { status: 'expired', productId, expiresAt, willRenew: false, environment };
-  }
   // A subscription that is still inside its paid period but already unsubscribed
   // keeps Premium until it lapses; the mirror models that as `cancelled`.
   const subscription = record(record(subscriber?.subscriptions)?.[productId ?? '']);
   const unsubscribedAt = isoDate(subscription?.unsubscribe_detected_at);
   const billingIssueAt = isoDate(subscription?.billing_issues_detected_at);
+  // TASK-012: `expires_date` is the end of the CURRENT BILLING PERIOD, not the end of
+  // the entitlement. An auto-renewing subscription is extended by a renewal that can
+  // land after that instant, so reporting `expired` on the boundary demotes a paying
+  // user. Only a subscription that nothing will renew ends exactly at `expires_date`.
+  // This mirrors `private.revenuecat_entitlement_window` in the database.
+  const autoRenewing = !unsubscribedAt && !billingIssueAt;
+  const lapsedForMs = expiresAt === null ? -1 : now.getTime() - new Date(expiresAt).getTime();
+  const active =
+    expiresAt === null ||
+    lapsedForMs < 0 ||
+    (autoRenewing && lapsedForMs < RENEWAL_GRACE_MS);
+  if (!active) {
+    return { status: 'expired', productId, expiresAt, willRenew: false, environment };
+  }
   if (billingIssueAt) {
     return { status: 'billing_issue', productId, expiresAt, willRenew: false, environment };
   }

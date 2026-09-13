@@ -190,3 +190,69 @@ test('ignores entitlements other than premium', () => {
   );
   assert.equal(snapshot.status, 'free');
 });
+
+// --- TASK-012: renewal boundary -------------------------------------------------
+// `expires_date` is the end of the current billing period, not the end of the
+// entitlement. A renewal can land after it, and demoting on that instant is what
+// left a paying account unable to add a second vehicle.
+
+test('keeps an auto-renewing subscription active while a renewal is still landing', () => {
+  const snapshot = readSubscriberSnapshot(
+    subscriber({
+      premium: { expires_date: '2026-09-07T11:55:00Z', product_identifier: 'premium_monthly' },
+    }),
+    now,
+  );
+  assert.equal(snapshot.status, 'active');
+  assert.equal(snapshot.willRenew, true);
+});
+
+test('still expires an auto-renewing subscription once the grace is exhausted', () => {
+  const snapshot = readSubscriberSnapshot(
+    subscriber({
+      premium: { expires_date: '2026-09-07T10:30:00Z', product_identifier: 'premium_monthly' },
+    }),
+    now,
+  );
+  assert.equal(snapshot.status, 'expired');
+  assert.equal(snapshot.willRenew, false);
+});
+
+test('gives no renewal grace to a subscription nothing will renew', () => {
+  const unsubscribed = readSubscriberSnapshot(
+    subscriber(
+      { premium: { expires_date: '2026-09-07T11:55:00Z', product_identifier: 'premium_monthly' } },
+      { premium_monthly: { unsubscribe_detected_at: '2026-09-05T00:00:00Z' } },
+    ),
+    now,
+  );
+  assert.equal(unsubscribed.status, 'expired');
+
+  const billingIssue = readSubscriberSnapshot(
+    subscriber(
+      { premium: { expires_date: '2026-09-07T11:55:00Z', product_identifier: 'premium_monthly' } },
+      { premium_monthly: { billing_issues_detected_at: '2026-09-06T00:00:00Z' } },
+    ),
+    now,
+  );
+  assert.equal(billingIssue.status, 'expired');
+});
+
+test('a renewal landing inside the grace reconciles the mirror back to premium', async () => {
+  const applied = [];
+  const result = await handleEntitlementSync(userId, {
+    enabled: true,
+    fetchSubscriber: async () =>
+      subscriber({
+        premium: { expires_date: '2026-09-07T11:58:00Z', product_identifier: 'premium_monthly' },
+      }),
+    applySnapshot: async (id, snapshot) => {
+      applied.push({ id, status: snapshot.status, willRenew: snapshot.willRenew });
+      return 'premium';
+    },
+    now: () => now,
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.plan, 'premium');
+  assert.deepEqual(applied, [{ id: userId, status: 'active', willRenew: true }]);
+});
