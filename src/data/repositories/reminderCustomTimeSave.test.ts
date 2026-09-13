@@ -151,3 +151,21 @@ describe('reminder custom-time save path', () => {
     expect(mocks.setNotificationLeadDays).not.toHaveBeenCalled();
   });
 });
+
+// TASK-013: the device notification must follow a confirmed database row, never
+// precede it -- a reminder the server rejected must not leave an alarm behind, and a
+// reminder the server accepted must schedule against the persisted time.
+it('schedules the device notification only after the row is persisted, using the saved time', async () => {
+  const stub = client();
+  mocks.getSupabaseClient.mockReturnValue(stub.supabase);
+
+  const saved = await new SupabaseAppRepository().saveReminder('vehicle-1', draft('22:30'));
+
+  // The write happened first...
+  expect(stub.inserted[0].due_time).toBe('22:30');
+  expect(saved.dueTime).toBe('22:30');
+  // ...and only then was an alarm scheduled, for the row that actually exists.
+  expect(mocks.reconcileReminderNotification).toHaveBeenCalledOnce();
+  const [scheduledFor] = mocks.reconcileReminderNotification.mock.calls[0];
+  expect(scheduledFor).toMatchObject({ id: 'reminder-1', dueTime: '22:30', dueDate: FUTURE_DATE });
+});
