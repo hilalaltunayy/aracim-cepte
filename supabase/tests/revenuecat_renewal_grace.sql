@@ -130,7 +130,7 @@ reset role;
 -- Free stays Free: one vehicle only.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"c1200000-0000-4000-8000-000000000002","role":"authenticated"}';
-select public.create_vehicle_with_limit('Fiat','Egea',2017,'01 DDD 005',50000,'gasoline','sedan',null,'grey');
+select public.create_vehicle_with_limit('Fiat','Egea',2017,'01 DDD 005',50000,'gasoline','sedan',null,'gray');
 do $$
 declare v_blocked boolean := false;
 begin
@@ -152,5 +152,18 @@ begin
     raise exception 'entitlement leaked across accounts';
   end if;
 end $$;
+
+-- Explicit, auditable result. Every assertion above raises on failure, so reaching
+-- this row at all is the pass signal; the values make the proof readable.
+select
+  'TASK-012 RENEWAL GRACE: PASS'                                              as result,
+  private.effective_plan_for_user('c1200000-0000-4000-8000-000000000001')     as renewing_plan,
+  private.max_vehicles_for_user('c1200000-0000-4000-8000-000000000001')       as renewing_max_vehicles,
+  (select count(*) from public.vehicles
+     where owner_id='c1200000-0000-4000-8000-000000000001' and archived_at is null)
+                                                                              as renewing_vehicles_created,
+  private.effective_plan_for_user('c1200000-0000-4000-8000-000000000002')     as expired_plan,
+  private.max_vehicles_for_user('c1200000-0000-4000-8000-000000000002')       as expired_max_vehicles,
+  private.effective_plan_for_user('c1200000-0000-4000-8000-000000000003')     as cancelled_plan;
 
 rollback;

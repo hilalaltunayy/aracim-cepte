@@ -46,7 +46,7 @@ as $fn$
     -- No scheduled end at all (lifetime / non-expiring entitlement).
     when p_expires_at is null then null
     -- Still renewing: the period end is not the entitlement end.
-    when p_status = 'active' and pg_catalog.coalesce(p_will_renew, false)
+    when p_status = 'active' and p_will_renew is true
       then p_expires_at + private.revenuecat_renewal_grace()
     -- Nothing will extend it: the period end is final.
     else p_expires_at
