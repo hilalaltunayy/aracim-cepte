@@ -44,8 +44,9 @@ import { resolveVehicleScreenState } from '@/shared/utils/vehicleState';
 import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwitcherSheet';
 import { AssistantFloatingEntry } from '@/features/vehicleAssistant/components/AssistantFloatingEntry';
 import {
+  getVehicleAddBlockedDialog,
   getVehicleCapacity,
-  getVehicleLimitMessage,
+  getVehicleLimitDialogButtons,
 } from '@/features/vehicles/domain/multiVehicle';
 
 export default function DashboardScreen() {
@@ -71,6 +72,7 @@ export default function DashboardScreen() {
     refresh,
     bootstrapped,
     entitlements,
+    entitlementStatus,
     setActiveVehicle,
   } = useDataStore();
   const vehicle = vehicles.find((item) => item.id === activeVehicleId);
@@ -96,15 +98,17 @@ export default function DashboardScreen() {
   const activeReminderCount = reminders.filter((reminder) => !reminder.completed).length;
   const capacity = getVehicleCapacity(vehicles.length, entitlements);
   const requestAddVehicle = () => {
-    if (capacity.canAdd) {
+    const dialog = getVehicleAddBlockedDialog(vehicles.length, entitlementStatus, entitlements);
+    if (!dialog) {
       setSwitcherOpen(false);
       router.navigate('/vehicle/edit');
       return;
     }
-    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity), [
-      { text: 'Daha sonra', style: 'cancel' },
-      { text: 'Premium’u incele', onPress: () => router.push('/premium' as never) },
-    ]);
+    Alert.alert(
+      dialog.title,
+      dialog.message,
+      getVehicleLimitDialogButtons(dialog, () => router.push('/premium' as never)),
+    );
   };
   const actions = [
     { label: 'Yakıt', icon: 'water-outline', type: 'fuel' },

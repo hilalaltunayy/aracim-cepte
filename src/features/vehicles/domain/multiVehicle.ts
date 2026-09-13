@@ -1,6 +1,7 @@
 import type { Vehicle } from '@/domain/entities';
 import {
   FREE_ENTITLEMENTS,
+  PLAN_ENTITLEMENTS,
   canCreateVehicle,
   type PlanEntitlements,
 } from '@/features/entitlements/domain/entitlements';
@@ -82,6 +83,65 @@ export function getVehicleDisplayName(vehicle: Pick<Vehicle, 'brand' | 'model'>)
 
 export function getVehicleLimitMessage(capacity: Pick<VehicleCapacity, 'maximum'>): string {
   return `Planınızda en fazla ${capacity.maximum} araç ekleyebilirsiniz. Mevcut araçlarınız korunur.`;
+}
+
+export interface VehicleAddBlockedDialog {
+  title: string;
+  message: string;
+  /** Only true when moving to Premium would actually let this account add a vehicle. */
+  offerUpgrade: boolean;
+}
+
+/** Structurally compatible with React Native's `AlertButton`, without importing it here. */
+export interface VehicleLimitDialogButton {
+  text: string;
+  style?: 'cancel';
+  onPress?: () => void;
+}
+
+/**
+ * What tapping "Araç ekle" should show when a new vehicle cannot be added right now.
+ * Returns `null` when the add is allowed.
+ *
+ * The upgrade CTA is offered only when Premium would raise the limit for this
+ * account: never to a user who is already Premium and at the Premium cap, never to a
+ * downgraded account already holding at least the Premium maximum, and never while
+ * the plan is still resolving — an unresolved plan falls back to Free limits, which
+ * would otherwise show an entitled user a false "upgrade" prompt.
+ */
+export function getVehicleAddBlockedDialog(
+  vehicleCount: number,
+  entitlementStatus: EntitlementStatus,
+  entitlements: Pick<PlanEntitlements, 'maxVehicles'> | null | undefined,
+): VehicleAddBlockedDialog | null {
+  const gate = getVehicleCreationGate(vehicleCount, entitlementStatus, entitlements);
+  if (gate.status === 'allowed') return null;
+  if (gate.status === 'verifying') {
+    return {
+      title: 'Araç ekleme',
+      message: 'Araç ekleme hakkınız doğrulanıyor. Lütfen kısa süre sonra tekrar deneyin.',
+      offerUpgrade: false,
+    };
+  }
+  return {
+    title: 'Araç sınırı',
+    message: getVehicleLimitMessage(gate.capacity),
+    offerUpgrade:
+      entitlementStatus === 'free' &&
+      canCreateVehicle(gate.capacity.current, PLAN_ENTITLEMENTS.premium),
+  };
+}
+
+/** The dialog's actions: an upgrade path only when it helps, otherwise a single dismiss. */
+export function getVehicleLimitDialogButtons(
+  dialog: Pick<VehicleAddBlockedDialog, 'offerUpgrade'>,
+  onUpgrade: () => void,
+): VehicleLimitDialogButton[] {
+  if (!dialog.offerUpgrade) return [{ text: 'Tamam', style: 'cancel' }];
+  return [
+    { text: 'Daha sonra', style: 'cancel' },
+    { text: 'Premium’u incele', onPress: onUpgrade },
+  ];
 }
 
 /** A response for an old vehicle selection must never overwrite the current vehicle bundle. */

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Vehicle } from '@/domain/entities';
 import { PLAN_ENTITLEMENTS } from '@/features/entitlements/domain/entitlements';
 import {
@@ -6,7 +6,9 @@ import {
   getVehicleCapacity,
   getVehicleCreationGate,
   getVehicleDeletionOutcome,
+  getVehicleAddBlockedDialog,
   getVehicleDisplayName,
+  getVehicleLimitDialogButtons,
   getVehicleLimitMessage,
 } from './multiVehicle';
 
@@ -80,6 +82,58 @@ describe('multi-vehicle domain rules', () => {
   it('keeps display names concise and exposes a capacity-safe message', () => {
     expect(getVehicleDisplayName({ brand: ' Kia ', model: ' Sportage ' })).toBe('Kia Sportage');
     expect(getVehicleLimitMessage({ maximum: 3 })).toContain('3 araç');
+  });
+
+  describe('Add Vehicle limit dialog (TASK-014)', () => {
+    it('lets the add through when there is room, so no dialog is shown', () => {
+      expect(getVehicleAddBlockedDialog(0, 'free', PLAN_ENTITLEMENTS.free)).toBeNull();
+      expect(getVehicleAddBlockedDialog(2, 'premium', PLAN_ENTITLEMENTS.premium)).toBeNull();
+    });
+
+    it('Free at 1/1 keeps the upgrade path, and the CTA routes to Premium', () => {
+      const dialog = getVehicleAddBlockedDialog(1, 'free', PLAN_ENTITLEMENTS.free);
+      expect(dialog).toMatchObject({ title: 'Araç sınırı', offerUpgrade: true });
+      expect(dialog?.message).toContain('en fazla 1 araç');
+
+      const onUpgrade = vi.fn();
+      const buttons = getVehicleLimitDialogButtons(dialog!, onUpgrade);
+      expect(buttons.map((button) => button.text)).toEqual(['Daha sonra', 'Premium’u incele']);
+      buttons.find((button) => button.text === 'Premium’u incele')?.onPress?.();
+      expect(onUpgrade).toHaveBeenCalledOnce();
+    });
+
+    it('Premium at 3/3 shows the max-3 limit with a single dismiss and no paywall', () => {
+      const dialog = getVehicleAddBlockedDialog(3, 'premium', PLAN_ENTITLEMENTS.premium);
+      expect(dialog).toMatchObject({ title: 'Araç sınırı', offerUpgrade: false });
+      expect(dialog?.message).toContain('en fazla 3 araç');
+
+      const onUpgrade = vi.fn();
+      const buttons = getVehicleLimitDialogButtons(dialog!, onUpgrade);
+      expect(buttons).toEqual([{ text: 'Tamam', style: 'cancel' }]);
+      expect(buttons.some((button) => button.text === 'Premium’u incele')).toBe(false);
+      buttons.forEach((button) => button.onPress?.());
+      expect(onUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('does not render the Free upgrade CTA while entitlement is still resolving', () => {
+      // An unresolved plan falls back to Free limits, so 2 vehicles would look "over
+      // the Free limit" for an account that may well be Premium.
+      const dialog = getVehicleAddBlockedDialog(2, 'unknown', PLAN_ENTITLEMENTS.free);
+      expect(dialog).toMatchObject({ offerUpgrade: false });
+      expect(dialog?.message).toContain('doğrulanıyor');
+      expect(dialog?.message).not.toContain('en fazla');
+
+      const onUpgrade = vi.fn();
+      const buttons = getVehicleLimitDialogButtons(dialog!, onUpgrade);
+      expect(buttons).toEqual([{ text: 'Tamam', style: 'cancel' }]);
+      buttons.forEach((button) => button.onPress?.());
+      expect(onUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('does not offer an upgrade that could not help a downgraded account at the Premium cap', () => {
+      const dialog = getVehicleAddBlockedDialog(3, 'free', PLAN_ENTITLEMENTS.free);
+      expect(dialog).toMatchObject({ title: 'Araç sınırı', offerUpgrade: false });
+    });
   });
 
   it('rejects stale vehicle bundle responses after an A to B switch', () => {

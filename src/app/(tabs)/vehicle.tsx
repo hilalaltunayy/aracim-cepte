@@ -32,8 +32,9 @@ import { VehicleSwitcherSheet } from '@/features/vehicles/components/VehicleSwit
 import { VehiclePhotoGallery } from '@/features/vehicles/components/VehiclePhotoGallery';
 import { VehiclePhotoImage } from '@/features/vehicles/components/VehiclePhotoImage';
 import {
+  getVehicleAddBlockedDialog,
   getVehicleCapacity,
-  getVehicleLimitMessage,
+  getVehicleLimitDialogButtons,
 } from '@/features/vehicles/domain/multiVehicle';
 
 const sections = [
@@ -94,6 +95,7 @@ export default function VehicleScreen() {
     vehiclePhotos,
     bootstrapped,
     entitlements,
+    entitlementStatus,
     setActiveVehicle,
     loading,
     saveVehiclePhoto,
@@ -116,15 +118,17 @@ export default function VehicleScreen() {
   const summary = getBodyConditionSummary(bodyConditions);
   const capacity = getVehicleCapacity(vehicles.length, entitlements);
   const requestAddVehicle = () => {
-    if (capacity.canAdd) {
+    const dialog = getVehicleAddBlockedDialog(vehicles.length, entitlementStatus, entitlements);
+    if (!dialog) {
       setSwitcherOpen(false);
       router.navigate('/vehicle/edit');
       return;
     }
-    Alert.alert('Araç sınırı', getVehicleLimitMessage(capacity), [
-      { text: 'Daha sonra', style: 'cancel' },
-      { text: 'Premium’u incele', onPress: () => router.push('/premium' as never) },
-    ]);
+    Alert.alert(
+      dialog.title,
+      dialog.message,
+      getVehicleLimitDialogButtons(dialog, () => router.push('/premium' as never)),
+    );
   };
   return (
     <Screen scrollEnabled={!vehicle3dInteracting} backdrop={<AutomotiveBackdrop />}>
